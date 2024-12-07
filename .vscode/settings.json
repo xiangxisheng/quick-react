@@ -1,0 +1,15 @@
+{
+	//*(可将前面的“//”改成“/”使用默认的字体)
+	"editor.fontSize": 14, // 字体大小，可以填12或14
+	"editor.lineHeight": 19, // 行高，要比字体大点（例如字体大小14对应19，12对应16）
+	"editor.fontFamily": "xspace,NSimSun", // 字体推荐NSimSun（清晰度高）需要安装xspace字体
+	"editor.tabSize": 2, // 缩进宽度，宋体填1或2就足够了
+	"editor.letterSpacing": 0,
+	//*/
+	"editor.renderWhitespace": "all", // 用于区分Tab还是Space
+	"editor.detectIndentation": false, //解决缩进失效
+	"editor.insertSpaces": false, // true表示用空格代替缩进
+	"editor.formatOnSave": true, // 保存时自动缩进
+	"editor.mouseWheelZoom": false, // 不允许鼠标滚轮调节大小
+	"workbench.colorTheme": "Default Dark Modern", // 使用默认的暗黑主题
+}

@@ -1,0 +1,31 @@
+{
+	"name": "quick-react",
+	"version": "1.0.0",
+	"description": "quick react",
+	"main": "esbuild.js",
+	"scripts": {
+		"test": "node esbuild.js"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/xiangxisheng/quick-react.git"
+	},
+	"keywords": [
+		"react"
+	],
+	"author": "xixi",
+	"license": "ISC",
+	"bugs": {
+		"url": "https://github.com/xiangxisheng/quick-react/issues"
+	},
+	"homepage": "https://github.com/xiangxisheng/quick-react#readme",
+	"dependencies": {
+		"react": "^19.0.0",
+		"react-dom": "^19.0.0"
+	},
+	"devDependencies": {
+		"@types/react": "^19.0.1",
+		"@types/react-dom": "^19.0.1",
+		"esbuild": "^0.24.0"
+	}
+}
