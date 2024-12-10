@@ -1,6 +1,6 @@
-import React from 'react';
 import { BrowserRouter as Router, Route, Routes, useNavigate } from 'react-router-dom';
-import Table from './table';
+//import Table from './table';
+import Aliyun from './aliyun';
 
 const App1 = () => {
 	const navigate = useNavigate();
@@ -20,8 +20,8 @@ function AppRouter() {
 		<Router>
 			<Routes>
 				<Route path="/" element={<App1 />} />
-				<Route path="/table" element={<Table />} />
-				<Route path="/api/*" element={<Table />} />
+				<Route path="/table" element={<Aliyun />} />
+				<Route path="/api/*" element={<Aliyun />} />
 			</Routes>
 		</Router>
 	);

@@ -1,7 +1,7 @@
 import { signHmacSha1ToBase64 } from '@/utils/crypto';
 
 // 生成签名
-const generateSignature = async (params: any, accessKeySecret: string): Promise<string> => {
+const generateSignature = async (params: Record<string, string>, accessKeySecret: string): Promise<string> => {
 	const queryString = Object.keys(params).sort().map(key => {
 		return encodeURIComponent(key) + '=' + encodeURIComponent(params[key]);
 	}).join('&');
@@ -26,7 +26,42 @@ function getApiEndpoint(RegionId: string): string {
 	return 'https://ecs-cn-hangzhou.aliyuncs.com/';
 }
 
-export async function AliyunApi(requestParams2: Record<string, any>, AccessKeySecret: string): Promise<any> {
+export interface AliyunEipAddress {
+	AllocationId: string;
+	Bandwidth: number;
+	IpAddress: string;
+}
+export interface AliyunVpcAttributes {
+	PrivateIpAddress: {
+		IpAddress: string;
+	};
+	VSwitchId: string;
+	VpcId: string;
+}
+export interface AliyunInstance {
+	CreationTime: string;
+	InstanceId: string;
+	InstanceName: string;
+	InstanceType: string;
+	Cpu: number;
+	Memory: number;
+	EipAddress: AliyunEipAddress;
+	StartTime: string;
+	VpcAttributes: AliyunVpcAttributes;
+	ZoneId: string;
+	OSType: string
+	Status: string;
+}
+export interface AliyunResponse {
+	Instances: {
+		Instance: AliyunInstance[],
+	};
+	PageNumber: number;
+	PageSize: number;
+	TotalCount: number;
+};
+
+export async function AliyunApi(requestParams2: Record<string, string | number>, AccessKeySecret: string): Promise<AliyunResponse> {
 	const requestParams1 = {
 		Format: 'JSON',
 		SignatureMethod: 'HMAC-SHA1',
@@ -36,10 +71,10 @@ export async function AliyunApi(requestParams2: Record<string, any>, AccessKeySe
 		Version: '2014-05-26',
 	};
 	const requestParams3 = { ...requestParams1, ...requestParams2 };
-	console.log(requestParams3);
+	// console.log(requestParams3);
 	const Signature = await generateSignature(requestParams3, AccessKeySecret);
 	const urlParams = new URLSearchParams({ ...requestParams3, Signature });
-	const apiEndpoint = getApiEndpoint(requestParams2.RegionId);
+	const apiEndpoint = getApiEndpoint(String(requestParams2.RegionId));
 	const url = `${apiEndpoint}?${urlParams.toString()}`;
 	return await fetchInstanceDetails(url);
 }
