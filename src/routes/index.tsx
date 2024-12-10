@@ -58,7 +58,12 @@ const App: React.FC = () => {
 
 	return (
 		<Layout style={{ height: '100%' }}>
-			<Menu onClick={onClick} selectedKeys={[current]} mode="horizontal" items={items} />
+			<Menu
+				onClick={onClick}
+				selectedKeys={[current]}
+				mode="horizontal"
+				items={items}
+			/>
 			<Content>
 				<Routes>
 					<Route path="/" element={<Home />} />

@@ -79,18 +79,14 @@ export const XTable = <T,>({ columns, fetchApi }: XTableType<T>) => {
 	const navigate = useNavigate();
 
 	return (
-		<>
-			<button onClick={() => navigate('/api/console/aliyun')}>aliyun</button>
-			<button onClick={() => navigate('/api/console/mail')}>test</button>
-			<Table<T>
-				rowSelection={rowSelection}
-				pagination={pagination}
-				onChange={onChange}
-				columns={columns}
-				dataSource={dataSource}
-				loading={loading}
-				rowKey="InstanceId"
-			/>
-		</>
+		<Table<T>
+			rowSelection={rowSelection}
+			pagination={pagination}
+			onChange={onChange}
+			columns={columns}
+			dataSource={dataSource}
+			loading={loading}
+			rowKey="InstanceId"
+		/>
 	);
 };
