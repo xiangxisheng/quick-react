@@ -12,8 +12,8 @@
 		const content = await fs.readFile(filePath, { encoding: 'utf-8' });
 		resData(req, res, 200, contentType, content);
 	};
-	const resData = async (req, res, statusCode, contentType, content) => {
-		console.info(new Date(), `[${statusCode}]`, req.url);
+	const resData = async (req, res, statusCode, contentType, content, message = '') => {
+		console.info(new Date(), `[${statusCode}]`, req.url, message);
 		res.writeHead(statusCode, { 'Content-Type': `${contentType}; charset=utf-8` });
 		res.end(content);
 	};
@@ -28,7 +28,10 @@
 			if (req.url === '/bundle.js.map') {
 				return await resFile(req, res, 'bundle.js.map', 'application/json');
 			}
-			return await resData(req, res, 404, 'text/plain', '404 Not Found\n');
+			if (req.headers.accept.indexOf('text/html') !== -1) {
+				return await resFile(req, res, 'index.html', 'text/html');
+			}
+			return await resData(req, res, 404, 'text/plain', '404 Not Found\n', req.headers.accept);
 		} catch (ex) {
 			return await resData(req, res, 500, 'text/plain', 'Error reading file\n');
 		}
