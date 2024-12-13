@@ -1,11 +1,25 @@
+function checkAndLoadModule(moduleName) {
+	try {
+		return require(moduleName);
+	} catch (e) {
+		if (e.code === 'MODULE_NOT_FOUND') {
+			console.log(`Module "${moduleName}" is not installed.`);
+			return null;
+		} else {
+			throw e; // 如果是其他错误，抛出异常
+		}
+	}
+}
 (async () => {
 	const outfile = "dist/bundle.js";
-	const http_port = Number(process.env.HTTP_PORT) || 9001;
+	const http_port = Number(process.env.HTTP_PORT) || 8088;
 
 	const esbuild = require("esbuild");
-	const http = require('http');
+	const http = require('https');
 	const fs = require('fs/promises');
 	const path = require('path');
+	const zlib = require('zlib');
+	const ZstdCodec = checkAndLoadModule('node-zstd');
 
 	const resFile = async (req, res, fileName, contentType) => {
 		const filePath = path.join(__dirname, 'dist', fileName);
@@ -14,10 +28,39 @@
 	};
 	const resData = async (req, res, statusCode, contentType, content, message = '') => {
 		console.info(new Date(), `[${statusCode}]`, req.url, message);
-		res.writeHead(statusCode, { 'Content-Type': `${contentType}; charset=utf-8` });
-		res.end(content);
+		const acceptEncoding = req.headers['accept-encoding'] || '';
+		let stream;
+		if (0) {
+		} else if (ZstdCodec && /\bzstd\b/.test(acceptEncoding)) {
+			res.setHeader('Content-Encoding', 'zstd');
+			// 注意：需要一个 zstd 库来支持 zstd 压缩，例如 node-zstd。
+			const zstd = new ZstdCodec.Simple();
+			stream = zstd.compressStream(res);
+		} else if (0 && /\bbr\b/.test(acceptEncoding)) {
+			res.setHeader('Content-Encoding', 'br');
+			stream = zlib.createBrotliCompress();
+		} else if (1 && /\bgzip\b/.test(acceptEncoding)) {
+			res.setHeader('Content-Encoding', 'gzip');
+			stream = zlib.createGzip();
+		} else if (1 && /\bdeflate\b/.test(acceptEncoding)) {
+			res.setHeader('Content-Encoding', 'deflate');
+			stream = zlib.createDeflate();
+		}
+		res.setHeader('Content-Type', `${contentType}; charset=utf-8`);
+		res.writeHead(statusCode);
+		if (stream) {
+			stream.pipe(res);
+			stream.end(content);
+		} else {
+			// 如果没有支持的压缩格式，则直接发送原始数据。
+			res.end(content);
+		}
 	};
-	const server = http.createServer(async (req, res) => {
+	const options = {
+		key: await fs.readFile('/home/coder/.acme.sh/anan.cc_ecc/anan.cc.key'),
+		cert: await fs.readFile('/home/coder/.acme.sh/anan.cc_ecc/fullchain.cer')
+	};
+	const server = http.createServer(options, async (req, res) => {
 		try {
 			if (req.url === '/') {
 				return await resFile(req, res, 'index.html', 'text/html');

@@ -56,6 +56,9 @@ export const XTable = <T,>({ columns, fetchApi }: XTableType<T>) => {
 			setDataSource(dataSource);
 			setPagination((prev) => ({ ...prev, total }));
 		} catch (ex) {
+			if (ex) {
+				alert(ex.toString());
+			}
 		} finally {
 			setLoading(false);
 		}

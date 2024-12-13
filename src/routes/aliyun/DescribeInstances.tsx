@@ -10,7 +10,22 @@ import { getColumnSearchProps } from '@/utils/antd/getColumnSearchProps';
 interface DataType extends AliyunInstance { };
 
 const App: React.FC = () => {
-
+	const openVNC = async (record: DataType) => {
+		const requestParams: Record<string, string | number> = {
+			AccessKeyId: localStorage.getItem('AccessKeyId') ?? '',
+			RegionId: 'cn-hangzhou',
+			Action: 'DescribeInstanceVncUrl',
+			InstanceId: record.InstanceId,
+		};
+		const aliRes: AliyunResponse = await AliyunApi(
+			'https://ecs-cn-hangzhou.aliyuncs.com/',
+			requestParams,
+			localStorage.getItem('AccessKeySecret') ?? ''
+		);
+		const vncUrl = aliRes.VncUrl;
+		const isWindows = 'true';
+		window.open(`https://g.alicdn.com/aliyun/ecs-console-vnc2/0.0.8/index.html?vncUrl=${vncUrl}&instanceId=${record.InstanceId}&isWindows=${isWindows}`);
+	};
 	// 代码分类：表列定义
 	const columns: TableProps<DataType>['columns'] = [
 		{
@@ -70,9 +85,9 @@ const App: React.FC = () => {
 		{
 			title: 'Action',
 			key: 'action',
-			render: (_, record) => (
+			render: (_, record: DataType) => (
 				<Space size="middle">
-					<button>查看</button>
+					<button onClick={() => openVNC(record)}>VNC</button>
 				</Space>
 			),
 		},
@@ -106,13 +121,22 @@ const App: React.FC = () => {
 			requestParams,
 			localStorage.getItem('AccessKeySecret') ?? ''
 		);
+		if (aliRes.Message) {
+			throw new Error(aliRes.Message);
+		}
+		if (aliRes.Code === 'MissingParameter') {
+			throw new Error(aliRes.Code);
+		}
 		console.log('aliRes', aliRes);
 		//console.log(aliRes.Instances.Instance);
 		const dataSource: DataType[] = [];
+		if (!aliRes.Instances) {
+			throw new Error('no Instances');
+		}
 		for (const instance of aliRes.Instances.Instance) {
 			dataSource.push(instance);
 		}
-		return ({ dataSource, total: aliRes.TotalCount });
+		return ({ dataSource, total: aliRes.TotalCount ?? 0 });
 	}
 
 	return (<XTable<DataType>

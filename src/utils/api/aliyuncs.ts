@@ -53,12 +53,15 @@ export interface AliyunInstance {
 	Status: string;
 }
 export interface AliyunResponse {
-	Instances: {
+	Message?: string,
+	Code?: string,
+	VncUrl: string,
+	Instances?: {
 		Instance: AliyunInstance[],
 	};
-	PageNumber: number;
-	PageSize: number;
-	TotalCount: number;
+	PageNumber?: number;
+	PageSize?: number;
+	TotalCount?: number;
 };
 
 export async function AliyunApi(
