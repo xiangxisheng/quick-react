@@ -101,7 +101,11 @@ const App: React.FC = () => {
 				}
 			}
 		}
-		const aliRes: AliyunResponse = await AliyunApi(requestParams, localStorage.getItem('AccessKeySecret') ?? '');
+		const aliRes: AliyunResponse = await AliyunApi(
+			'https://ecs-cn-hangzhou.aliyuncs.com/',
+			requestParams,
+			localStorage.getItem('AccessKeySecret') ?? ''
+		);
 		console.log('aliRes', aliRes);
 		//console.log(aliRes.Instances.Instance);
 		const dataSource: DataType[] = [];

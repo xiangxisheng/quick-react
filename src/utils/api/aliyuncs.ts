@@ -61,7 +61,11 @@ export interface AliyunResponse {
 	TotalCount: number;
 };
 
-export async function AliyunApi(requestParams2: Record<string, string | number>, AccessKeySecret: string): Promise<AliyunResponse> {
+export async function AliyunApi(
+	apiEndpoint: string,
+	requestParams2: Record<string, string | number>,
+	AccessKeySecret: string
+): Promise<AliyunResponse> {
 	const requestParams1 = {
 		Format: 'JSON',
 		SignatureMethod: 'HMAC-SHA1',
@@ -74,7 +78,7 @@ export async function AliyunApi(requestParams2: Record<string, string | number>,
 	// console.log(requestParams3);
 	const Signature = await generateSignature(requestParams3, AccessKeySecret);
 	const urlParams = new URLSearchParams({ ...requestParams3, Signature });
-	const apiEndpoint = getApiEndpoint(String(requestParams2.RegionId));
+	//const apiEndpoint = getApiEndpoint(String(requestParams2.RegionId));
 	const url = `${apiEndpoint}?${urlParams.toString()}`;
 	return await fetchInstanceDetails(url);
 }
