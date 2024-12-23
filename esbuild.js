@@ -10,12 +10,16 @@ function checkAndLoadModule(moduleName) {
 		}
 	}
 }
-(async () => {
+
+const main = async (defaPort, domain) => {
 	const outfile = "dist/bundle.js";
-	const http_port = Number(process.env.HTTP_PORT) || 8088;
+	const http_port = Number(process.env.HTTP_PORT) || defaPort;
 
 	const esbuild = require("esbuild");
-	const http = require('https');
+	const os = require('os');
+	const { createServer } = require('node:http');
+	const { createSecureServer } = require('node:http2');
+
 	const fs = require('fs/promises');
 	const path = require('path');
 	const zlib = require('zlib');
@@ -56,11 +60,8 @@ function checkAndLoadModule(moduleName) {
 			res.end(content);
 		}
 	};
-	const options = {
-		key: await fs.readFile('/home/coder/.acme.sh/anan.cc_ecc/anan.cc.key'),
-		cert: await fs.readFile('/home/coder/.acme.sh/anan.cc_ecc/fullchain.cer')
-	};
-	const server = http.createServer(options, async (req, res) => {
+
+	const onRequestHandler = async (req, res) => {
 		try {
 			if (req.url === '/') {
 				return await resFile(req, res, 'index.html', 'text/html');
@@ -78,10 +79,27 @@ function checkAndLoadModule(moduleName) {
 		} catch (ex) {
 			return await resData(req, res, 500, 'text/plain', 'Error reading file\n');
 		}
-	});
-	server.listen(http_port, '0.0.0.0', () => {
-		console.log(`Listening on 127.0.0.1:${http_port}`);
-	});
+	};
+
+	async function getAcmeServerOptions(domain) {
+		const baseDir = path.join(os.homedir(), '.acme.sh', `${domain}_ecc`);
+		return {
+			key: await fs.readFile(path.join(baseDir, `${domain}.key`)),
+			cert: await fs.readFile(path.join(baseDir, 'fullchain.cer')),
+		};
+	}
+
+	try {
+		const server = createSecureServer(await getAcmeServerOptions(domain), onRequestHandler);
+		server.listen(http_port, '0.0.0.0', () => {
+			console.log(`HTTP/2 Listening on ${domain}:${http_port}`);
+		});
+	} catch (e) {
+		const server = createServer(onRequestHandler);
+		server.listen(http_port, '0.0.0.0', () => {
+			console.log(`HTTP/1 Listening on 127.0.0.1:${http_port}`);
+		});
+	}
 
 	const config = {
 		entryPoints: ["./src/index.tsx"],
@@ -102,4 +120,6 @@ function checkAndLoadModule(moduleName) {
 	};
 	const ctx = await esbuild.context(config);
 	await ctx.watch();
-})();
+};
+
+main(8088, 'anan.cc');
