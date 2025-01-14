@@ -1,12 +1,18 @@
 import type React from 'react';
 import type { MenuProps } from 'antd';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Layout, Menu } from 'antd';
 import { AppstoreOutlined, MailOutlined } from '@ant-design/icons';
 import AliyunIndex from './aliyun/index';
+import Sign from './sign';
 const { Content } = Layout;
+
+interface RouteConfig {
+	path: string;
+	element: React.ReactNode;
+}
 
 // 定义路由对应的页面组件
 const Home = () => <h1 style={{ padding: 10, margin: 0, height: '100%' }}>Home Page</h1>;
@@ -31,6 +37,18 @@ const items: MenuItem[] = [
 		key: '/about',
 		icon: <AppstoreOutlined />,
 	},
+	{
+		label: '登录',
+		key: '/sign',
+		icon: <AppstoreOutlined />,
+	},
+];
+
+const routes: RouteConfig[] = [
+	{ path: '/', element: <Home /> },
+	{ path: '/aliyun/*', element: <AliyunIndex /> },
+	{ path: '/about', element: <About /> },
+	{ path: '/sign', element: <Sign /> },
 ];
 
 const App: React.FC = () => {
@@ -56,6 +74,8 @@ const App: React.FC = () => {
 		}
 	};
 
+	const memoizedRoutes = useMemo(() => routes, []);
+
 	return (
 		<Layout style={{ height: '100%' }}>
 			<Menu
@@ -66,9 +86,9 @@ const App: React.FC = () => {
 			/>
 			<Content>
 				<Routes>
-					<Route path="/" element={<Home />} />
-					<Route path="/aliyun/*" element={<AliyunIndex />} />
-					<Route path="/about" element={<About />} />
+					{memoizedRoutes.map((route, index) => (
+						<Route key={index} path={route.path} element={route.element} />
+					))}
 				</Routes>
 			</Content>
 		</Layout>
