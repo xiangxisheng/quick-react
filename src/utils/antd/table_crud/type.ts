@@ -4,6 +4,11 @@ interface ResJsonTableColumnRule {
     message: string;
 }
 
+interface SelectOption {
+    value: string;
+    text: string;
+}
+
 interface ResJsonTableColumn {
     dataIndex: string;
     title: string;
@@ -11,4 +16,5 @@ interface ResJsonTableColumn {
     rules?: ResJsonTableColumnRule[];
     ellipsis?: boolean;
     placeholder?: string;
+    options?: SelectOption[];
 }

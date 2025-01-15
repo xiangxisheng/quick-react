@@ -1,10 +1,12 @@
 import { Button, Col, DatePicker, Drawer, Form, Input, Row, Select, Space } from 'antd';
-const { Option } = Select;
+import { Modal } from 'antd';
+import { ExclamationCircleOutlined } from '@ant-design/icons';
 
 interface DataType extends Record<string, string | number> { }
 
 // 定义TableCRUD的传参
 type TableCrudType = {
+    api_url: string;
     title: string;
     columns: ResJsonTableColumn[];
     row: DataType;
@@ -30,8 +32,9 @@ function getFormItemComponent(item: ResJsonTableColumn) {
         case ('select'):
             return (
                 <Select placeholder={item.placeholder}>
-                    <Option value="xiao">Xiaoxiao Fu</Option>
-                    <Option value="mao">Maomao Zhou</Option>
+                    {item.options?.map((option) => (
+                        <Select.Option value={option.value}>{option.text}</Select.Option>
+                    ))}
                 </Select>
             );
         case ('textarea'):
@@ -49,55 +52,91 @@ function getFormItemComponent(item: ResJsonTableColumn) {
     }
 }
 
-export default ({ title, columns, row, open, onClose }: TableCrudType) => {
+export default ({ api_url, title, columns, row, open, onClose }: TableCrudType) => {
+    const [modal, contextHolder] = Modal.useModal();
 
     const [form] = Form.useForm();
     const handleSubmit = () => {
         form.submit();
     };
 
-    return (<Drawer
-        title={title}
-        width={720}
-        onClose={onClose}
-        open={open}
-        styles={{
-            body: {
-                paddingBottom: 80,
+    const onFinish = async (values: Record<string, string>) => {
+        console.log(values)
+        await fetch(api_url, {
+            method: 'POST', // 指定请求方法
+            headers: {
+                'Content-Type': 'application/json', // 指定请求头，表明是 JSON 数据
             },
-        }}
-        extra={
-            <Space>
-                <Button onClick={onClose}>Cancel</Button>
-                <Button onClick={handleSubmit} type="primary">
-                    Submit
-                </Button>
-            </Space>
+            body: JSON.stringify(values), // 将数据转换为 JSON 字符串
+        })
+
+    }
+
+    const _onClose = () => {
+        if (form.isFieldsTouched()) {
+            modal.confirm({
+                title: '确认提示',
+                icon: <ExclamationCircleOutlined />,
+                content: '内容修改尚未保存，还要离开吗？',
+                okText: '离开',
+                cancelText: '留下',
+                onOk: () => {
+                    form.resetFields();
+                    onClose();
+                },
+                maskClosable: true,
+            });
+            return;
         }
-    >
-        <Form layout="vertical" form={form}>
-            <Row gutter={16}>
-                {columns.map((item) => {
-                    if (!item.form) {
-                        return;
-                    }
-                    const component = getFormItemComponent(item);
-                    if (!component) {
-                        return;
-                    }
-                    return (
-                        <Col span={24}>
-                            <Form.Item
-                                name={item.dataIndex}
-                                label={item.title}
-                                rules={item.rules}
-                            >
-                                {component}
-                            </Form.Item>
-                        </Col>
-                    );
-                })}
-            </Row>
-        </Form>
-    </Drawer>);
+        form.resetFields();
+        onClose();
+    };
+
+    return (<>
+        {contextHolder}
+        <Drawer
+            title={title}
+            width={720}
+            onClose={_onClose}
+            open={open}
+            styles={{
+                body: {
+                    paddingBottom: 80,
+                },
+            }}
+            extra={
+                <Space>
+                    <Button onClick={_onClose}>取消</Button>
+                    <Button onClick={handleSubmit} type="primary">
+                        确定
+                    </Button>
+                </Space>
+            }
+        >
+            <Form layout="vertical" form={form} onFinish={onFinish} initialValues={row}>
+                <Row gutter={16}>
+                    {columns.map((item) => {
+                        if (!item.form) {
+                            return;
+                        }
+                        const component = getFormItemComponent(item);
+                        if (!component) {
+                            return;
+                        }
+                        return (
+                            <Col span={24}>
+                                <Form.Item
+                                    name={item.dataIndex}
+                                    label={item.title}
+                                    rules={item.rules}
+                                >
+                                    {component}
+                                </Form.Item>
+                            </Col>
+                        );
+                    })}
+                </Row>
+            </Form>
+        </Drawer>
+    </>);
 };

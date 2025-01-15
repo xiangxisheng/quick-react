@@ -51,7 +51,8 @@ export default ({ api_url }: TableCrudType) => {
 	const [dataSource, setDataSource] = useState<DataType[]>([]);
 	const [columns, setColumns] = useState<TableColumnsType<DataType>>();
 	const [resJsonColumns, setResJsonColumns] = useState<ResJsonTableColumn[]>([]);
-	const [drawer_row] = useState<DataType>({});
+	const [drawerRow, setDrawerRow] = useState<DataType>({});
+	const [drawerTitle, setDrawerTitle] = useState<string>('');
 	async function fetchData() {
 		setLoading(true);
 		try {
@@ -64,6 +65,7 @@ export default ({ api_url }: TableCrudType) => {
 			}
 			setColumns(tableColumns);
 			setDataSource(resJSON.dataSource);
+			setDrawerRow({ name: 'asdf' });
 			setPagination((prev) => ({ ...prev, total: 0 }));
 		} catch (ex) {
 			if (ex) {
@@ -93,10 +95,22 @@ export default ({ api_url }: TableCrudType) => {
 
 	const [open, setOpen] = useState(false);
 
+	const onAddNew = () => {
+		setDrawerTitle('新增');
+		setOpen(true)
+	};
+
 	return (<>
-		<Drawer title="test" columns={resJsonColumns} row={drawer_row} open={open} onClose={() => setOpen(false)} />
-		<Button type="primary" onClick={() => setOpen(true)} icon={<PlusOutlined />}>
-			New account
+		<Drawer
+			title={drawerTitle}
+			api_url={api_url}
+			columns={resJsonColumns}
+			row={drawerRow}
+			open={open}
+			onClose={() => setOpen(false)}
+		/>
+		<Button type="primary" onClick={onAddNew} icon={<PlusOutlined />}>
+			新增
 		</Button>
 		<Table<DataType>
 			rowSelection={rowSelection}
