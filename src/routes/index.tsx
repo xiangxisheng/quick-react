@@ -7,6 +7,7 @@ import { Layout, Menu } from 'antd';
 import { AppstoreOutlined, MailOutlined } from '@ant-design/icons';
 import AliyunIndex from './aliyun/index';
 import Sign from './sign';
+import BkData from '@/routes/bkdata';
 const { Content } = Layout;
 
 interface RouteConfig {
@@ -33,6 +34,11 @@ const items: MenuItem[] = [
 		icon: <AppstoreOutlined />,
 	},
 	{
+		label: 'BK数据',
+		key: '/bkdata/panel',
+		icon: <AppstoreOutlined />,
+	},
+	{
 		label: '关于',
 		key: '/about',
 		icon: <AppstoreOutlined />,
@@ -47,6 +53,7 @@ const items: MenuItem[] = [
 const routes: RouteConfig[] = [
 	{ path: '/', element: <Home /> },
 	{ path: '/aliyun/*', element: <AliyunIndex /> },
+	{ path: '/bkdata/*', element: <BkData /> },
 	{ path: '/about', element: <About /> },
 	{ path: '/sign', element: <Sign /> },
 ];
@@ -61,7 +68,14 @@ const App: React.FC = () => {
 		document.body.style.margin = '0';
 		document.body.style.height = '100%';
 		document.documentElement.style.height = '100%';
-		setCurrent(location.pathname); // URL 变化时同步菜单高亮
+		const a = location.pathname.split('/');
+		for (const item of items) {
+			if ((location.pathname + '/').indexOf((item?.key ?? '').toString() + '/') === 0) {
+				// URL 变化时同步菜单高亮
+				setCurrent((item?.key ?? '').toString());
+				continue;
+			}
+		}
 	}, [location.pathname]);
 
 	const onClick: MenuProps['onClick'] = (e) => {
@@ -96,10 +110,18 @@ const App: React.FC = () => {
 };
 
 // 使用 Router 包裹应用
-const RootApp = () => (
-	<Router>
-		<App />
-	</Router>
-);
+import type { Config } from '@/config';
+type Type = {
+	config: Config;
+};
+
+const RootApp = ({ config }: Type) => {
+	console.log(config)
+	return (
+		<Router>
+			<App />
+		</Router>
+	);
+};
 
 export default RootApp;
