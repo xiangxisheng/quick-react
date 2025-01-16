@@ -42,7 +42,11 @@ const items: MenuItem[] = [
 	},
 ];
 
-function AppRouter() {
+type AppType = {
+	api_fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+};
+
+function AppRouter({ api_fetch }: AppType) {
 	const location = useLocation(); // 获取当前 URL 路径
 	const [current, setCurrent] = useState(location.pathname); // 同步选中状态
 	const navigate = useNavigate();
@@ -103,7 +107,7 @@ function AppRouter() {
 				}}>
 					<Routes>
 						<Route path="/" element={<App1 />} />
-						<Route path="/data/columns" element={<TableCRUD api_url='/api/bkdata/panel/data/columns' />} />
+						<Route path="/data/columns" element={<TableCRUD api_fetch={api_fetch} api_url='/api/bkdata/panel/data/columns' />} />
 					</Routes>
 				</Content>
 				<Footer style={{

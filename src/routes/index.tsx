@@ -50,15 +50,21 @@ const items: MenuItem[] = [
 	},
 ];
 
-const routes: RouteConfig[] = [
-	{ path: '/', element: <Home /> },
-	{ path: '/aliyun/*', element: <AliyunIndex /> },
-	{ path: '/bkdata/*', element: <BkData /> },
-	{ path: '/about', element: <About /> },
-	{ path: '/sign', element: <Sign /> },
-];
 
-const App: React.FC = () => {
+type AppType = {
+	api_fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+};
+
+const App = ({ api_fetch }: AppType) => {
+
+	const routes: RouteConfig[] = [
+		{ path: '/', element: <Home /> },
+		{ path: '/aliyun/*', element: <AliyunIndex /> },
+		{ path: '/bkdata/*', element: <BkData api_fetch={api_fetch} /> },
+		{ path: '/about', element: <About /> },
+		{ path: '/sign', element: <Sign /> },
+	];
+
 	const location = useLocation(); // 获取当前 URL 路径
 	const [current, setCurrent] = useState(location.pathname); // 同步选中状态
 	const navigate = useNavigate();
@@ -111,17 +117,21 @@ const App: React.FC = () => {
 
 // 使用 Router 包裹应用
 import type { Config } from '@/config';
-type Type = {
+type RouteIndexType = {
 	config: Config;
 };
 
-const RootApp = ({ config }: Type) => {
+import { useCommonApi } from '@/utils/common/api'
+
+const RouteIndex = ({ config }: RouteIndexType) => {
+	const { apiFetch, contextHolder } = useCommonApi();
 	console.log(config)
 	return (
 		<Router>
-			<App />
+			{contextHolder}
+			<App api_fetch={apiFetch} />
 		</Router>
 	);
 };
 
-export default RootApp;
+export default RouteIndex;

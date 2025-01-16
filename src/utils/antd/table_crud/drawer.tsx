@@ -1,8 +1,7 @@
+import type { DataType, ResJsonTableColumn } from '@/utils/common/api';
 import { Button, Col, DatePicker, Drawer, Form, Input, Row, Select, Space } from 'antd';
 import { Modal } from 'antd';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
-
-interface DataType extends Record<string, string | number> { }
 
 // 定义TableCRUD的传参
 type TableCrudType = {
@@ -12,6 +11,7 @@ type TableCrudType = {
     row: DataType;
     open: boolean;
     onClose: () => void;
+    api_fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 };
 
 function getFormItemComponent(item: ResJsonTableColumn) {
@@ -52,7 +52,7 @@ function getFormItemComponent(item: ResJsonTableColumn) {
     }
 }
 
-export default ({ api_url, title, columns, row, open, onClose }: TableCrudType) => {
+export default ({ api_fetch, api_url, title, columns, row, open, onClose }: TableCrudType) => {
     const [modal, contextHolder] = Modal.useModal();
 
     const [form] = Form.useForm();
@@ -61,15 +61,18 @@ export default ({ api_url, title, columns, row, open, onClose }: TableCrudType) 
     };
 
     const onFinish = async (values: Record<string, string>) => {
-        console.log(values)
-        await fetch(api_url, {
+        const res = await api_fetch(api_url, {
             method: 'POST', // 指定请求方法
             headers: {
                 'Content-Type': 'application/json', // 指定请求头，表明是 JSON 数据
             },
             body: JSON.stringify(values), // 将数据转换为 JSON 字符串
-        })
-
+        });
+        if (!res.ok) {
+            return;
+        }
+        form.resetFields();
+        onClose();
     }
 
     const _onClose = async () => {

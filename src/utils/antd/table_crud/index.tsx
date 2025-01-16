@@ -2,26 +2,22 @@ import type React from 'react';
 import type { FilterValue } from 'antd/es/table/interface';
 import type { TableProps, TablePaginationConfig } from 'antd';
 import type { TableColumnsType } from 'antd';
+import type { ResJSON, DataType, ResJsonTableColumn } from '@/utils/common/api';
+
 import { useState, useEffect } from 'react';
 import { Table, Button } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { PlusOutlined } from '@ant-design/icons';
 import Drawer from './drawer';
 
-interface DataType extends Record<string, string | number> { }
-
 // 定义TableCRUD的传参
 type TableCrudType = {
+	api_fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 	api_url: string;
 };
 
 
-export default ({ api_url }: TableCrudType) => {
-
-	interface ResponseJSON {
-		columns: ResJsonTableColumn[];
-		dataSource: DataType[];
-	}
+export default ({ api_fetch, api_url }: TableCrudType) => {
 
 	// 代码分类：批量操作
 	const rowSelection: TableProps<DataType>['rowSelection'] = (() => {
@@ -56,15 +52,19 @@ export default ({ api_url }: TableCrudType) => {
 	async function fetchData() {
 		setLoading(true);
 		try {
-			const response: Response = await fetch(api_url);
-			const resJSON: ResponseJSON = await response.json();
-			setResJsonColumns(resJSON.columns);
-			const tableColumns: TableColumnsType<DataType> = [];
-			for (const column of resJSON.columns) {
-				tableColumns.push(column);
+			const response: Response = await api_fetch(api_url);
+			const resJSON: ResJSON = await response.json();
+			if (resJSON.columns) {
+				setResJsonColumns(resJSON.columns);
+				const tableColumns: TableColumnsType<DataType> = [];
+				for (const column of resJSON.columns) {
+					tableColumns.push(column);
+				}
+				setColumns(tableColumns);
 			}
-			setColumns(tableColumns);
-			setDataSource(resJSON.dataSource);
+			if (resJSON.dataSource) {
+				setDataSource(resJSON.dataSource);
+			}
 			setDrawerRow({ name: 'asdf' });
 			setPagination((prev) => ({ ...prev, total: 0 }));
 		} catch (ex) {
@@ -103,6 +103,7 @@ export default ({ api_url }: TableCrudType) => {
 	return (<>
 		<Drawer
 			title={drawerTitle}
+			api_fetch={api_fetch}
 			api_url={api_url}
 			columns={resJsonColumns}
 			row={drawerRow}
