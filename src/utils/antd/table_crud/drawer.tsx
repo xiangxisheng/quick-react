@@ -72,21 +72,21 @@ export default ({ api_url, title, columns, row, open, onClose }: TableCrudType) 
 
     }
 
-    const _onClose = () => {
+    const _onClose = async () => {
         if (form.isFieldsTouched()) {
-            modal.confirm({
+            // 当表单内容有被修改时弹出[确认提示]
+            const rConfirm = await modal.confirm({
                 title: '确认提示',
                 icon: <ExclamationCircleOutlined />,
-                content: '内容修改尚未保存，还要离开吗？',
+                content: '内容修改尚未保存，仍要离开吗？',
                 okText: '离开',
                 cancelText: '留下',
-                onOk: () => {
-                    form.resetFields();
-                    onClose();
-                },
                 maskClosable: true,
             });
-            return;
+            if (!rConfirm) {
+                // 代表点了[取消]
+                return;
+            }
         }
         form.resetFields();
         onClose();
