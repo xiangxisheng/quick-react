@@ -2,12 +2,13 @@ import type React from 'react';
 import type { FilterValue } from 'antd/es/table/interface';
 import type { TableProps, TablePaginationConfig } from 'antd';
 import type { TableColumnsType } from 'antd';
-import type { ResJSON, DataType, ResJsonTableColumn } from '@/utils/common/api';
+import type { ResJSON, DataType } from '@/utils/common/api';
+import type { ResJsonTableColumn, ResJsonTableOption } from '@/utils/common/api';
 
 import { useState, useEffect } from 'react';
-import { Table, Button } from 'antd';
+import { Table, Button, Flex } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import Drawer from './drawer';
 
 // 定义TableCRUD的传参
@@ -19,9 +20,9 @@ type TableCrudType = {
 
 export default ({ api_fetch, api_url }: TableCrudType) => {
 
+	const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 	// 代码分类：批量操作
 	const rowSelection: TableProps<DataType>['rowSelection'] = (() => {
-		const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 		const onSelectChange = (newSelectedRowKeys: React.Key[]) => {
 			console.log('selectedRowKeys changed: ', newSelectedRowKeys);
 			setSelectedRowKeys(newSelectedRowKeys);
@@ -47,33 +48,36 @@ export default ({ api_fetch, api_url }: TableCrudType) => {
 	const [dataSource, setDataSource] = useState<DataType[]>([]);
 	const [columns, setColumns] = useState<TableColumnsType<DataType>>();
 	const [resJsonColumns, setResJsonColumns] = useState<ResJsonTableColumn[]>([]);
+	const [resJsonTableOption, setResJsonTableOption] = useState<ResJsonTableOption>();
 	const [drawerRow, setDrawerRow] = useState<DataType>({});
 	const [drawerTitle, setDrawerTitle] = useState<string>('');
 	async function fetchData() {
 		setLoading(true);
-		try {
-			const response: Response = await api_fetch(api_url);
-			const resJSON: ResJSON = await response.json();
-			if (resJSON.columns) {
-				setResJsonColumns(resJSON.columns);
+
+		const response: Response = await api_fetch(api_url);
+		const resJSON: ResJSON = await response.json();
+		if (resJSON.table) {
+			if (resJSON.table.option) {
+				setResJsonTableOption(resJSON.table.option);
+			}
+			if (resJSON.table.columns) {
+				setResJsonColumns(resJSON.table.columns);
 				const tableColumns: TableColumnsType<DataType> = [];
-				for (const column of resJSON.columns) {
+				for (const column of resJSON.table.columns) {
 					tableColumns.push(column);
 				}
 				setColumns(tableColumns);
 			}
-			if (resJSON.dataSource) {
-				setDataSource(resJSON.dataSource);
+			if (resJSON.table.dataSource) {
+				setDataSource(resJSON.table.dataSource);
 			}
-			setDrawerRow({ name: 'asdf' });
-			setPagination((prev) => ({ ...prev, total: 0 }));
-		} catch (ex) {
-			if (ex) {
-				alert(ex.toString());
-			}
-		} finally {
-			setLoading(false);
 		}
+
+		//setDrawerRow({ name: 'asdf' });
+		setPagination((prev) => ({ ...prev, total: 0 }));
+
+		setLoading(false);
+
 	}
 	useEffect(() => {
 		fetchData();
@@ -100,7 +104,13 @@ export default ({ api_fetch, api_url }: TableCrudType) => {
 		setOpen(true)
 	};
 
-	return (<>
+	const onDelete = async () => {
+		setLoading(true);
+		await api_fetch(api_url, { method: 'DELETE', body: JSON.stringify(selectedRowKeys) });
+		setLoading(false);
+	}
+
+	return (<Flex vertical gap="small">
 		<Drawer
 			title={drawerTitle}
 			api_fetch={api_fetch}
@@ -110,9 +120,10 @@ export default ({ api_fetch, api_url }: TableCrudType) => {
 			open={open}
 			onClose={() => setOpen(false)}
 		/>
-		<Button type="primary" onClick={onAddNew} icon={<PlusOutlined />}>
-			新增
-		</Button>
+		<Flex wrap gap="small">
+			<Button type="primary" onClick={onAddNew} icon={<PlusOutlined />}>新增</Button>
+			<Button danger type="primary" disabled={selectedRowKeys.length === 0} onClick={onDelete} icon={<DeleteOutlined />}>删除</Button>
+		</Flex>
 		<Table<DataType>
 			rowSelection={rowSelection}
 			pagination={pagination}
@@ -120,7 +131,7 @@ export default ({ api_fetch, api_url }: TableCrudType) => {
 			columns={columns}
 			dataSource={dataSource}
 			loading={loading}
-			rowKey="InstanceId"
+			rowKey={resJsonTableOption?.rowKey}
 		/>
-	</>);
+	</Flex>);
 };

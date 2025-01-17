@@ -101,7 +101,7 @@ function AppRouter({ api_fetch }: AppType) {
 					</Breadcrumb>
 				</Header>
 				<Content style={{
-					margin: '2px',
+					margin: '8px',
 					height: '100%',
 					overflowY: 'scroll',
 				}}>
