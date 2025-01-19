@@ -4,6 +4,7 @@ import type { TableProps, TablePaginationConfig } from 'antd';
 import type { TableColumnsType } from 'antd';
 import type { ResJSON, DataType } from '@/utils/common/api';
 import type { ResJsonTableColumn, ResJsonTableOption } from '@/utils/common/api';
+import type { CommonApi } from '@/utils/common/api';
 
 import { useState, useEffect } from 'react';
 import { Table, Button, Flex } from 'antd';
@@ -13,12 +14,12 @@ import Drawer from './drawer';
 
 // 定义TableCRUD的传参
 type TableCrudType = {
-	api_fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+	commonApi: CommonApi;
 	api_url: string;
 };
 
 
-export default ({ api_fetch, api_url }: TableCrudType) => {
+export default ({ commonApi, api_url }: TableCrudType) => {
 
 	const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 	// 代码分类：批量操作
@@ -51,34 +52,39 @@ export default ({ api_fetch, api_url }: TableCrudType) => {
 	const [resJsonTableOption, setResJsonTableOption] = useState<ResJsonTableOption>();
 	const [drawerRow, setDrawerRow] = useState<DataType>({});
 	const [drawerTitle, setDrawerTitle] = useState<string>('');
-	async function fetchData() {
-		setLoading(true);
 
-		const response: Response = await api_fetch(api_url);
-		const resJSON: ResJSON = await response.json();
-		if (resJSON.table) {
-			if (resJSON.table.option) {
-				setResJsonTableOption(resJSON.table.option);
-			}
-			if (resJSON.table.columns) {
-				setResJsonColumns(resJSON.table.columns);
-				const tableColumns: TableColumnsType<DataType> = [];
-				for (const column of resJSON.table.columns) {
-					tableColumns.push(column);
+	const fetchData = async (): Promise<void> => {
+		setLoading(true);
+		try {
+			const response: Response = await commonApi.apiFetch(api_url);
+			const resJSON: ResJSON = await response.json();
+			if (resJSON.table) {
+				if (resJSON.table.option) {
+					setResJsonTableOption(resJSON.table.option);
 				}
-				setColumns(tableColumns);
+				if (resJSON.table.columns) {
+					setResJsonColumns(resJSON.table.columns);
+					const tableColumns: TableColumnsType<DataType> = [];
+					for (const column of resJSON.table.columns) {
+						tableColumns.push(column);
+					}
+					setColumns(tableColumns);
+				}
+				if (resJSON.table.dataSource) {
+					setDataSource(resJSON.table.dataSource);
+				}
 			}
-			if (resJSON.table.dataSource) {
-				setDataSource(resJSON.table.dataSource);
-			}
+
+			//setDrawerRow({ name: 'asdf' });
+			setPagination((prev) => ({ ...prev, total: 0 }));
+
+		} catch (ex) {
+		} finally {
+			setLoading(false);
 		}
 
-		//setDrawerRow({ name: 'asdf' });
-		setPagination((prev) => ({ ...prev, total: 0 }));
-
-		setLoading(false);
-
 	}
+
 	useEffect(() => {
 		fetchData();
 	}, [filters, pagination.pageSize, pagination.current]);
@@ -105,20 +111,31 @@ export default ({ api_fetch, api_url }: TableCrudType) => {
 	};
 
 	const onDelete = async () => {
+		if (!await commonApi.modalConfirm({
+			content: `确定删除所选的 ${selectedRowKeys.length} 项吗？`,
+		})) {
+			return;
+		}
 		setLoading(true);
-		await api_fetch(api_url, { method: 'DELETE', body: JSON.stringify(selectedRowKeys) });
-		setLoading(false);
+		try {
+			await commonApi.apiFetch(api_url, { method: 'DELETE', body: JSON.stringify(selectedRowKeys) });
+			await fetchData();
+		} catch (ex) {
+		} finally {
+			setLoading(false);
+		}
 	}
 
 	return (<Flex vertical gap="small">
 		<Drawer
 			title={drawerTitle}
-			api_fetch={api_fetch}
+			commonApi={commonApi}
 			api_url={api_url}
 			columns={resJsonColumns}
 			row={drawerRow}
 			open={open}
 			onClose={() => setOpen(false)}
+			fetchData={fetchData}
 		/>
 		<Flex wrap gap="small">
 			<Button type="primary" onClick={onAddNew} icon={<PlusOutlined />}>新增</Button>

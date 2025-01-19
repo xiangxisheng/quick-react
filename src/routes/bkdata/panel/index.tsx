@@ -1,5 +1,6 @@
 import type React from 'react';
 import type { MenuProps } from 'antd';
+import type { CommonApi } from '@/utils/common/api';
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Route, Routes } from 'react-router-dom';
@@ -43,10 +44,10 @@ const items: MenuItem[] = [
 ];
 
 type AppType = {
-	api_fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+	commonApi: CommonApi;
 };
 
-function AppRouter({ api_fetch }: AppType) {
+function AppRouter({ commonApi }: AppType) {
 	const location = useLocation(); // 获取当前 URL 路径
 	const [current, setCurrent] = useState(location.pathname); // 同步选中状态
 	const navigate = useNavigate();
@@ -107,7 +108,7 @@ function AppRouter({ api_fetch }: AppType) {
 				}}>
 					<Routes>
 						<Route path="/" element={<App1 />} />
-						<Route path="/data/columns" element={<TableCRUD api_fetch={api_fetch} api_url='/api/bkdata/panel/data/columns' />} />
+						<Route path="/data/columns" element={<TableCRUD commonApi={commonApi} api_url='/api/bkdata/panel/data/columns' />} />
 					</Routes>
 				</Content>
 				<Footer style={{

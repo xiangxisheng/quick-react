@@ -1,4 +1,5 @@
 import type { DataType, ResJsonTableColumn } from '@/utils/common/api';
+import type { CommonApi } from '@/utils/common/api';
 import { Button, Col, DatePicker, Drawer, Form, Input, Row, Select, Space } from 'antd';
 import { Modal } from 'antd';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
@@ -11,7 +12,8 @@ type TableCrudType = {
     row: DataType;
     open: boolean;
     onClose: () => void;
-    api_fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+    commonApi: CommonApi;
+    fetchData: () => Promise<void>;
 };
 
 function getFormItemComponent(item: ResJsonTableColumn) {
@@ -52,7 +54,7 @@ function getFormItemComponent(item: ResJsonTableColumn) {
     }
 }
 
-export default ({ api_fetch, api_url, title, columns, row, open, onClose }: TableCrudType) => {
+export default ({ commonApi, api_url, title, columns, row, open, onClose, fetchData }: TableCrudType) => {
     const [modal, contextHolder] = Modal.useModal();
 
     const [form] = Form.useForm();
@@ -61,32 +63,36 @@ export default ({ api_fetch, api_url, title, columns, row, open, onClose }: Tabl
     };
 
     const onFinish = async (values: Record<string, string>) => {
-        const res = await api_fetch(api_url, {
-            method: 'POST', // 指定请求方法
-            headers: {
-                'Content-Type': 'application/json', // 指定请求头，表明是 JSON 数据
-            },
-            body: JSON.stringify(values), // 将数据转换为 JSON 字符串
-        });
-        if (!res.ok) {
-            return;
+        // 前端校验通过，开始向后端提交表单
+        try {
+            const res = await commonApi.apiFetch(api_url, {
+                method: 'POST', // 指定请求方法
+                headers: {
+                    'Content-Type': 'application/json', // 指定请求头，表明是 JSON 数据
+                },
+                body: JSON.stringify(values), // 将数据转换为 JSON 字符串
+            });
+            if (!res.ok) {
+                return;
+            }
+            form.resetFields();
+            onClose();
+            await fetchData();
+        } catch (ex) {
+
+        } finally {
+
         }
-        form.resetFields();
-        onClose();
     }
 
     const _onClose = async () => {
         if (form.isFieldsTouched()) {
             // 当表单内容有被修改时弹出[确认提示]
-            const rConfirm = await modal.confirm({
-                title: '确认提示',
-                icon: <ExclamationCircleOutlined />,
+            if (!await commonApi.modalConfirm({
                 content: '内容修改尚未保存，仍要离开吗？',
                 okText: '离开',
                 cancelText: '留下',
-                maskClosable: true,
-            });
-            if (!rConfirm) {
+            })) {
                 // 代表点了[取消]
                 return;
             }

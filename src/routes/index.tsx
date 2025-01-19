@@ -1,5 +1,6 @@
 import type React from 'react';
 import type { MenuProps } from 'antd';
+import type { CommonApi } from '@/utils/common/api';
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
@@ -52,15 +53,15 @@ const items: MenuItem[] = [
 
 
 type AppType = {
-	api_fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+	commonApi: CommonApi;
 };
 
-const App = ({ api_fetch }: AppType) => {
+const App = ({ commonApi }: AppType) => {
 
 	const routes: RouteConfig[] = [
 		{ path: '/', element: <Home /> },
 		{ path: '/aliyun/*', element: <AliyunIndex /> },
-		{ path: '/bkdata/*', element: <BkData api_fetch={api_fetch} /> },
+		{ path: '/bkdata/*', element: <BkData commonApi={commonApi} /> },
 		{ path: '/about', element: <About /> },
 		{ path: '/sign', element: <Sign /> },
 	];
@@ -124,12 +125,12 @@ type RouteIndexType = {
 import { useCommonApi } from '@/utils/common/api'
 
 const RouteIndex = ({ config }: RouteIndexType) => {
-	const { apiFetch, contextHolder } = useCommonApi();
+	const { commonApi, contextHolder } = useCommonApi();
 	console.log(config)
 	return (
 		<Router>
 			{contextHolder}
-			<App api_fetch={apiFetch} />
+			<App commonApi={commonApi} />
 		</Router>
 	);
 };
