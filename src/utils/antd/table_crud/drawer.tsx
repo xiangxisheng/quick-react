@@ -88,8 +88,9 @@ export default ({ commonApi, api_url, title, columns, row, open, onClose, fetchD
     const _onClose = async () => {
         if (form.isFieldsTouched()) {
             // 当表单内容有被修改时弹出[确认提示]
-            if (!await commonApi.modalConfirm({
-                content: '内容修改尚未保存，仍要离开吗？',
+            if (!await commonApi.modalConfirm([
+                '内容修改尚未保存，仍要离开吗？'
+            ], {
                 okText: '离开',
                 cancelText: '留下',
             })) {

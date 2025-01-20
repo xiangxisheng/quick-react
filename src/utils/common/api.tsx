@@ -41,24 +41,41 @@ export interface ResJSON {
 /* 类型定义结束 */
 
 export interface CommonApi {
+    modalError: (aContentLine: string[], props?: ModalFuncProps) => Promise<void>,
+    modalConfirm: (aContentLine: string[], props?: ModalFuncProps) => Promise<boolean>
     apiFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-    modalConfirm: (props: ModalFuncProps) => Promise<boolean>
 }
 
 export function useCommonApi() {
     const [modal, contextHolder] = Modal.useModal();
 
-    const modalError = (aContentLine: string[]) => {
-        modal.error({
+    const getContentLine = (aContentLine: string[]): React.ReactNode => {
+        return aContentLine.map((line, index) => (
+            <div key={index}>{line}</div>
+        ))
+    };
+
+    const modalError = async (aContentLine: string[], props?: ModalFuncProps): Promise<void> => {
+        await modal.error({
             title: '错误',
             icon: <ExclamationCircleOutlined />,
-            content: aContentLine.map((line, index) => (
-                <div key={index}>{line}</div>
-            )),
+            content: getContentLine(aContentLine),
             maskClosable: true,
+            ...props,
         });
     };
 
+    const modalConfirm = async (aContentLine: string[], props?: ModalFuncProps): Promise<boolean> => {
+        return await modal.confirm({
+            title: '确认提示',
+            icon: <ExclamationCircleOutlined />,
+            content: getContentLine(aContentLine),
+            okText: '确定',
+            cancelText: '取消',
+            maskClosable: true,
+            ...props,
+        });
+    };
 
     const apiFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
         try {
@@ -91,20 +108,10 @@ export function useCommonApi() {
         }
     };
 
-    const modalConfirm = async (props: ModalFuncProps): Promise<boolean> => {
-        return await modal.confirm({
-            title: '确认提示',
-            icon: <ExclamationCircleOutlined />,
-            okText: '确定',
-            cancelText: '取消',
-            maskClosable: true,
-            ...props,
-        });
-    };
-
     const commonApi: CommonApi = {
-        apiFetch,
+        modalError,
         modalConfirm,
+        apiFetch,
     }
 
     return {

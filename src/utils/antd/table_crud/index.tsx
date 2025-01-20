@@ -7,7 +7,7 @@ import type { ResJsonTableColumn, ResJsonTableOption } from '@/utils/common/api'
 import type { CommonApi } from '@/utils/common/api';
 
 import { useState, useEffect } from 'react';
-import { Table, Button, Flex } from 'antd';
+import { Table, Button, Flex, Space } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import Drawer from './drawer';
@@ -49,9 +49,37 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 	const [dataSource, setDataSource] = useState<DataType[]>([]);
 	const [columns, setColumns] = useState<TableColumnsType<DataType>>();
 	const [resJsonColumns, setResJsonColumns] = useState<ResJsonTableColumn[]>([]);
-	const [resJsonTableOption, setResJsonTableOption] = useState<ResJsonTableOption>();
+	const [resJsonTableOption, setResJsonTableOption] = useState<ResJsonTableOption>({ rowKey: 'key' });
 	const [drawerRow, setDrawerRow] = useState<DataType>({});
 	const [drawerTitle, setDrawerTitle] = useState<string>('');
+
+	const apiDelete = async (ids: unknown[]) => {
+		// 向后段API发送删除指令
+		try {
+			setLoading(true);
+			await commonApi.apiFetch(api_url, { method: 'DELETE', body: JSON.stringify(ids) });
+			await fetchData();
+		} catch (ex) {
+		} finally {
+			setLoading(false);
+		}
+	}
+
+	const onDeleteOne = async (value: any, record: DataType, index: number): Promise<void> => {
+		// 点击删除按钮时，弹出提示让用户确认删除操作
+		const rowId = record[resJsonTableOption.rowKey];
+		const aContentLine: string[] = [`确定要删除 ${resJsonTableOption.rowKey} = ${rowId} 吗？`];
+		if (!await commonApi.modalConfirm(aContentLine)) {
+			return;
+		}
+		await apiDelete([rowId]);
+	}
+
+	const onOpenEdit = async (value: any, record: DataType, index: number): Promise<void> => {
+		// 打开编辑框，获取单条数据
+		const rowId = record[resJsonTableOption.rowKey];
+		alert(rowId);
+	}
 
 	const fetchData = async (): Promise<void> => {
 		setLoading(true);
@@ -60,7 +88,8 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 			const resJSON: ResJSON = await response.json();
 			if (resJSON.table) {
 				if (resJSON.table.option) {
-					setResJsonTableOption(resJSON.table.option);
+					Object.assign(resJsonTableOption, resJSON.table.option);
+					setResJsonTableOption((prev) => ({ ...prev, ...resJSON.table?.option }));
 				}
 				if (resJSON.table.columns) {
 					setResJsonColumns(resJSON.table.columns);
@@ -68,6 +97,16 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 					for (const column of resJSON.table.columns) {
 						tableColumns.push(column);
 					}
+					tableColumns.push({
+						title: '操作',
+						key: 'operation',
+						fixed: 'right',
+						width: 100,
+						render: (value: any, record: DataType, index: number) => (<Space>
+							<a onClick={() => onOpenEdit(value, record, index)}>编辑</a>
+							<a onClick={() => onDeleteOne(value, record, index)}>删除</a>
+						</Space>),
+					});
 					setColumns(tableColumns);
 				}
 				if (resJSON.table.dataSource) {
@@ -111,19 +150,12 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 	};
 
 	const onDelete = async () => {
-		if (!await commonApi.modalConfirm({
-			content: `确定删除所选的 ${selectedRowKeys.length} 项吗？`,
-		})) {
+		if (!await commonApi.modalConfirm(
+			[`确定删除所选的 ${selectedRowKeys.length} 项吗？`]
+		)) {
 			return;
 		}
-		setLoading(true);
-		try {
-			await commonApi.apiFetch(api_url, { method: 'DELETE', body: JSON.stringify(selectedRowKeys) });
-			await fetchData();
-		} catch (ex) {
-		} finally {
-			setLoading(false);
-		}
+		await apiDelete(selectedRowKeys);
 	}
 
 	return (<Flex vertical gap="small">
@@ -149,6 +181,7 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 			dataSource={dataSource}
 			loading={loading}
 			rowKey={resJsonTableOption?.rowKey}
+			scroll={{ x: 'max-content' }}
 		/>
 	</Flex>);
 };
