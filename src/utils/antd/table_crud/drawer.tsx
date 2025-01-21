@@ -5,135 +5,135 @@ import { useEffect } from 'react';
 
 // 定义TableCRUD的传参
 type TableCrudType = {
-    title: string;
-    columns: ResJsonTableColumn[];
-    row: DataType;
-    open: boolean;
-    onClose: () => void;
-    commonApi: CommonApi;
-    onFinish: (values: Record<string, string>) => Promise<void>;
-    okText: string;
-    cancelText: string;
+	title: string;
+	columns: ResJsonTableColumn[];
+	row: DataType;
+	open: boolean;
+	onClose: () => void;
+	commonApi: CommonApi;
+	onFinish: (values: Record<string, string>) => Promise<void>;
+	okText: string;
+	cancelText: string;
 };
 
 function getFormItemComponent(item: ResJsonTableColumn) {
-    switch (item.form) {
-        case ('input'):
-            return (
-                <Input placeholder={item.placeholder} />
-            );
-        case ('url'):
-            return (
-                <Input
-                    style={{ width: '100%' }}
-                    addonBefore="http://"
-                    addonAfter=".com"
-                    placeholder={item.placeholder}
-                />
-            );
-        case ('select'):
-            return (
-                <Select placeholder={item.placeholder}>
-                    {item.options?.map((option) => (
-                        <Select.Option value={option.value}>{option.text}</Select.Option>
-                    ))}
-                </Select>
-            );
-        case ('textarea'):
-            return (
-                <Input.TextArea rows={4} placeholder={item.placeholder} />
-            );
-        case ('datepicker_rangepicker'):
-            return (
-                <DatePicker.RangePicker
-                    style={{ width: '100%' }}
-                    getPopupContainer={(trigger) => trigger.parentElement!}
-                />
-            );
+	switch (item.form) {
+		case ('input'):
+			return (
+				<Input placeholder={item.placeholder} />
+			);
+		case ('url'):
+			return (
+				<Input
+					style={{ width: '100%' }}
+					addonBefore="http://"
+					addonAfter=".com"
+					placeholder={item.placeholder}
+				/>
+			);
+		case ('select'):
+			return (
+				<Select placeholder={item.placeholder}>
+					{item.options?.map((option) => (
+						<Select.Option value={option.value}>{option.text}</Select.Option>
+					))}
+				</Select>
+			);
+		case ('textarea'):
+			return (
+				<Input.TextArea rows={4} placeholder={item.placeholder} />
+			);
+		case ('datepicker_rangepicker'):
+			return (
+				<DatePicker.RangePicker
+					style={{ width: '100%' }}
+					getPopupContainer={(trigger) => trigger.parentElement!}
+				/>
+			);
 
-    }
+	}
 }
 
 export default ({ commonApi, title, columns, row, open, onClose, onFinish, okText, cancelText }: TableCrudType) => {
 
-    const [form] = Form.useForm();
-    const handleSubmit = () => {
-        form.submit();
-    };
+	const [form] = Form.useForm();
+	const handleSubmit = () => {
+		form.submit();
+	};
 
-    useEffect(() => {
-        if (open === false) {
-            if (form.isFieldsTouched()) {
-                form.resetFields();
-            }
-        }
-    }, [open]);
+	useEffect(() => {
+		if (open === false) {
+			if (form.isFieldsTouched()) {
+				form.resetFields();
+			}
+		}
+	}, [open]);
 
-    useEffect(() => {
-        form.setFieldsValue(row);
-        form.resetFields();
-    }, [row]);
+	useEffect(() => {
+		form.setFieldsValue(row);
+		form.resetFields();
+	}, [row]);
 
-    const _onClose = async () => {
-        if (form.isFieldsTouched()) {
-            // 当表单内容有被修改时弹出[确认提示]
-            if (!await commonApi.modalConfirm([
-                '内容修改尚未保存，仍要离开吗？'
-            ], {
-                okText: '离开',
-                cancelText: '留下',
-            })) {
-                // 代表点了[取消]
-                return;
-            }
-        }
-        onClose();
-    };
+	const _onClose = async () => {
+		if (form.isFieldsTouched()) {
+			// 当表单内容有被修改时弹出[确认提示]
+			if (!await commonApi.modalConfirm([
+				'内容修改尚未保存，仍要离开吗？'
+			], {
+				okText: '离开',
+				cancelText: '留下',
+			})) {
+				// 代表点了[取消]
+				return;
+			}
+		}
+		onClose();
+	};
 
-    return (<>
-        <Drawer
-            title={title}
-            width={720}
-            onClose={_onClose}
-            open={open}
-            styles={{
-                body: {
-                    paddingBottom: 80,
-                },
-            }}
-            extra={
-                <Space>
-                    <Button onClick={_onClose}>{cancelText}</Button>
-                    <Button onClick={handleSubmit} type="primary">
-                        {okText}
-                    </Button>
-                </Space>
-            }
-        >
-            <Form layout="vertical" form={form} onFinish={onFinish} initialValues={row}>
-                <Row gutter={16}>
-                    {columns.map((item) => {
-                        if (!item.form) {
-                            return;
-                        }
-                        const component = getFormItemComponent(item);
-                        if (!component) {
-                            return;
-                        }
-                        return (
-                            <Col span={24}>
-                                <Form.Item
-                                    name={item.dataIndex}
-                                    label={item.title}
-                                    rules={item.rules}
-                                >
-                                    {component}
-                                </Form.Item>
-                            </Col>
-                        );
-                    })}
-                </Row>
-            </Form>
-        </Drawer>
-    </>);
+	return (<>
+		<Drawer
+			title={title}
+			width={720}
+			onClose={_onClose}
+			open={open}
+			styles={{
+				body: {
+					paddingBottom: 80,
+				},
+			}}
+			extra={
+				<Space>
+					<Button onClick={_onClose}>{cancelText}</Button>
+					<Button onClick={handleSubmit} type="primary">
+						{okText}
+					</Button>
+				</Space>
+			}
+		>
+			<Form layout="vertical" form={form} onFinish={onFinish} initialValues={row}>
+				<Row gutter={16}>
+					{columns.map((item) => {
+						if (!item.form) {
+							return;
+						}
+						const component = getFormItemComponent(item);
+						if (!component) {
+							return;
+						}
+						return (
+							<Col span={24}>
+								<Form.Item
+									name={item.dataIndex}
+									label={item.title}
+									rules={item.rules}
+								>
+									{component}
+								</Form.Item>
+							</Col>
+						);
+					})}
+				</Row>
+			</Form>
+		</Drawer>
+	</>);
 };

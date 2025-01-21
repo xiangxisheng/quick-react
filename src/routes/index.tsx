@@ -12,8 +12,8 @@ import BkData from '@/routes/bkdata';
 const { Content } = Layout;
 
 interface RouteConfig {
-    path: string;
-    element: React.ReactNode;
+	path: string;
+	element: React.ReactNode;
 }
 
 // 定义路由对应的页面组件
@@ -24,115 +24,115 @@ type MenuItem = Required<MenuProps>['items'][number];
 
 // 定义菜单项
 const items: MenuItem[] = [
-    {
-        label: '首页',
-        key: '/',
-        icon: <MailOutlined />,
-    },
-    {
-        label: '阿里云',
-        key: '/aliyun',
-        icon: <AppstoreOutlined />,
-    },
-    {
-        label: 'BK数据',
-        key: '/bkdata/panel',
-        icon: <AppstoreOutlined />,
-    },
-    {
-        label: '关于',
-        key: '/about',
-        icon: <AppstoreOutlined />,
-    },
-    {
-        label: '登录',
-        key: '/sign',
-        icon: <AppstoreOutlined />,
-    },
+	{
+		label: '首页',
+		key: '/',
+		icon: <MailOutlined />,
+	},
+	{
+		label: '阿里云',
+		key: '/aliyun',
+		icon: <AppstoreOutlined />,
+	},
+	{
+		label: 'BK数据',
+		key: '/bkdata/panel',
+		icon: <AppstoreOutlined />,
+	},
+	{
+		label: '关于',
+		key: '/about',
+		icon: <AppstoreOutlined />,
+	},
+	{
+		label: '登录',
+		key: '/sign',
+		icon: <AppstoreOutlined />,
+	},
 ];
 
 
 type AppType = {
-    commonApi: CommonApi;
+	commonApi: CommonApi;
 };
 
 const App = ({ commonApi }: AppType) => {
 
-    const routes: RouteConfig[] = [
-        { path: '/', element: <Home /> },
-        { path: '/aliyun/*', element: <AliyunIndex /> },
-        { path: '/bkdata/*', element: <BkData commonApi={commonApi} /> },
-        { path: '/about', element: <About /> },
-        { path: '/sign', element: <Sign /> },
-    ];
+	const routes: RouteConfig[] = [
+		{ path: '/', element: <Home /> },
+		{ path: '/aliyun/*', element: <AliyunIndex /> },
+		{ path: '/bkdata/*', element: <BkData commonApi={commonApi} /> },
+		{ path: '/about', element: <About /> },
+		{ path: '/sign', element: <Sign /> },
+	];
 
-    const location = useLocation(); // 获取当前 URL 路径
-    const [current, setCurrent] = useState(location.pathname); // 同步选中状态
-    const navigate = useNavigate();
+	const location = useLocation(); // 获取当前 URL 路径
+	const [current, setCurrent] = useState(location.pathname); // 同步选中状态
+	const navigate = useNavigate();
 
-    useEffect(() => {
-        // 设置 body 的 margin 为 0
-        document.body.style.margin = '0';
-        document.body.style.height = '100%';
-        document.documentElement.style.height = '100%';
-        const a = location.pathname.split('/');
-        for (const item of items) {
-            if ((location.pathname + '/').indexOf((item?.key ?? '').toString() + '/') === 0) {
-                // URL 变化时同步菜单高亮
-                setCurrent((item?.key ?? '').toString());
-                continue;
-            }
-        }
-    }, [location.pathname]);
+	useEffect(() => {
+		// 设置 body 的 margin 为 0
+		document.body.style.margin = '0';
+		document.body.style.height = '100%';
+		document.documentElement.style.height = '100%';
+		const a = location.pathname.split('/');
+		for (const item of items) {
+			if ((location.pathname + '/').indexOf((item?.key ?? '').toString() + '/') === 0) {
+				// URL 变化时同步菜单高亮
+				setCurrent((item?.key ?? '').toString());
+				continue;
+			}
+		}
+	}, [location.pathname]);
 
-    const onClick: MenuProps['onClick'] = (e) => {
-        console.log('click ', e);
-        setCurrent(e.key);
+	const onClick: MenuProps['onClick'] = (e) => {
+		console.log('click ', e);
+		setCurrent(e.key);
 
-        // 对非外部链接的菜单项手动导航
-        if (!e.keyPath.some((key) => key === 'external')) {
-            navigate(e.key); // 使用 e.key 作为路径
-        }
-    };
+		// 对非外部链接的菜单项手动导航
+		if (!e.keyPath.some((key) => key === 'external')) {
+			navigate(e.key); // 使用 e.key 作为路径
+		}
+	};
 
-    const memoizedRoutes = useMemo(() => routes, []);
+	const memoizedRoutes = useMemo(() => routes, []);
 
-    return (
-        <Layout style={{ height: '100%' }}>
-            <Menu
-                onClick={onClick}
-                selectedKeys={[current]}
-                mode="horizontal"
-                items={items}
-            />
-            <Content>
-                <Routes>
-                    {memoizedRoutes.map((route, index) => (
-                        <Route key={index} path={route.path} element={route.element} />
-                    ))}
-                </Routes>
-            </Content>
-        </Layout>
-    );
+	return (
+		<Layout style={{ height: '100%' }}>
+			<Menu
+				onClick={onClick}
+				selectedKeys={[current]}
+				mode="horizontal"
+				items={items}
+			/>
+			<Content>
+				<Routes>
+					{memoizedRoutes.map((route, index) => (
+						<Route key={index} path={route.path} element={route.element} />
+					))}
+				</Routes>
+			</Content>
+		</Layout>
+	);
 };
 
 // 使用 Router 包裹应用
 import type { Config } from '@/config';
 type RouteIndexType = {
-    config: Config;
+	config: Config;
 };
 
 import { useCommonApi } from '@/utils/common/api'
 
 const RouteIndex = ({ config }: RouteIndexType) => {
-    const [commonApi, contextHolder] = useCommonApi();
-    console.log(config)
-    return (
-        <Router>
-            {contextHolder}
-            <App commonApi={commonApi} />
-        </Router>
-    );
+	const [commonApi, contextHolder] = useCommonApi();
+	console.log(config)
+	return (
+		<Router>
+			{contextHolder}
+			<App commonApi={commonApi} />
+		</Router>
+	);
 };
 
 export default RouteIndex;
