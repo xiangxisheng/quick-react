@@ -46,7 +46,7 @@ export interface CommonApi {
     apiFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 }
 
-export function useCommonApi() {
+export function useCommonApi(): [CommonApi, JSX.Element] {
     const [modal, contextHolder] = Modal.useModal();
 
     const getContentLine = (aContentLine: string[]): React.ReactNode => {
@@ -114,8 +114,8 @@ export function useCommonApi() {
         apiFetch,
     }
 
-    return {
+    return [
         commonApi,
         contextHolder,
-    };
+    ];
 }

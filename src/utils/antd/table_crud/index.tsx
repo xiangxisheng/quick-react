@@ -2,15 +2,15 @@ import type React from 'react';
 import type { FilterValue } from 'antd/es/table/interface';
 import type { TableProps, TablePaginationConfig } from 'antd';
 import type { TableColumnsType } from 'antd';
-import type { ResJSON, DataType } from '@/utils/common/api';
-import type { ResJsonTableColumn, ResJsonTableOption } from '@/utils/common/api';
-import type { CommonApi } from '@/utils/common/api';
+import type { ResJSON, DataType, ResJsonTable } from '@/utils/common/api';
+import type { ResJsonTableOption } from '@/utils/common/api';
+import type { CommonApi, ResJsonTableColumn } from '@/utils/common/api';
 
 import { useState, useEffect } from 'react';
 import { Table, Button, Flex, Space } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
-import Drawer from './drawer';
+import { useDrawer } from '@/utils/common/drawer';
 
 // 定义TableCRUD的传参
 type TableCrudType = {
@@ -20,6 +20,7 @@ type TableCrudType = {
 
 
 export default ({ commonApi, api_url }: TableCrudType) => {
+	const [drawer, contextHolderDrawer] = useDrawer(commonApi);
 
 	const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 	// 代码分类：批量操作
@@ -47,11 +48,12 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 	});
 	const [filters, setFilters] = useState<Record<string, FilterValue | null>>({});
 	const [dataSource, setDataSource] = useState<DataType[]>([]);
-	const [columns, setColumns] = useState<TableColumnsType<DataType>>();
+	const [tableColumns, setTableColumns] = useState<TableColumnsType<DataType>>();
 	const [resJsonColumns, setResJsonColumns] = useState<ResJsonTableColumn[]>([]);
 	const [resJsonTableOption, setResJsonTableOption] = useState<ResJsonTableOption>({ rowKey: 'key' });
-	const [drawerRow, setDrawerRow] = useState<DataType>({});
-	const [drawerTitle, setDrawerTitle] = useState<string>('');
+	const cacheResJsonTable: ResJsonTable = {
+		columns: [],
+	};
 
 	const apiDelete = async (ids: unknown[]) => {
 		// 向后段API发送删除指令
@@ -78,7 +80,55 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 	const onOpenEdit = async (value: any, record: DataType, index: number): Promise<void> => {
 		// 打开编辑框，获取单条数据
 		const rowId = record[resJsonTableOption.rowKey];
-		alert(rowId);
+		const url = `${api_url}/${rowId}`;
+		try {
+			const res = await commonApi.apiFetch(url, {
+				method: 'GET', // 指定请求方法
+				headers: {
+					'Content-Type': 'application/json', // 指定请求头，表明是 JSON 数据
+				},
+			});
+			const row = await res.json();
+			if (!res.ok) {
+				return;
+			}
+			if (!cacheResJsonTable.columns) {
+				alert('no cacheResJsonTable.columns');
+				return;
+			}
+			const newRow = await drawer.drawerForm({
+				title: '编辑',
+				columns: cacheResJsonTable.columns,
+				row,
+			});
+			if (!newRow) {
+				// 用户点了[取消]按钮
+				return;
+			}
+			try {
+				const res = await commonApi.apiFetch(url, {
+					method: 'PUT', // 指定请求方法
+					headers: {
+						'Content-Type': 'application/json', // 指定请求头，表明是 JSON 数据
+					},
+					body: JSON.stringify(newRow), // 将数据转换为 JSON 字符串
+				});
+				if (!res.ok) {
+					return;
+				}
+				drawer.drawerClose();
+				await fetchData();
+			} catch (ex) {
+
+			} finally {
+
+			}
+		} catch (ex) {
+
+		} finally {
+
+		}
+
 	}
 
 	const fetchData = async (): Promise<void> => {
@@ -92,6 +142,7 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 					setResJsonTableOption((prev) => ({ ...prev, ...resJSON.table?.option }));
 				}
 				if (resJSON.table.columns) {
+					cacheResJsonTable.columns = resJSON.table.columns;
 					setResJsonColumns(resJSON.table.columns);
 					const tableColumns: TableColumnsType<DataType> = [];
 					for (const column of resJSON.table.columns) {
@@ -107,7 +158,7 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 							<a onClick={() => onDeleteOne(value, record, index)}>删除</a>
 						</Space>),
 					});
-					setColumns(tableColumns);
+					setTableColumns(tableColumns);
 				}
 				if (resJSON.table.dataSource) {
 					setDataSource(resJSON.table.dataSource);
@@ -142,11 +193,35 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 	// 代码分类：导航
 	const navigate = useNavigate();
 
-	const [open, setOpen] = useState(false);
+	const onAddNew = async (columns: ResJsonTableColumn[]) => {
+		const newRow = await drawer.drawerForm({
+			title: '新增',
+			columns,
+		});
+		if (!newRow) {
+			// 用户点了[取消]按钮
+			return;
+		}
+		// 前端校验通过，开始向后端提交表单
+		try {
+			const res = await commonApi.apiFetch(api_url, {
+				method: 'POST', // 指定请求方法
+				headers: {
+					'Content-Type': 'application/json', // 指定请求头，表明是 JSON 数据
+				},
+				body: JSON.stringify(newRow), // 将数据转换为 JSON 字符串
+			});
+			if (!res.ok) {
+				return;
+			}
+			//form.resetFields();
+			drawer.drawerClose();
+			await fetchData();
+		} catch (ex) {
 
-	const onAddNew = () => {
-		setDrawerTitle('新增');
-		setOpen(true)
+		} finally {
+
+		}
 	};
 
 	const onDelete = async () => {
@@ -159,25 +234,16 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 	}
 
 	return (<Flex vertical gap="small">
-		<Drawer
-			title={drawerTitle}
-			commonApi={commonApi}
-			api_url={api_url}
-			columns={resJsonColumns}
-			row={drawerRow}
-			open={open}
-			onClose={() => setOpen(false)}
-			fetchData={fetchData}
-		/>
+		{contextHolderDrawer}
 		<Flex wrap gap="small">
-			<Button type="primary" onClick={onAddNew} icon={<PlusOutlined />}>新增</Button>
+			<Button type="primary" onClick={() => onAddNew(resJsonColumns)} icon={<PlusOutlined />}>新增</Button>
 			<Button danger type="primary" disabled={selectedRowKeys.length === 0} onClick={onDelete} icon={<DeleteOutlined />}>删除</Button>
 		</Flex>
 		<Table<DataType>
 			rowSelection={rowSelection}
 			pagination={pagination}
 			onChange={onChange}
-			columns={columns}
+			columns={tableColumns}
 			dataSource={dataSource}
 			loading={loading}
 			rowKey={resJsonTableOption?.rowKey}

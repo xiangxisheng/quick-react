@@ -1,19 +1,19 @@
 import type { DataType, ResJsonTableColumn } from '@/utils/common/api';
 import type { CommonApi } from '@/utils/common/api';
 import { Button, Col, DatePicker, Drawer, Form, Input, Row, Select, Space } from 'antd';
-import { Modal } from 'antd';
-import { ExclamationCircleOutlined } from '@ant-design/icons';
+import { useEffect } from 'react';
 
 // 定义TableCRUD的传参
 type TableCrudType = {
-    api_url: string;
     title: string;
     columns: ResJsonTableColumn[];
     row: DataType;
     open: boolean;
     onClose: () => void;
     commonApi: CommonApi;
-    fetchData: () => Promise<void>;
+    onFinish: (values: Record<string, string>) => Promise<void>;
+    okText: string;
+    cancelText: string;
 };
 
 function getFormItemComponent(item: ResJsonTableColumn) {
@@ -54,36 +54,25 @@ function getFormItemComponent(item: ResJsonTableColumn) {
     }
 }
 
-export default ({ commonApi, api_url, title, columns, row, open, onClose, fetchData }: TableCrudType) => {
-    const [modal, contextHolder] = Modal.useModal();
+export default ({ commonApi, title, columns, row, open, onClose, onFinish, okText, cancelText }: TableCrudType) => {
 
     const [form] = Form.useForm();
     const handleSubmit = () => {
         form.submit();
     };
 
-    const onFinish = async (values: Record<string, string>) => {
-        // 前端校验通过，开始向后端提交表单
-        try {
-            const res = await commonApi.apiFetch(api_url, {
-                method: 'POST', // 指定请求方法
-                headers: {
-                    'Content-Type': 'application/json', // 指定请求头，表明是 JSON 数据
-                },
-                body: JSON.stringify(values), // 将数据转换为 JSON 字符串
-            });
-            if (!res.ok) {
-                return;
+    useEffect(() => {
+        if (open === false) {
+            if (form.isFieldsTouched()) {
+                form.resetFields();
             }
-            form.resetFields();
-            onClose();
-            await fetchData();
-        } catch (ex) {
-
-        } finally {
-
         }
-    }
+    }, [open]);
+
+    useEffect(() => {
+        form.setFieldsValue(row);
+        form.resetFields();
+    }, [row]);
 
     const _onClose = async () => {
         if (form.isFieldsTouched()) {
@@ -98,12 +87,10 @@ export default ({ commonApi, api_url, title, columns, row, open, onClose, fetchD
                 return;
             }
         }
-        form.resetFields();
         onClose();
     };
 
     return (<>
-        {contextHolder}
         <Drawer
             title={title}
             width={720}
@@ -116,9 +103,9 @@ export default ({ commonApi, api_url, title, columns, row, open, onClose, fetchD
             }}
             extra={
                 <Space>
-                    <Button onClick={_onClose}>取消</Button>
+                    <Button onClick={_onClose}>{cancelText}</Button>
                     <Button onClick={handleSubmit} type="primary">
-                        确定
+                        {okText}
                     </Button>
                 </Space>
             }
