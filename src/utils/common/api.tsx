@@ -1,7 +1,7 @@
 import { Modal, ModalFuncProps } from 'antd';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
 
-/* 类型定义开始 */
+/* 前端类型定义开始 */
 export interface DataType extends Record<string, unknown> { }
 
 interface ResJsonTableColumnRule {
@@ -17,11 +17,13 @@ interface ResJsonTableColumnSelectOption {
 export interface ResJsonTableColumn {
 	dataIndex: string;
 	title: string;
-	form?: string;
+	component?: 'textbox' | 'url' | 'textarea' | 'select' | 'datepicker' | 'datepicker_rangepicker';
 	rules?: ResJsonTableColumnRule[];
 	ellipsis?: boolean;
 	placeholder?: string;
 	options?: ResJsonTableColumnSelectOption[];
+	dataType?: 'js_timestamp';
+	dayjsFormat?: string;
 }
 
 export interface ResJsonTableOption {
@@ -35,10 +37,10 @@ export interface ResJsonTable {
 }
 
 export interface ResJSON {
-	table?: ResJsonTable,
+	table?: ResJsonTable;
 	message?: string;
 }
-/* 类型定义结束 */
+/* 前端类型定义结束 */
 
 export interface CommonApi {
 	modalError: (aContentLine: string[], props?: ModalFuncProps) => Promise<void>,
@@ -103,7 +105,7 @@ export function useCommonApi(): [CommonApi, JSX.Element] {
 				modalError(['未知错误在apiFetch']);
 				throw ex;
 			}
-			modalError([ex.toString()]);
+			//modalError([ex.toString()]);
 			throw ex;
 		}
 	};

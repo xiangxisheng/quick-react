@@ -11,6 +11,7 @@ import { Table, Button, Flex, Space } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useDrawer } from '@/utils/common/drawer';
+import dayjs from 'dayjs';
 
 // 定义TableCRUD的传参
 type TableCrudType = {
@@ -96,33 +97,35 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 				alert('no cacheResJsonTable.columns');
 				return;
 			}
-			const newRow = await drawer.drawerForm({
+			await drawer.drawerForm({
 				title: '编辑',
 				columns: cacheResJsonTable.columns,
 				row,
-			});
-			if (!newRow) {
-				// 用户点了[取消]按钮
-				return;
-			}
-			try {
-				const res = await commonApi.apiFetch(url, {
-					method: 'PUT', // 指定请求方法
-					headers: {
-						'Content-Type': 'application/json', // 指定请求头，表明是 JSON 数据
-					},
-					body: JSON.stringify(newRow), // 将数据转换为 JSON 字符串
-				});
-				if (!res.ok) {
+			}, async (newRow) => {
+				if (!newRow) {
+					// 用户点了[取消]按钮
 					return;
 				}
-				drawer.drawerClose();
-				await fetchData();
-			} catch (ex) {
+				try {
+					const res = await commonApi.apiFetch(url, {
+						method: 'PUT', // 指定请求方法
+						headers: {
+							'Content-Type': 'application/json', // 指定请求头，表明是 JSON 数据
+						},
+						body: JSON.stringify(newRow), // 将数据转换为 JSON 字符串
+					});
+					if (!res.ok) {
+						return;
+					}
+					drawer.drawerClose();
+					await fetchData();
+				} catch (ex) {
 
-			} finally {
+				} finally {
 
-			}
+				}
+			});
+
 		} catch (ex) {
 
 		} finally {
@@ -146,7 +149,26 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 					setResJsonColumns(resJSON.table.columns);
 					const tableColumns: TableColumnsType<DataType> = [];
 					for (const column of resJSON.table.columns) {
-						tableColumns.push(column);
+						tableColumns.push({
+							...column,
+							render: (value) => {
+								if (column.dataType === 'js_timestamp') {
+									if (!value) {
+										return `(空)`;
+									}
+									return dayjs(value).format(column.dayjsFormat);
+								}
+								if (column.options) {
+									for (const option of column.options) {
+										if (option.value !== value) {
+											continue;
+										}
+										return option.text;
+									}
+								}
+								return value;
+							},
+						});
 					}
 					tableColumns.push({
 						title: '操作',
@@ -194,34 +216,36 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 	const navigate = useNavigate();
 
 	const onAddNew = async (columns: ResJsonTableColumn[]) => {
-		const newRow = await drawer.drawerForm({
+		await drawer.drawerForm({
 			title: '新增',
 			columns,
-		});
-		if (!newRow) {
-			// 用户点了[取消]按钮
-			return;
-		}
-		// 前端校验通过，开始向后端提交表单
-		try {
-			const res = await commonApi.apiFetch(api_url, {
-				method: 'POST', // 指定请求方法
-				headers: {
-					'Content-Type': 'application/json', // 指定请求头，表明是 JSON 数据
-				},
-				body: JSON.stringify(newRow), // 将数据转换为 JSON 字符串
-			});
-			if (!res.ok) {
+		}, async (newRow) => {
+			if (!newRow) {
+				// 用户点了[取消]按钮
 				return;
 			}
-			//form.resetFields();
-			drawer.drawerClose();
-			await fetchData();
-		} catch (ex) {
+			// 前端校验通过，开始向后端提交表单
+			try {
+				const res = await commonApi.apiFetch(api_url, {
+					method: 'POST', // 指定请求方法
+					headers: {
+						'Content-Type': 'application/json', // 指定请求头，表明是 JSON 数据
+					},
+					body: JSON.stringify(newRow), // 将数据转换为 JSON 字符串
+				});
+				if (!res.ok) {
+					return;
+				}
+				//form.resetFields();
+				drawer.drawerClose();
+				await fetchData();
+			} catch (ex) {
 
-		} finally {
+			} finally {
 
-		}
+			}
+		});
+
 	};
 
 	const onDelete = async () => {

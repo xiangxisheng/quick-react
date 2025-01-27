@@ -17,8 +17,8 @@ type TableCrudType = {
 };
 
 function getFormItemComponent(item: ResJsonTableColumn) {
-	switch (item.form) {
-		case ('input'):
+	switch (item.component) {
+		case ('textbox'):
 			return (
 				<Input placeholder={item.placeholder} />
 			);
@@ -42,6 +42,17 @@ function getFormItemComponent(item: ResJsonTableColumn) {
 		case ('textarea'):
 			return (
 				<Input.TextArea rows={4} placeholder={item.placeholder} />
+			);
+		case ('datepicker'):
+			return (
+				<DatePicker
+					style={{ width: '100%' }}
+					format={item.dayjsFormat}
+					placeholder={item.placeholder}
+					onChange={(_, dateString) => {
+						console.log('onChange', item.dataIndex, dateString);
+					}}
+				/>
 			);
 		case ('datepicker_rangepicker'):
 			return (
@@ -70,6 +81,7 @@ export default ({ commonApi, title, columns, row, open, onClose, onFinish, okTex
 	}, [open]);
 
 	useEffect(() => {
+		// 外部调用设置新的row值时，刷新新值
 		form.setFieldsValue(row);
 		form.resetFields();
 	}, [row]);
@@ -113,7 +125,7 @@ export default ({ commonApi, title, columns, row, open, onClose, onFinish, okTex
 			<Form layout="vertical" form={form} onFinish={onFinish} initialValues={row}>
 				<Row gutter={16}>
 					{columns.map((item) => {
-						if (!item.form) {
+						if (!item.component) {
 							return;
 						}
 						const component = getFormItemComponent(item);
