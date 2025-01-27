@@ -152,10 +152,12 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 						tableColumns.push({
 							...column,
 							render: (value) => {
-								if (column.dataType === 'js_timestamp') {
+								if (column.dayjsFormat) {
 									if (!value) {
 										return `(空)`;
 									}
+								}
+								if (column.dataType === 'js_timestamp') {
 									return dayjs(value).format(column.dayjsFormat);
 								}
 								if (column.options) {

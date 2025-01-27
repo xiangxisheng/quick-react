@@ -32,6 +32,9 @@ export function useDrawer(commonApi: CommonApi): [drawerType, JSX.Element] {
 			if (props.row) {
 				for (const column of props.columns) {
 					if (column.dayjsFormat) {
+						if (!props.row[column.dataIndex]) {
+							continue;
+						}
 						// 读入日期之前将字符串转换成dayjs格式
 						props.row[column.dataIndex] = dayjs(props.row[column.dataIndex]?.toString(), column.dayjsFormat);
 					}
@@ -52,6 +55,9 @@ export function useDrawer(commonApi: CommonApi): [drawerType, JSX.Element] {
 		if (resolveRef.current) {
 			for (const column of columns) {
 				if (column.dayjsFormat) {
+					if (!values[column.dataIndex]) {
+						continue;
+					}
 					// 返回日期之前将dayjs转换成字符串
 					values[column.dataIndex] = dayjs(values[column.dataIndex]).format(column.dayjsFormat);
 				}
