@@ -84,10 +84,22 @@ export function useCommonApi(): [CommonApi, JSX.Element] {
 		});
 	};
 
+	const getJsonByRes = async (res: Response): Promise<ResJSON> => {
+		const text = await res.text();
+		try {
+			return JSON.parse(text);
+		} catch (e) {
+			return {
+				title: 'JSON解析失败',
+				message: text,
+			}
+		}
+	};
+
 	const apiFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
 		try {
 			const res: Response = await fetch(input, init);
-			const resJSON: ResJSON = await res.json();
+			const resJSON: ResJSON = await getJsonByRes(res);
 			if (!res.ok) {
 				const aContentLine = [];
 				aContentLine.push(`${init?.method} ${input}`);

@@ -63,6 +63,7 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 			await commonApi.apiFetch(api_url, { method: 'DELETE', body: JSON.stringify(ids) });
 			await fetchData();
 		} catch (ex) {
+			console.error(ex);
 		} finally {
 			setLoading(false);
 		}
@@ -107,7 +108,7 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 				drawer.drawerClose();
 				await fetchData();
 			} catch (ex) {
-
+				console.error(ex);
 			} finally {
 				drawerForm1.setSubmitting‌(false);
 			}
@@ -130,7 +131,7 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 			drawerForm1.setRow(row);
 
 		} catch (ex) {
-
+			console.error(ex);
 		} finally {
 			drawerForm1.setLoading(false);
 		}
@@ -196,6 +197,7 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 			setPagination((prev) => ({ ...prev, total: 0 }));
 
 		} catch (ex) {
+			console.error(ex);
 		} finally {
 			setLoading(false);
 		}
@@ -221,7 +223,7 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 	const navigate = useNavigate();
 
 	const onAddNew = async (columns: ResJsonTableColumn[]) => {
-		await drawer.drawerForm({
+		const drawerForm = drawer.drawerForm({
 			title: '新增',
 			columns,
 		}, async (newRow) => {
@@ -230,6 +232,7 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 				return;
 			}
 			// 前端校验通过，开始向后端提交表单
+			drawerForm.setSubmitting‌(true);
 			try {
 				const res = await commonApi.apiFetch(api_url, {
 					method: 'POST', // 指定请求方法
@@ -245,9 +248,9 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 				drawer.drawerClose();
 				await fetchData();
 			} catch (ex) {
-
+				console.error(ex);
 			} finally {
-
+				drawerForm.setSubmitting‌(false);
 			}
 		});
 
@@ -265,7 +268,7 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 	return (<Flex vertical gap="small">
 		{contextHolderDrawer}
 		<Flex wrap gap="small">
-			<Button type="primary" onClick={() => onAddNew(resJsonColumns)} icon={<PlusOutlined />}>新增</Button>
+			<Button type="primary" onClick={() => onAddNew(resJsonColumns)} icon={<PlusOutlined />} disabled={loading}>新增</Button>
 			<Button danger type="primary" disabled={selectedRowKeys.length === 0} onClick={onDelete} icon={<DeleteOutlined />}>删除</Button>
 		</Flex>
 		<Table<DataType>

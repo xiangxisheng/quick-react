@@ -132,7 +132,12 @@ export default ({
 			extra={
 				<Space>
 					<Button onClick={_onClose}>{cancelText}</Button>
-					<Button loading={submitting‌} disabled={loading} onClick={handleSubmit} type="primary">
+					<Button
+						loading={submitting‌}
+						disabled={loading}
+						onClick={handleSubmit}
+						type="primary"
+					>
 						{okText}
 					</Button>
 				</Space>
