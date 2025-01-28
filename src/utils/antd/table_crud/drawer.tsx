@@ -15,6 +15,8 @@ type TableCrudType = {
 	onFinish: (values: Record<string, string>) => Promise<void>;
 	okText: string;
 	cancelText: string;
+	loading: boolean;
+	submitting‌: boolean;
 };
 
 function getFormItemComponent(item: ResJsonTableColumn) {
@@ -67,7 +69,19 @@ function getFormItemComponent(item: ResJsonTableColumn) {
 	}
 }
 
-export default ({ commonApi, title, columns, row, open, onClose, onFinish, okText, cancelText }: TableCrudType) => {
+export default ({
+	commonApi,
+	title,
+	columns,
+	row,
+	open,
+	onClose,
+	onFinish,
+	okText,
+	cancelText,
+	loading,
+	submitting‌,
+}: TableCrudType) => {
 
 	const [form] = Form.useForm();
 	const handleSubmit = () => {
@@ -118,13 +132,20 @@ export default ({ commonApi, title, columns, row, open, onClose, onFinish, okTex
 			extra={
 				<Space>
 					<Button onClick={_onClose}>{cancelText}</Button>
-					<Button onClick={handleSubmit} type="primary">
+					<Button loading={submitting‌} disabled={loading} onClick={handleSubmit} type="primary">
 						{okText}
 					</Button>
 				</Space>
 			}
+			loading={loading}
 		>
-			<Form layout="vertical" form={form} onFinish={onFinish} initialValues={row}>
+			<Form
+				layout="vertical"
+				form={form}
+				onFinish={onFinish}
+				initialValues={row}
+				disabled={submitting‌}
+			>
 				<Row gutter={16}>
 					{columns.map((item) => {
 						if (!item.component) {

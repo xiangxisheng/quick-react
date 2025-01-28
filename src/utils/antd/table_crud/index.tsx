@@ -80,6 +80,40 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 
 	const onOpenEdit = async (value: any, record: DataType, index: number): Promise<void> => {
 		// 打开编辑框，获取单条数据
+		if (!cacheResJsonTable.columns) {
+			alert('no cacheResJsonTable.columns');
+			return;
+		}
+		const drawerForm1 = drawer.drawerForm({
+			title: '编辑',
+			columns: cacheResJsonTable.columns,
+		}, async (newRow) => {
+			if (!newRow) {
+				// 用户点了[取消]按钮
+				return;
+			}
+			drawerForm1.setSubmitting‌(true);
+			try {
+				const res = await commonApi.apiFetch(url, {
+					method: 'PUT', // 指定请求方法
+					headers: {
+						'Content-Type': 'application/json', // 指定请求头，表明是 JSON 数据
+					},
+					body: JSON.stringify(newRow), // 将数据转换为 JSON 字符串
+				});
+				if (!res.ok) {
+					return;
+				}
+				drawer.drawerClose();
+				await fetchData();
+			} catch (ex) {
+
+			} finally {
+				drawerForm1.setSubmitting‌(false);
+			}
+		});
+		drawerForm1.setLoading(true);
+
 		const rowId = record[resJsonTableOption.rowKey];
 		const url = `${api_url}/${rowId}`;
 		try {
@@ -93,43 +127,12 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 			if (!res.ok) {
 				return;
 			}
-			if (!cacheResJsonTable.columns) {
-				alert('no cacheResJsonTable.columns');
-				return;
-			}
-			await drawer.drawerForm({
-				title: '编辑',
-				columns: cacheResJsonTable.columns,
-				row,
-			}, async (newRow) => {
-				if (!newRow) {
-					// 用户点了[取消]按钮
-					return;
-				}
-				try {
-					const res = await commonApi.apiFetch(url, {
-						method: 'PUT', // 指定请求方法
-						headers: {
-							'Content-Type': 'application/json', // 指定请求头，表明是 JSON 数据
-						},
-						body: JSON.stringify(newRow), // 将数据转换为 JSON 字符串
-					});
-					if (!res.ok) {
-						return;
-					}
-					drawer.drawerClose();
-					await fetchData();
-				} catch (ex) {
-
-				} finally {
-
-				}
-			});
+			drawerForm1.setRow(row);
 
 		} catch (ex) {
 
 		} finally {
-
+			drawerForm1.setLoading(false);
 		}
 
 	}

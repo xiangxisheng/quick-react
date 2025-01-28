@@ -4,9 +4,15 @@ import { useState, useRef } from 'react';
 import DrawerForm from '@/utils/antd/table_crud/drawer';
 import dayjs from 'dayjs';
 
+interface testType {
+	setRow: (value: DataType) => void;
+	setLoading: (value: boolean) => void;
+	setSubmitting‌: (value: boolean) => void;
+}
+
 export interface drawerType {
 	drawerClose: () => void;
-	drawerForm: (props: DrawerFuncProps, callback: (value?: DataType) => void) => Promise<DataType | undefined> | void;
+	drawerForm: (props: DrawerFuncProps, callback: (value?: DataType) => void) => testType;
 }
 
 export interface DrawerFuncProps {
@@ -21,12 +27,14 @@ export function useDrawer(commonApi: CommonApi): [drawerType, JSX.Element] {
 	const [row, setRow] = useState<DataType>({});
 	const [title, setTitle] = useState<string>('');
 	const resolveRef = useRef<(value?: DataType) => void>(); // 使用 useRef 持久化 resolve
+	const [loading, setLoading] = useState<boolean>(false);
+	const [submitting‌, setSubmitting‌] = useState<boolean>(false);
 
 	const drawer: drawerType = {
 		drawerClose: () => {
 			setOpen(false);
 		},
-		drawerForm: (props: DrawerFuncProps, callback?: (value?: DataType) => void): Promise<DataType | undefined> | void => {
+		drawerForm: (props: DrawerFuncProps, callback?: (value?: DataType) => void): testType => {
 			setTitle(props.title);
 			setColumns(props.columns);
 			setRow({});
@@ -45,11 +53,12 @@ export function useDrawer(commonApi: CommonApi): [drawerType, JSX.Element] {
 			setOpen(true);
 			if (callback) {
 				resolveRef.current = callback;
-				return;
 			}
-			return new Promise((_resolve, reject) => {
-				resolveRef.current = _resolve;
-			});
+			return {
+				setRow,
+				setLoading,
+				setSubmitting‌,
+			};
 		}
 	};
 	const onFinish = async (values: Record<string, string | number | Date | Dayjs | null | undefined>) => {
@@ -84,6 +93,8 @@ export function useDrawer(commonApi: CommonApi): [drawerType, JSX.Element] {
 			onClose={onClose}
 			okText='确定'
 			cancelText='取消'
+			loading={loading}
+			submitting‌={submitting‌}
 		/>
 	];
 }
