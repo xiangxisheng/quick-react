@@ -7,7 +7,7 @@ import type { ResJsonTableOption } from '@/utils/common/api';
 import type { CommonApi, ResJsonTableColumn } from '@/utils/common/api';
 
 import { useState, useEffect } from 'react';
-import { Table, Button, Flex, Space } from 'antd';
+import { Table, Button, Flex, Space, Tag } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useDrawer } from '@/utils/common/drawer';
@@ -154,7 +154,7 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 							render: (value) => {
 								if (column.dayjsFormat) {
 									if (!value) {
-										return `(空)`;
+										return <span style={{ color: '#CCCCCC' }}>(空)</span>;
 									}
 								}
 								if (column.dataType === 'js_timestamp') {
@@ -165,7 +165,7 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 										if (option.value !== value) {
 											continue;
 										}
-										return option.text;
+										return <Tag color={option.color} key={option.value}>{option.text}</Tag>;
 									}
 								}
 								return value;

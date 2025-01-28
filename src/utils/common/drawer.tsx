@@ -29,6 +29,7 @@ export function useDrawer(commonApi: CommonApi): [drawerType, JSX.Element] {
 		drawerForm: (props: DrawerFuncProps, callback?: (value?: DataType) => void): Promise<DataType | undefined> | void => {
 			setTitle(props.title);
 			setColumns(props.columns);
+			setRow({});
 			if (props.row) {
 				for (const column of props.columns) {
 					if (column.dayjsFormat) {

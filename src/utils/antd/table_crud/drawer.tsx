@@ -1,6 +1,7 @@
 import type { DataType, ResJsonTableColumn } from '@/utils/common/api';
 import type { CommonApi } from '@/utils/common/api';
 import { Button, Col, DatePicker, Drawer, Form, Input, Row, Select, Space } from 'antd';
+import { InputNumber } from 'antd';
 import { useEffect } from 'react';
 
 // 定义TableCRUD的传参
@@ -61,7 +62,8 @@ function getFormItemComponent(item: ResJsonTableColumn) {
 					getPopupContainer={(trigger) => trigger.parentElement!}
 				/>
 			);
-
+		case ('inputnumber'):
+			return (<InputNumber style={{ width: '100%' }} placeholder={item.placeholder} />);
 	}
 }
 

@@ -1,4 +1,5 @@
 import { Modal, ModalFuncProps } from 'antd';
+import { message } from 'antd';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
 
 /* 前端类型定义开始 */
@@ -12,17 +13,19 @@ interface ResJsonTableColumnRule {
 interface ResJsonTableColumnSelectOption {
 	value: string;
 	text: string;
+	color?: string;
+	dataTypes?: string[];
 }
 
 export interface ResJsonTableColumn {
 	dataIndex: string;
 	title: string;
-	component?: 'textbox' | 'url' | 'textarea' | 'select' | 'datepicker' | 'datepicker_rangepicker';
+	component?: 'textbox' | 'url' | 'textarea' | 'select' | 'datepicker' | 'datepicker_rangepicker' | 'inputnumber';
 	rules?: ResJsonTableColumnRule[];
 	ellipsis?: boolean;
 	placeholder?: string;
 	options?: ResJsonTableColumnSelectOption[];
-	dataType?: 'js_timestamp';
+	dataType?: 'js_timestamp' | 'int' | 'float' | 'string' | 'datetime';
 	dayjsFormat?: string;
 }
 
@@ -38,6 +41,7 @@ export interface ResJsonTable {
 
 export interface ResJSON {
 	table?: ResJsonTable;
+	title?: string;
 	message?: string;
 }
 /* 前端类型定义结束 */
@@ -49,7 +53,8 @@ export interface CommonApi {
 }
 
 export function useCommonApi(): [CommonApi, JSX.Element] {
-	const [modal, contextHolder] = Modal.useModal();
+	const [modalApi, contextHolderModal] = Modal.useModal();
+	const [messageApi, contextHolderMessage] = message.useMessage();
 
 	const getContentLine = (aContentLine: string[]): React.ReactNode => {
 		return aContentLine.map((line, index) => (
@@ -58,7 +63,7 @@ export function useCommonApi(): [CommonApi, JSX.Element] {
 	};
 
 	const modalError = async (aContentLine: string[], props?: ModalFuncProps): Promise<void> => {
-		await modal.error({
+		await modalApi.error({
 			title: '错误',
 			icon: <ExclamationCircleOutlined />,
 			content: getContentLine(aContentLine),
@@ -68,7 +73,7 @@ export function useCommonApi(): [CommonApi, JSX.Element] {
 	};
 
 	const modalConfirm = async (aContentLine: string[], props?: ModalFuncProps): Promise<boolean> => {
-		return await modal.confirm({
+		return await modalApi.confirm({
 			title: '确认提示',
 			icon: <ExclamationCircleOutlined />,
 			content: getContentLine(aContentLine),
@@ -82,22 +87,28 @@ export function useCommonApi(): [CommonApi, JSX.Element] {
 	const apiFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
 		try {
 			const res: Response = await fetch(input, init);
+			const resJSON: ResJSON = await res.json();
 			if (!res.ok) {
 				const aContentLine = [];
 				aContentLine.push(`${init?.method} ${input}`);
 				aContentLine.push(`提交失败, 错误状态码: ${res.status}`);
+				if (resJSON.message) {
+					aContentLine.push(`消息: ${resJSON.message}`);
+				}
 				modalError(aContentLine);
 				throw res;
 			}
-			const resJSON: ResJSON = await res.json();
 			res.json = async () => {
 				return resJSON;
 			}
-			if (resJSON.message) {
-				modal.success({
-					title: '成功',
+			if (resJSON.title && resJSON.message) {
+				modalApi.success({
+					title: resJSON.title,
 					content: resJSON.message,
 				});
+			}
+			if (resJSON.message) {
+				messageApi.success(resJSON.message);
 			}
 			return res;
 		} catch (ex) {
@@ -118,6 +129,9 @@ export function useCommonApi(): [CommonApi, JSX.Element] {
 
 	return [
 		commonApi,
-		contextHolder,
+		<>
+			{contextHolderModal}
+			{contextHolderMessage}
+		</>,
 	];
 }
