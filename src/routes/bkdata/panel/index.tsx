@@ -41,6 +41,11 @@ const items: MenuItem[] = [
 		key: '/bkdata/panel/data/columns',
 		icon: <AppstoreOutlined />,
 	},
+	{
+		label: '数据管理',
+		key: '/bkdata/panel/data/rows',
+		icon: <AppstoreOutlined />,
+	},
 ];
 
 type AppType = {
@@ -108,7 +113,8 @@ function AppRouter({ commonApi }: AppType) {
 				}}>
 					<Routes>
 						<Route path="/" element={<App1 />} />
-						<Route path="/data/columns" element={<TableCRUD commonApi={commonApi} api_url='/api/bkdata/panel/data/columns' />} />
+						<Route path="/data/columns" element={<TableCRUD key="/data/columns" commonApi={commonApi} api_url='/api/bkdata/panel/data/columns' />} />
+						<Route path="/data/rows" element={<TableCRUD key="/data/rows" commonApi={commonApi} api_url='/api/bkdata/panel/data/rows' />} />
 					</Routes>
 				</Content>
 				<Footer style={{
