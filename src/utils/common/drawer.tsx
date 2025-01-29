@@ -18,7 +18,6 @@ export interface drawerType {
 export interface DrawerFuncProps {
 	title: string,
 	columns: ResJsonTableColumn[],
-	row?: DataType,
 }
 
 export function useDrawer(commonApi: CommonApi): [drawerType, JSX.Element] {
@@ -38,24 +37,24 @@ export function useDrawer(commonApi: CommonApi): [drawerType, JSX.Element] {
 			setTitle(props.title);
 			setColumns(props.columns);
 			setRow({});
-			if (props.row) {
-				for (const column of props.columns) {
-					if (column.dayjsFormat) {
-						if (!props.row[column.dataIndex]) {
-							continue;
-						}
-						// 读入日期之前将字符串转换成dayjs格式
-						props.row[column.dataIndex] = dayjs(props.row[column.dataIndex]?.toString(), column.dayjsFormat);
-					}
-				}
-				setRow(props.row);
-			}
 			setOpen(true);
 			if (callback) {
 				resolveRef.current = callback;
 			}
 			return {
-				setRow,
+				setRow: (_row: DataType) => {
+					// 外部调用设置新的row值时，刷新新值
+					for (const column of props.columns) {
+						if (column.dayjsFormat) {
+							if (!_row[column.dataIndex]) {
+								continue;
+							}
+							// 读入日期之前将字符串转换成dayjs格式
+							_row[column.dataIndex] = dayjs(_row[column.dataIndex]?.toString(), column.dayjsFormat);
+						}
+					}
+					setRow(_row);
+				},
 				setLoading,
 				setSubmitting‌,
 			};
