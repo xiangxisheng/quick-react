@@ -8,7 +8,7 @@ import { Layout, Menu } from 'antd';
 import { AppstoreOutlined, MailOutlined } from '@ant-design/icons';
 import AliyunIndex from './aliyun/index';
 import Sign from './sign';
-import BkData from '@/routes/bkdata';
+import Panel from './panel';
 const { Content } = Layout;
 
 interface RouteConfig {
@@ -35,8 +35,8 @@ const items: MenuItem[] = [
 		icon: <AppstoreOutlined />,
 	},
 	{
-		label: 'BK数据',
-		key: '/bkdata/panel',
+		label: '管理后台',
+		key: '/panel',
 		icon: <AppstoreOutlined />,
 	},
 	{
@@ -61,7 +61,7 @@ const App = ({ commonApi }: AppType) => {
 	const routes: RouteConfig[] = [
 		{ path: '/', element: <Home /> },
 		{ path: '/aliyun/*', element: <AliyunIndex /> },
-		{ path: '/bkdata/*', element: <BkData commonApi={commonApi} /> },
+		{ path: '/panel/*', element: <Panel commonApi={commonApi} /> },
 		{ path: '/about', element: <About /> },
 		{ path: '/sign', element: <Sign /> },
 	];
