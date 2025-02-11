@@ -46,6 +46,7 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 	const [pagination, setPagination] = useState<TablePaginationConfig>({
 		current: 1,
 		pageSize: 10,
+		showSizeChanger: true,
 	});
 	const [filters, setFilters] = useState<Record<string, FilterValue | null>>({});
 	const [dataSource, setDataSource] = useState<DataType[]>([]);
@@ -141,7 +142,12 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 	const fetchData = async (): Promise<void> => {
 		setLoading(true);
 		try {
-			const response: Response = await commonApi.apiFetch(api_url);
+			const query: Record<string, string> = {
+				pageNum: pagination.current?.toString() || '0',
+				pageSize: pagination.pageSize?.toString() || '0',
+			};
+			const queryString = new URLSearchParams(query).toString();
+			const response: Response = await commonApi.apiFetch(`${api_url}?${queryString}`);
 			const resJSON: ResJSON = await response.json();
 			if (resJSON.table) {
 				if (resJSON.table.option) {
