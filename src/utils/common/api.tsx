@@ -20,7 +20,7 @@ interface ResJsonTableColumnSelectOption {
 export interface ResJsonTableColumn {
 	dataIndex: string;
 	title: string;
-	component?: 'textbox' | 'url' | 'textarea' | 'select' | 'datepicker' | 'datepicker_rangepicker' | 'inputnumber';
+	component?: 'textbox' | 'url' | 'textarea' | 'select' | 'datepicker' | 'datepicker_rangepicker' | 'inputnumber' | 'upload';
 	rules?: ResJsonTableColumnRule[];
 	ellipsis?: boolean;
 	placeholder?: string;

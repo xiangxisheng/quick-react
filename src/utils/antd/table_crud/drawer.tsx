@@ -1,6 +1,10 @@
 import type { DataType, ResJsonTableColumn } from '@/utils/common/api';
 import type { CommonApi } from '@/utils/common/api';
+import type { UploadProps } from 'antd';
+
+import { InboxOutlined } from '@ant-design/icons';
 import { Button, Col, DatePicker, Drawer, Form, Input, Row, Select, Space } from 'antd';
+import { Upload } from 'antd';
 import { InputNumber } from 'antd';
 import { useEffect } from 'react';
 
@@ -19,7 +23,12 @@ type TableCrudType = {
 	submitting‌: boolean;
 };
 
-function getFormItemComponent(item: ResJsonTableColumn) {
+function getFullFileExtension(filename: string): string {
+	const index = filename.indexOf('.');
+	return index !== -1 ? filename.slice(index) : '';
+}
+
+function getFormItemComponent(item: ResJsonTableColumn, row: DataType) {
 	switch (item.component) {
 		case ('textbox'):
 			return (
@@ -66,6 +75,72 @@ function getFormItemComponent(item: ResJsonTableColumn) {
 			);
 		case ('inputnumber'):
 			return (<InputNumber style={{ width: '100%' }} placeholder={item.placeholder} />);
+		case ('upload'):
+			interface File {
+				uid: string;
+				name: string;
+				size: number,
+				type: string,
+				url: string,
+				response: {
+					file_sha1: string;
+				}
+			}
+			interface FileVal {
+				file: File;
+				fileList: File[];
+			}
+			console.log('row', row);
+			const props: UploadProps = {
+				name: 'file',
+				multiple: true,
+				maxCount: 10,
+				action: '/api/upload',
+				onChange(info) {
+					console.log('info.event:', info.event, 'info.file:', info.file);
+				},
+				onDrop(e) {
+					console.log('Dropped files', e.dataTransfer.files);
+				},
+			};
+			const fileVal = row[item.dataIndex] as FileVal;
+			if (fileVal && fileVal.file) {
+				props.defaultFileList = [];
+				for (const item of fileVal.fileList) {
+					item.url = `/api/data/${item.response.file_sha1}${getFullFileExtension(item.name)}`;
+					props.defaultFileList.push(item);
+				}
+			}
+			return (
+				<Upload.Dragger {...props}>
+					<p className="ant-upload-drag-icon">
+						<InboxOutlined />
+					</p>
+					<p className="ant-upload-text">拖动文件到此区域上传</p>
+					<p className="ant-upload-hint">
+						仅支持单个上传，最新上传的文件代替当前文件。
+					</p>
+					{0 ? <span onClick={(e) => e.stopPropagation()}>
+						{fileVal && fileVal.file && fileVal.file.response ? <>
+							查看已保存文件：
+							{
+								fileVal.fileList.map((item) => {
+									return <div>
+										<span>
+											<a href={`/panel/data/rows/download/${item.response.file_sha1}`}>{item.name}</a>
+											&nbsp;
+											<a href={'#'}>删</a>
+										</span>
+									</div>
+								})
+							}
+						</> : null}
+					</span> : null}
+				</Upload.Dragger>
+			);
+
+
+
 	}
 }
 
@@ -156,7 +231,7 @@ export default ({
 						if (!item.component) {
 							return;
 						}
-						const component = getFormItemComponent(item);
+						const component = getFormItemComponent(item, row);
 						if (!component) {
 							return;
 						}
