@@ -17,15 +17,18 @@ interface ResJsonTableColumnSelectOption {
 	dataTypes?: string[];
 }
 
+export type ColumnComponentType = 'textbox' | 'url' | 'textarea' | 'select' | 'datepicker' | 'datepicker_rangepicker' | 'inputnumber' | 'upload';
+export type ColumnDataType = 'js_timestamp' | 'int' | 'float' | 'string' | 'datetime';
+
 export interface ResJsonTableColumn {
 	dataIndex: string;
 	title: string;
-	component?: 'textbox' | 'url' | 'textarea' | 'select' | 'datepicker' | 'datepicker_rangepicker' | 'inputnumber' | 'upload';
+	component?: ColumnComponentType;
 	rules?: ResJsonTableColumnRule[];
 	ellipsis?: boolean;
 	placeholder?: string;
 	options?: ResJsonTableColumnSelectOption[];
-	dataType?: 'js_timestamp' | 'int' | 'float' | 'string' | 'datetime';
+	dataType?: ColumnDataType;
 	dayjsFormat?: string;
 }
 
