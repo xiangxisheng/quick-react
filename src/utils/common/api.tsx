@@ -40,6 +40,7 @@ export interface ResJsonTable {
 	option?: ResJsonTableOption;
 	columns?: ResJsonTableColumn[];
 	dataSource?: DataType[];
+	totalRecords?: number,
 }
 
 export interface ResJSON {

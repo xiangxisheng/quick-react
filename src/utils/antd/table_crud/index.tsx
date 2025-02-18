@@ -200,7 +200,7 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 			}
 
 			//setDrawerRow({ name: 'asdf' });
-			setPagination((prev) => ({ ...prev, total: 0 }));
+			setPagination((prev) => ({ ...prev, total: resJSON.table?.totalRecords, }));
 
 		} catch (ex) {
 			console.error(ex);
