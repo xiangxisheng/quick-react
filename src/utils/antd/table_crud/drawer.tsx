@@ -102,6 +102,14 @@ function getFormItemComponent(item: ResJsonTableColumn, row: DataType) {
 				onDrop(e) {
 					console.log('Dropped files', e.dataTransfer.files);
 				},
+				listType: 'picture-card',
+				showUploadList: {
+					extra: ({ size = 0 }) => (
+						<span style={{ color: '#cccccc' }}>({(size / 1024 / 1024).toFixed(2)}MB)</span>
+					),
+					showPreviewIcon: true,
+					showRemoveIcon: true,
+				},
 			};
 			const fileVal = row[item.dataIndex] as FileVal;
 			if (fileVal && fileVal.file) {
@@ -118,24 +126,8 @@ function getFormItemComponent(item: ResJsonTableColumn, row: DataType) {
 					</p>
 					<p className="ant-upload-text">拖动文件到此区域上传</p>
 					<p className="ant-upload-hint">
-						仅支持单个上传，最新上传的文件代替当前文件。
+						支持单个或多个上传。
 					</p>
-					{0 ? <span onClick={(e) => e.stopPropagation()}>
-						{fileVal && fileVal.file && fileVal.file.response ? <>
-							查看已保存文件：
-							{
-								fileVal.fileList.map((item) => {
-									return <div>
-										<span>
-											<a href={`/panel/data/rows/download/${item.response.file_sha1}`}>{item.name}</a>
-											&nbsp;
-											<a href={'#'}>删</a>
-										</span>
-									</div>
-								})
-							}
-						</> : null}
-					</span> : null}
 				</Upload.Dragger>
 			);
 
