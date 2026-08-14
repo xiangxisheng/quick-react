@@ -1,16 +1,3 @@
-function checkAndLoadModule(moduleName) {
-	try {
-		return require(moduleName);
-	} catch (e) {
-		if (e.code === 'MODULE_NOT_FOUND') {
-			console.log(`Module "${moduleName}" is not installed.`);
-			return null;
-		} else {
-			throw e; // 如果是其他错误，抛出异常
-		}
-	}
-}
-
 const main = async (defaPort, domain) => {
 	const outfile = "dist/bundle.js";
 	const http_port = Number(process.env.HTTP_PORT) || defaPort;
@@ -22,8 +9,7 @@ const main = async (defaPort, domain) => {
 
 	const fs = require('fs/promises');
 	const path = require('path');
-	const zlib = require('zlib');
-	const ZstdCodec = checkAndLoadModule('node-zstd');
+	const zlib = require('node:zlib');
 
 	const resFile = async (req, res, fileName, contentType) => {
 		const filePath = path.join(__dirname, 'dist', fileName);
@@ -35,11 +21,9 @@ const main = async (defaPort, domain) => {
 		const acceptEncoding = req.headers['accept-encoding'] || '';
 		let stream;
 		if (0) {
-		} else if (ZstdCodec && /\bzstd\b/.test(acceptEncoding)) {
+		} else if (typeof zlib.createZstdCompress === 'function' && /\bzstd\b/.test(acceptEncoding)) {
 			res.setHeader('Content-Encoding', 'zstd');
-			// 注意：需要一个 zstd 库来支持 zstd 压缩，例如 node-zstd。
-			const zstd = new ZstdCodec.Simple();
-			stream = zstd.compressStream(res);
+			stream = zlib.createZstdCompress();
 		} else if (0 && /\bbr\b/.test(acceptEncoding)) {
 			res.setHeader('Content-Encoding', 'br');
 			stream = zlib.createBrotliCompress();
