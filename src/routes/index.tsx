@@ -22,34 +22,31 @@ const About = () => <h1 style={{ padding: 10, margin: 0, height: '100%' }}>About
 
 type MenuItem = Required<MenuProps>['items'][number];
 
-// 定义菜单项
-const items: MenuItem[] = [
-	{
-		label: '首页',
-		key: '/',
-		icon: <MailOutlined />,
-	},
-	{
-		label: '阿里云',
-		key: '/aliyun',
-		icon: <AppstoreOutlined />,
-	},
-	{
-		label: '管理后台',
-		key: '/panel',
-		icon: <AppstoreOutlined />,
-	},
-	{
-		label: '关于',
-		key: '/about',
-		icon: <AppstoreOutlined />,
-	},
-	{
-		label: '登录',
-		key: '/sign',
-		icon: <AppstoreOutlined />,
-	},
+interface InitialMenuItem {
+	label: string;
+	key: string;
+	icon: 'mail' | 'appstore';
+}
+
+const fallbackMenu: InitialMenuItem[] = [
+	{ label: '首页', key: '/', icon: 'mail' },
+	{ label: '阿里云', key: '/aliyun', icon: 'appstore' },
+	{ label: '管理后台', key: '/panel', icon: 'appstore' },
+	{ label: '关于', key: '/about', icon: 'appstore' },
+	{ label: '登录', key: '/sign', icon: 'appstore' },
 ];
+
+const serverMenu = (window as Window & { __INITIAL_MENU__?: InitialMenuItem[] }).__INITIAL_MENU__;
+const menuConfig = serverMenu?.length ? serverMenu : fallbackMenu;
+const menuIcons = {
+	mail: <MailOutlined />,
+	appstore: <AppstoreOutlined />,
+};
+const items: MenuItem[] = menuConfig.map((item) => ({
+	label: item.label,
+	key: item.key,
+	icon: menuIcons[item.icon],
+}));
 
 
 type AppType = {

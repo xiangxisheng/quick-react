@@ -9,3 +9,5 @@ dist/*.js
 dist/*.js.map
 dist/*.mjs
 dist/*.mjs.map
+public/bundle.js
+public/bundle.js.map

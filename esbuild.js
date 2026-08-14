@@ -4,38 +4,59 @@ const esbuild = require('esbuild');
 
 const projectDir = __dirname;
 const distDir = path.join(projectDir, 'dist');
+const publicDir = path.join(projectDir, 'public');
 
-const createBuildContext = (entryPoint, outfile, options = {}) => esbuild.context({
-	entryPoints: [path.join(projectDir, entryPoint)],
-	bundle: true,
-	sourcemap: true,
-	outfile: path.join(distDir, outfile),
-	plugins: [{
-		name: `rebuild-notify-${outfile}`,
-		setup(build) {
-			build.onEnd((result) => {
-				console.log(`${outfile}: build ended with ${result.errors.length} errors`);
-			});
-		},
-	}],
-	...options,
-});
+const createBuildContext = async (entryPoint, outputDir, outfile, options = {}) => {
+	let initialBuildResolve;
+	let initialBuildReject;
+	let initialBuildCompleted = false;
+	const initialBuild = new Promise((resolve, reject) => {
+		initialBuildResolve = resolve;
+		initialBuildReject = reject;
+	});
+	const context = await esbuild.context({
+		entryPoints: [path.join(projectDir, entryPoint)],
+		bundle: true,
+		sourcemap: true,
+		outfile: path.join(outputDir, outfile),
+		plugins: [{
+			name: `rebuild-notify-${outfile}`,
+			setup(build) {
+				build.onEnd((result) => {
+					console.log(`${outfile}: build ended with ${result.errors.length} errors`);
+					if (!initialBuildCompleted) {
+						initialBuildCompleted = true;
+						if (result.errors.length > 0) {
+							initialBuildReject(new Error(`${outfile} initial build failed`));
+						} else {
+							initialBuildResolve();
+						}
+					}
+				});
+			},
+		}],
+		...options,
+	});
+	return { context, initialBuild };
+};
 
 const main = async () => {
 	const watch = process.argv.includes('--watch');
-	const frontend = await createBuildContext('src/index.tsx', 'bundle.js', {
+	const frontend = await createBuildContext('src/index.tsx', publicDir, 'bundle.js', {
 		minify: true,
 	});
-	const backend = await createBuildContext('server/app.mts', 'server.mjs', {
+	const backend = await createBuildContext('server/app.mts', distDir, 'server.mjs', {
 		platform: 'node',
 		format: 'esm',
 		target: 'node18',
 		packages: 'external',
 	});
 
-	const contexts = [frontend, backend];
+	const builds = [frontend, backend];
+	const contexts = builds.map(({ context }) => context);
 	if (watch) {
 		await Promise.all(contexts.map((context) => context.watch()));
+		await Promise.all(builds.map(({ initialBuild }) => initialBuild));
 		console.log('Watching frontend and backend sources');
 	} else {
 		try {
