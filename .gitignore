@@ -7,4 +7,5 @@ package-lock.json
 # TypeScript build output
 dist/*.js
 dist/*.js.map
-
+dist/*.mjs
+dist/*.mjs.map

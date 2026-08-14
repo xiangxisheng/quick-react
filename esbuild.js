@@ -1,109 +1,54 @@
-const main = async (defaPort, domain) => {
-	const path = require('node:path');
-	const outfile = path.join(__dirname, 'dist', 'bundle.js');
-	const http_port = Number(process.env.HTTP_PORT) || defaPort;
+const path = require('node:path');
+const { pathToFileURL } = require('node:url');
+const esbuild = require('esbuild');
 
-	const esbuild = require("esbuild");
-	const os = require('os');
-	const { createServer } = require('node:http');
-	const { createSecureServer } = require('node:http2');
+const projectDir = __dirname;
+const distDir = path.join(projectDir, 'dist');
 
-	const fs = require('fs/promises');
-	const zlib = require('node:zlib');
+const createBuildContext = (entryPoint, outfile, options = {}) => esbuild.context({
+	entryPoints: [path.join(projectDir, entryPoint)],
+	bundle: true,
+	sourcemap: true,
+	outfile: path.join(distDir, outfile),
+	plugins: [{
+		name: `rebuild-notify-${outfile}`,
+		setup(build) {
+			build.onEnd((result) => {
+				console.log(`${outfile}: build ended with ${result.errors.length} errors`);
+			});
+		},
+	}],
+	...options,
+});
 
-	const resFile = async (req, res, fileName, contentType) => {
-		const filePath = path.join(__dirname, 'dist', fileName);
-		const content = await fs.readFile(filePath, { encoding: 'utf-8' });
-		resData(req, res, 200, contentType, content);
-	};
-	const resData = async (req, res, statusCode, contentType, content, message = '') => {
-		console.info(new Date(), `[${statusCode}]`, req.url, message);
-		const acceptEncoding = req.headers['accept-encoding'] || '';
-		let stream;
-		if (0) {
-		} else if (typeof zlib.createZstdCompress === 'function' && /\bzstd\b/.test(acceptEncoding)) {
-			res.setHeader('Content-Encoding', 'zstd');
-			stream = zlib.createZstdCompress();
-		} else if (0 && /\bbr\b/.test(acceptEncoding)) {
-			res.setHeader('Content-Encoding', 'br');
-			stream = zlib.createBrotliCompress();
-		} else if (1 && /\bgzip\b/.test(acceptEncoding)) {
-			res.setHeader('Content-Encoding', 'gzip');
-			stream = zlib.createGzip();
-		} else if (1 && /\bdeflate\b/.test(acceptEncoding)) {
-			res.setHeader('Content-Encoding', 'deflate');
-			stream = zlib.createDeflate();
-		}
-		res.setHeader('Content-Type', `${contentType}; charset=utf-8`);
-		res.writeHead(statusCode);
-		if (stream) {
-			stream.pipe(res);
-			stream.end(content);
-		} else {
-			// 如果没有支持的压缩格式，则直接发送原始数据。
-			res.end(content);
-		}
-	};
-
-	const onRequestHandler = async (req, res) => {
-		try {
-			if (req.url === '/') {
-				return await resFile(req, res, 'index.html', 'text/html');
-			}
-			if (req.url === '/bundle.js') {
-				return await resFile(req, res, 'bundle.js', 'text/javascript');
-			}
-			if (req.url === '/bundle.js.map') {
-				return await resFile(req, res, 'bundle.js.map', 'application/json');
-			}
-			if ((req.headers.accept || '').includes('text/html')) {
-				return await resFile(req, res, 'index.html', 'text/html');
-			}
-			return await resData(req, res, 404, 'text/plain', '404 Not Found\n', req.headers.accept);
-		} catch (ex) {
-			return await resData(req, res, 500, 'text/plain', 'Error reading file\n');
-		}
-	};
-
-	async function getAcmeServerOptions(domain) {
-		const baseDir = path.join(os.homedir(), '.acme.sh', `${domain}_ecc`);
-		return {
-			key: await fs.readFile(path.join(baseDir, `${domain}.key`)),
-			cert: await fs.readFile(path.join(baseDir, 'fullchain.cer')),
-		};
-	}
-
-	try {
-		const server = createSecureServer(await getAcmeServerOptions(domain), onRequestHandler);
-		server.listen(http_port, '0.0.0.0', () => {
-			console.log(`HTTP/2 Listening on ${domain}:${http_port}`);
-		});
-	} catch (e) {
-		const server = createServer(onRequestHandler);
-		server.listen(http_port, '0.0.0.0', () => {
-			console.log(`HTTP/1 Listening on 127.0.0.1:${http_port}`);
-		});
-	}
-
-	const config = {
-		entryPoints: [path.join(__dirname, 'src', 'index.tsx')],
-		bundle: true,
+const main = async () => {
+	const watch = process.argv.includes('--watch');
+	const frontend = await createBuildContext('src/index.tsx', 'bundle.js', {
 		minify: true,
-		sourcemap: true,
-		outfile,
-		plugins: [
-			{
-				name: "rebuild-notify",
-				setup(build) {
-					build.onEnd((result) => {
-						console.log(`build ended with ${result.errors.length} errors`);
-					});
-				},
-			},
-		],
-	};
-	const ctx = await esbuild.context(config);
-	await ctx.watch();
+	});
+	const backend = await createBuildContext('server/app.mts', 'server.mjs', {
+		platform: 'node',
+		format: 'esm',
+		target: 'node24',
+		packages: 'external',
+	});
+
+	const contexts = [frontend, backend];
+	if (watch) {
+		await Promise.all(contexts.map((context) => context.watch()));
+		console.log('Watching frontend and backend sources');
+	} else {
+		try {
+			await Promise.all(contexts.map((context) => context.rebuild()));
+		} finally {
+			await Promise.all(contexts.map((context) => context.dispose()));
+		}
+	}
+
+	await import(`${pathToFileURL(path.join(distDir, 'server.mjs')).href}?startup=${Date.now()}`);
 };
 
-main(8088, 'anan.cc');
+main().catch((error) => {
+	console.error(error);
+	process.exitCode = 1;
+});
