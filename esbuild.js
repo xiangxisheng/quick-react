@@ -1,5 +1,6 @@
 const main = async (defaPort, domain) => {
-	const outfile = "dist/bundle.js";
+	const path = require('node:path');
+	const outfile = path.join(__dirname, 'dist', 'bundle.js');
 	const http_port = Number(process.env.HTTP_PORT) || defaPort;
 
 	const esbuild = require("esbuild");
@@ -8,7 +9,6 @@ const main = async (defaPort, domain) => {
 	const { createSecureServer } = require('node:http2');
 
 	const fs = require('fs/promises');
-	const path = require('path');
 	const zlib = require('node:zlib');
 
 	const resFile = async (req, res, fileName, contentType) => {
@@ -56,7 +56,7 @@ const main = async (defaPort, domain) => {
 			if (req.url === '/bundle.js.map') {
 				return await resFile(req, res, 'bundle.js.map', 'application/json');
 			}
-			if (req.headers.accept.indexOf('text/html') !== -1) {
+			if ((req.headers.accept || '').includes('text/html')) {
 				return await resFile(req, res, 'index.html', 'text/html');
 			}
 			return await resData(req, res, 404, 'text/plain', '404 Not Found\n', req.headers.accept);
@@ -86,7 +86,7 @@ const main = async (defaPort, domain) => {
 	}
 
 	const config = {
-		entryPoints: ["./src/index.tsx"],
+		entryPoints: [path.join(__dirname, 'src', 'index.tsx')],
 		bundle: true,
 		minify: true,
 		sourcemap: true,
