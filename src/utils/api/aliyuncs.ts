@@ -19,6 +19,18 @@ async function fetchInstanceDetails(url: string) {
 	}
 }
 
+const createSignatureNonce = () => {
+	if (typeof globalThis.crypto?.randomUUID === 'function') {
+		return globalThis.crypto.randomUUID();
+	}
+	if (typeof globalThis.crypto?.getRandomValues === 'function') {
+		const bytes = new Uint8Array(16);
+		globalThis.crypto.getRandomValues(bytes);
+		return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+	}
+	return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
+
 function getApiEndpoint(RegionId: string): string {
 	if (RegionId === 'cn-hangzhou') {
 		return 'https://ecs-cn-hangzhou.aliyuncs.com/';
@@ -73,7 +85,7 @@ export async function AliyunApi(
 		Format: 'JSON',
 		SignatureMethod: 'HMAC-SHA1',
 		SignatureVersion: '1.0',
-		SignatureNonce: crypto.randomUUID(),
+		SignatureNonce: createSignatureNonce(),
 		Timestamp: new Date().toISOString(),
 		Version: '2014-05-26',
 	};

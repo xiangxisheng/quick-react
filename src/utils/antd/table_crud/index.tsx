@@ -6,9 +6,9 @@ import type { ResJSON, DataType, ResJsonTable } from '@/utils/common/api.js';
 import type { ResJsonTableOption } from '@/utils/common/api.js';
 import type { CommonApi, ResJsonTableColumn } from '@/utils/common/api.js';
 
-import { useState, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { Table, Button, Flex, Space, Tag } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useDrawer } from '@/utils/common/drawer.js';
 import dayjs from 'dayjs';
@@ -16,11 +16,12 @@ import dayjs from 'dayjs';
 // 定义TableCRUD的传参
 type TableCrudType = {
 	commonApi: CommonApi;
-	api_url: string;
 };
 
 
-export default ({ commonApi, api_url }: TableCrudType) => {
+export default ({ commonApi }: TableCrudType) => {
+	const location = useLocation();
+	const apiPath = `/api${location.pathname}`;
 	const [drawer, contextHolderDrawer] = useDrawer(commonApi);
 
 	const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -53,15 +54,15 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 	const [tableColumns, setTableColumns] = useState<TableColumnsType<DataType>>();
 	const [resJsonColumns, setResJsonColumns] = useState<ResJsonTableColumn[]>([]);
 	const [resJsonTableOption, setResJsonTableOption] = useState<ResJsonTableOption>({ rowKey: 'key' });
-	const cacheResJsonTable: ResJsonTable = {
+	const cacheResJsonTable = useRef<ResJsonTable>({
 		columns: [],
-	};
+	});
 
 	const apiDelete = async (ids: unknown[]) => {
 		// 向后段API发送删除指令
 		try {
 			setLoading(true);
-			await commonApi.apiFetch(api_url, { method: 'DELETE', body: JSON.stringify(ids) });
+			await commonApi.apiFetch(apiPath, { method: 'DELETE', body: JSON.stringify(ids) });
 			await fetchData();
 		} catch (ex) {
 			console.error(ex);
@@ -82,13 +83,33 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 
 	const onOpenEdit = async (value: any, record: DataType, index: number): Promise<void> => {
 		// 打开编辑框，获取单条数据
-		if (!cacheResJsonTable.columns) {
+		if (!cacheResJsonTable.current.columns?.length) {
 			alert('no cacheResJsonTable.columns');
+			return;
+		}
+		const rowId = String(record[resJsonTableOption.rowKey] ?? '');
+		if (!rowId) {
+			console.error('编辑失败：记录缺少 rowKey', record);
+			return;
+		}
+		const url = `${apiPath}/${encodeURIComponent(rowId)}`;
+		let row: DataType;
+		try {
+			const res = await commonApi.apiFetch(url, {
+				method: 'GET',
+				headers: { 'Content-Type': 'application/json' },
+			});
+			if (!res.ok) {
+				return;
+			}
+			row = await res.json() as DataType;
+		} catch (ex) {
+			console.error('加载编辑数据失败', ex);
 			return;
 		}
 		const drawerForm1 = drawer.drawerForm({
 			title: '编辑',
-			columns: cacheResJsonTable.columns,
+			columns: cacheResJsonTable.current.columns,
 		}, async (newRow) => {
 			if (!newRow) {
 				// 用户点了[取消]按钮
@@ -112,30 +133,9 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 				console.error(ex);
 			} finally {
 				drawerForm1.setSubmitting‌(false);
-			}
+				}
 		});
-		drawerForm1.setLoading(true);
-
-		const rowId = record[resJsonTableOption.rowKey];
-		const url = `${api_url}/${rowId}`;
-		try {
-			const res = await commonApi.apiFetch(url, {
-				method: 'GET', // 指定请求方法
-				headers: {
-					'Content-Type': 'application/json', // 指定请求头，表明是 JSON 数据
-				},
-			});
-			const row = await res.json();
-			if (!res.ok) {
-				return;
-			}
-			drawerForm1.setRow(row);
-
-		} catch (ex) {
-			console.error(ex);
-		} finally {
-			drawerForm1.setLoading(false);
-		}
+		drawerForm1.setRow(row);
 
 	}
 
@@ -147,7 +147,7 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 				pageSize: pagination.pageSize?.toString() || '0',
 			};
 			const queryString = new URLSearchParams(query).toString();
-			const response: Response = await commonApi.apiFetch(`${api_url}?${queryString}`);
+			const response: Response = await commonApi.apiFetch(`${apiPath}?${queryString}`);
 			const resJSON: ResJSON = await response.json();
 			if (resJSON.table) {
 				if (resJSON.table.option) {
@@ -155,7 +155,7 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 					setResJsonTableOption((prev) => ({ ...prev, ...resJSON.table?.option }));
 				}
 				if (resJSON.table.columns) {
-					cacheResJsonTable.columns = resJSON.table.columns;
+					cacheResJsonTable.current.columns = resJSON.table.columns;
 					setResJsonColumns(resJSON.table.columns);
 					const tableColumns: TableColumnsType<DataType> = [];
 					for (const column of resJSON.table.columns) {
@@ -240,7 +240,7 @@ export default ({ commonApi, api_url }: TableCrudType) => {
 			// 前端校验通过，开始向后端提交表单
 			drawerForm.setSubmitting‌(true);
 			try {
-				const res = await commonApi.apiFetch(api_url, {
+				const res = await commonApi.apiFetch(apiPath, {
 					method: 'POST', // 指定请求方法
 					headers: {
 						'Content-Type': 'application/json', // 指定请求头，表明是 JSON 数据

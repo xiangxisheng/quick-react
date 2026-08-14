@@ -6,15 +6,21 @@ interface MenuItem {
 	icon: string;
 }
 
+interface InitialData {
+	siteNavigation: MenuItem[];
+	managementMenu: MenuItem[];
+	pages: Array<{ path: string; component: string }>;
+}
+
 interface IndexData {
 	title: string;
 	description: string;
 	canonical?: string;
-	menu: MenuItem[];
+	initialData: InitialData;
 }
 
 export const renderIndexHtml = (data: IndexData) => {
-	const menuJson = JSON.stringify(data.menu).replaceAll('<', '\\u003c');
+	const initialDataJson = JSON.stringify(data.initialData).replaceAll('<', '\\u003c');
 	return html`<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -29,7 +35,7 @@ export const renderIndexHtml = (data: IndexData) => {
 </head>
 <body>
   <div id="root"></div>
-  <script>window.__INITIAL_MENU__=${raw(menuJson)};</script>
+  <script>window.__INITIAL_DATA__=${raw(initialDataJson)};</script>
   <script src="/bundle.js"></script>
 </body>
 </html>`;

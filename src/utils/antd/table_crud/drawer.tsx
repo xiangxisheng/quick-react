@@ -165,8 +165,8 @@ export default ({
 
 	useEffect(() => {
 		// 外部调用设置新的row值时，刷新新值
-		form.setFieldsValue(row);
 		form.resetFields();
+		form.setFieldsValue(row);
 	}, [row]);
 
 	const _onClose = async () => {

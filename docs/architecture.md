@@ -14,7 +14,7 @@ server/templates/   -> 动态首页响应
 
 ## 请求流程
 
-访问 `/` 时，后端调用 `server/templates/index.mts`，用 Hono 的 HTML 模板生成标题、SEO 元数据和菜单数据，再让浏览器加载 `/bundle.js`。
+访问 `/` 时，后端生成 `initialData`，由 `server/templates/index.mts` 通过 `window.__INITIAL_DATA__` 注入页面。数据包含页面定义 `pages`、网站导航 `siteNavigation` 和后台菜单 `managementMenu`；页面定义指定路径和组件名称，前端通过组件注册表渲染，后台菜单由服务端生成，后续可在生成函数中按当前用户权限过滤。
 
 静态文件只从 `public/` 提供，`dist/server.mjs` 不在静态目录中。
 

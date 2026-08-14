@@ -19,8 +19,8 @@ GET /api/health
 ```text
 /api/upload
 /api/data/*
-/api/bkdata/panel/data/columns
-/api/bkdata/panel/data/rows
+/api/panel/data/columns
+/api/panel/data/rows
 ```
 
 后续 API 路由应放在 `server/` 中，并通过 Hono 路由注册。

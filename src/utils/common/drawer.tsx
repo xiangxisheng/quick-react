@@ -45,16 +45,15 @@ export function useDrawer(commonApi: CommonApi): [drawerType, React.JSX.Element]
 			return {
 				setRow: (_row: DataType) => {
 					// 外部调用设置新的row值时，刷新新值
+					const normalizedRow = { ..._row };
 					for (const column of props.columns) {
-						if (column.dayjsFormat) {
-							if (!_row[column.dataIndex]) {
-								continue;
-							}
-							// 读入日期之前将字符串转换成dayjs格式
-							_row[column.dataIndex] = dayjs(_row[column.dataIndex]?.toString(), column.dayjsFormat);
+						if (column.component !== 'datepicker' || !normalizedRow[column.dataIndex]) {
+							continue;
 						}
+						// DatePicker 只能接收 Dayjs，后端日期字符串需要先转换。
+						normalizedRow[column.dataIndex] = dayjs(normalizedRow[column.dataIndex]?.toString());
 					}
-					setRow(_row);
+					setRow(normalizedRow);
 				},
 				setLoading,
 				setSubmitting‌,
@@ -64,13 +63,14 @@ export function useDrawer(commonApi: CommonApi): [drawerType, React.JSX.Element]
 	const onFinish = async (values: Record<string, string | number | Date | Dayjs | null | undefined>) => {
 		if (resolveRef.current) {
 			for (const column of columns) {
-				if (column.dayjsFormat) {
-					if (!values[column.dataIndex]) {
-						continue;
-					}
-					// 返回日期之前将dayjs转换成字符串
-					values[column.dataIndex] = dayjs(values[column.dataIndex]).format(column.dayjsFormat);
+				if (column.component !== 'datepicker' || !values[column.dataIndex]) {
+					continue;
 				}
+				// 返回日期之前将 Dayjs 转换成后端可存储的字符串。
+				const date = dayjs(values[column.dataIndex]);
+				values[column.dataIndex] = column.dayjsFormat
+					? date.format(column.dayjsFormat)
+					: date.toISOString();
 			}
 			resolveRef.current(values);
 		}

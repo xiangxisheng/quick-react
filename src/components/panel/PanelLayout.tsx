@@ -3,7 +3,6 @@ import type { MenuProps } from 'antd';
 import type { CommonApi } from '@/utils/common/api.js';
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Route, Routes } from 'react-router-dom';
 import {
 	AppstoreOutlined,
 	MailOutlined,
@@ -13,46 +12,35 @@ import {
 import { Breadcrumb, Layout, Menu, theme } from 'antd';
 import { Button } from 'antd';
 const { Header, Content, Footer, Sider } = Layout;
-import TableCRUD from '@/utils/antd/table_crud/index.js';
 
-const App1 = () => {
-	const navigate = useNavigate();
-	function handleClick() {
-		navigate('/panel/data/columns');
-	}
-	return (
-		<>
-			<h1>Hello, React with esbuild!</h1>
-			<Button onClick={handleClick}>/panel/data/columns</Button>
-		</>
-	);
-};
 // 定义菜单项
 type MenuItem = Required<MenuProps>['items'][number];
 
-const items: MenuItem[] = [
-	{
-		label: '首页',
-		key: '/panel',
-		icon: <MailOutlined />,
-	},
-	{
-		label: '表列管理',
-		key: '/panel/data/columns',
-		icon: <AppstoreOutlined />,
-	},
-	{
-		label: '数据管理',
-		key: '/panel/data/rows',
-		icon: <AppstoreOutlined />,
-	},
-];
+interface InitialMenuItem {
+	label: string;
+	key: string;
+	icon: 'mail' | 'appstore';
+}
+
+const initialData = (window as Window & {
+	__INITIAL_DATA__?: { managementMenu: InitialMenuItem[] };
+}).__INITIAL_DATA__;
+const iconComponents = {
+	mail: <MailOutlined />,
+	appstore: <AppstoreOutlined />,
+};
+const items: MenuItem[] = (initialData?.managementMenu ?? []).map((item) => ({
+	label: item.label,
+	key: item.key,
+	icon: iconComponents[item.icon],
+}));
 
 type AppType = {
 	commonApi: CommonApi;
+	children?: React.ReactNode;
 };
 
-function AppRouter({ commonApi }: AppType) {
+function AppRouter({ commonApi, children }: AppType) {
 	const location = useLocation(); // 获取当前 URL 路径
 	const [current, setCurrent] = useState(location.pathname); // 同步选中状态
 	const navigate = useNavigate();
@@ -111,11 +99,7 @@ function AppRouter({ commonApi }: AppType) {
 					height: '100%',
 					overflowY: 'scroll',
 				}}>
-					<Routes>
-						<Route path="/" element={<App1 />} />
-						<Route path="/data/columns" element={<TableCRUD key="/data/columns" commonApi={commonApi} api_url='/api/bkdata/panel/data/columns' />} />
-						<Route path="/data/rows" element={<TableCRUD key="/data/rows" commonApi={commonApi} api_url='/api/bkdata/panel/data/rows' />} />
-					</Routes>
+					{children ?? <h1>Dashboard</h1>}
 				</Content>
 				<Footer style={{
 					height: '30px',

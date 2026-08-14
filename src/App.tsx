@@ -6,15 +6,12 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Layout, Menu } from 'antd';
 import { AppstoreOutlined, MailOutlined } from '@ant-design/icons';
-import AliyunIndex from './aliyun/index.js';
-import Sign from './sign.js';
-import Panel from './panel/index.js';
+import AliyunIndex from './components/aliyun/AliyunLayout.js';
+import DescribeInstances from './components/aliyun/DescribeInstances.js';
+import Sign from './components/Sign.js';
+import Panel from './components/panel/PanelLayout.js';
+import TableCRUD from '@/utils/antd/table_crud/index.js';
 const { Content } = Layout;
-
-interface RouteConfig {
-	path: string;
-	element: React.ReactNode;
-}
 
 // 定义路由对应的页面组件
 const Home = () => <h1 style={{ padding: 10, margin: 0, height: '100%' }}>Home Page</h1>;
@@ -28,24 +25,44 @@ interface InitialMenuItem {
 	icon: 'mail' | 'appstore';
 }
 
-const fallbackMenu: InitialMenuItem[] = [
-	{ label: '首页', key: '/', icon: 'mail' },
-	{ label: '阿里云', key: '/aliyun', icon: 'appstore' },
-	{ label: '管理后台', key: '/panel', icon: 'appstore' },
-	{ label: '关于', key: '/about', icon: 'appstore' },
-	{ label: '登录', key: '/sign', icon: 'appstore' },
-];
+interface InitialData {
+	siteNavigation: InitialMenuItem[];
+	managementMenu: InitialMenuItem[];
+	pages: Array<{ path: string; component: string }>;
+}
 
-const serverMenu = (window as Window & { __INITIAL_MENU__?: InitialMenuItem[] }).__INITIAL_MENU__;
-const menuConfig = serverMenu?.length ? serverMenu : fallbackMenu;
-const menuIcons = {
+const fallbackData: InitialData = {
+	siteNavigation: [
+		{ label: '首页', key: '/', icon: 'mail' },
+		{ label: '阿里云', key: '/aliyun', icon: 'appstore' },
+		{ label: '管理后台', key: '/panel', icon: 'appstore' },
+		{ label: '关于', key: '/about', icon: 'appstore' },
+		{ label: '登录', key: '/sign', icon: 'appstore' },
+	],
+	managementMenu: [],
+	pages: [
+		{ path: '/', component: 'home' },
+		{ path: '/aliyun', component: 'aliyun' },
+		{ path: '/aliyun/DescribeInstances', component: 'aliyunDescribeInstances' },
+		{ path: '/panel', component: 'dashboard' },
+		{ path: '/panel/data/columns', component: 'table' },
+		{ path: '/panel/data/rows', component: 'table' },
+		{ path: '/about', component: 'about' },
+		{ path: '/sign', component: 'sign' },
+	],
+};
+
+const serverData = (window as Window & { __INITIAL_DATA__?: InitialData }).__INITIAL_DATA__;
+const initialData = serverData ?? fallbackData;
+const siteNavigation = initialData.siteNavigation;
+const iconComponents = {
 	mail: <MailOutlined />,
 	appstore: <AppstoreOutlined />,
 };
-const items: MenuItem[] = menuConfig.map((item) => ({
+const items: MenuItem[] = siteNavigation.map((item) => ({
 	label: item.label,
 	key: item.key,
-	icon: menuIcons[item.icon],
+	icon: iconComponents[item.icon],
 }));
 
 
@@ -54,14 +71,19 @@ type AppType = {
 };
 
 const App = ({ commonApi }: AppType) => {
-
-	const routes: RouteConfig[] = [
-		{ path: '/', element: <Home /> },
-		{ path: '/aliyun/*', element: <AliyunIndex /> },
-		{ path: '/panel/*', element: <Panel commonApi={commonApi} /> },
-		{ path: '/about', element: <About /> },
-		{ path: '/sign', element: <Sign /> },
-	];
+	const componentRegistry: Record<string, React.ComponentType> = {
+		home: Home,
+		aliyun: AliyunIndex,
+		aliyunDescribeInstances: () => <AliyunIndex><DescribeInstances /></AliyunIndex>,
+		dashboard: () => <Panel commonApi={commonApi} />,
+		table: () => <Panel commonApi={commonApi}><TableCRUD commonApi={commonApi} /></Panel>,
+		about: About,
+		sign: Sign,
+	};
+	const routes = initialData.pages.flatMap((page) => {
+		const Component = componentRegistry[page.component];
+		return Component ? [{ path: page.path, element: <Component /> }] : [];
+	});
 
 	const location = useLocation(); // 获取当前 URL 路径
 	const [current, setCurrent] = useState(location.pathname); // 同步选中状态
@@ -113,17 +135,10 @@ const App = ({ commonApi }: AppType) => {
 	);
 };
 
-// 使用 Router 包裹应用
-import type { Config } from '@/config.js';
-type RouteIndexType = {
-	config: Config;
-};
-
 import { useCommonApi } from '@/utils/common/api.js'
 
-const RouteIndex = ({ config }: RouteIndexType) => {
+const AppRoot = () => {
 	const [commonApi, contextHolder] = useCommonApi();
-	console.log(config)
 	return (
 		<Router>
 			{contextHolder}
@@ -132,4 +147,4 @@ const RouteIndex = ({ config }: RouteIndexType) => {
 	);
 };
 
-export default RouteIndex;
+export default AppRoot;

@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -72,6 +73,142 @@ const menuItems = [
 	{ label: '登录', key: '/sign', icon: 'appstore' },
 ];
 
+const getManagementMenu = (_c: Context<AppEnv>) => [
+	{ label: '首页', key: '/panel', icon: 'mail' },
+	{ label: '表列管理', key: '/panel/data/columns', icon: 'appstore' },
+	{ label: '数据管理', key: '/panel/data/rows', icon: 'appstore' },
+];
+
+const getPageDefinitions = (_c: Context<AppEnv>) => [
+	{ path: '/', component: 'home' },
+	{ path: '/aliyun', component: 'aliyun' },
+	{ path: '/aliyun/DescribeInstances', component: 'aliyunDescribeInstances' },
+	{ path: '/panel', component: 'dashboard' },
+	{ path: '/panel/data/columns', component: 'table' },
+	{ path: '/panel/data/rows', component: 'table' },
+	{ path: '/about', component: 'about' },
+	{ path: '/sign', component: 'sign' },
+];
+
+type MockRow = Record<string, unknown> & { key: string };
+type MockColumn = {
+	dataIndex: string;
+	title: string;
+	component?: string;
+	dataType?: string;
+	dayjsFormat?: string;
+};
+type MockTable = {
+	columns: MockColumn[];
+	rows: MockRow[];
+};
+
+const mockTables: Record<string, MockTable> = {
+	columns: {
+		columns: [
+			{ dataIndex: 'key', title: '标识' },
+			{ dataIndex: 'dataIndex', title: '字段名' },
+			{ dataIndex: 'title', title: '标题' },
+			{ dataIndex: 'component', title: '表单组件' },
+			{ dataIndex: 'dataType', title: '数据类型' },
+		],
+		rows: [
+			{ key: 'column-1', dataIndex: 'name', title: '名称', component: 'textbox', dataType: 'string' },
+			{ key: 'column-2', dataIndex: 'status', title: '状态', component: 'select', dataType: 'string' },
+			{ key: 'column-3', dataIndex: 'createdAt', title: '创建时间', component: 'datepicker', dataType: 'datetime' },
+		],
+	},
+	rows: {
+		columns: [
+			{ dataIndex: 'key', title: '标识' },
+			{ dataIndex: 'name', title: '名称', component: 'textbox', dataType: 'string' },
+			{ dataIndex: 'status', title: '状态', component: 'select', dataType: 'string' },
+			{ dataIndex: 'createdAt', title: '创建时间', component: 'datepicker', dataType: 'datetime', dayjsFormat: 'YYYY-MM-DD HH:mm:ss' },
+		],
+		rows: [
+			{ key: 'row-1', name: '示例数据一', status: 'enabled', createdAt: '2026-01-01T08:00:00.000Z' },
+			{ key: 'row-2', name: '示例数据二', status: 'disabled', createdAt: '2026-01-02T08:00:00.000Z' },
+			{ key: 'row-3', name: '示例数据三', status: 'enabled', createdAt: '2026-01-03T08:00:00.000Z' },
+		],
+	},
+};
+
+const getMockTable = (resource: string) => mockTables[resource];
+
+const parseJsonBody = async (c: Context<AppEnv>) => {
+	try {
+		return await c.req.json<Record<string, unknown>>();
+	} catch {
+		return {};
+	}
+};
+
+const getMockTableResponse = (table: MockTable, pageNum: number, pageSize: number) => {
+	const start = Math.max(0, (pageNum - 1) * pageSize);
+	return {
+		table: {
+			option: { rowKey: 'key' },
+			columns: table.columns,
+			dataSource: table.rows.slice(start, start + pageSize),
+			totalRecords: table.rows.length,
+		},
+	};
+};
+
+const mockTablePath = '/api/panel/data/:resource';
+
+app.get(mockTablePath, (c) => {
+	const table = getMockTable(c.req.param('resource'));
+	if (!table) {
+		return c.json({ message: '模拟数据表不存在' }, 404);
+	}
+	const pageNum = Math.max(1, Number(c.req.query('pageNum')) || 1);
+	const pageSize = Math.max(1, Number(c.req.query('pageSize')) || 10);
+	return c.json(getMockTableResponse(table, pageNum, pageSize));
+});
+
+app.get(`${mockTablePath}/:id`, (c) => {
+	const table = getMockTable(c.req.param('resource'));
+	const row = table?.rows.find((item) => item.key === c.req.param('id'));
+	if (!row) {
+		return c.json({ message: '模拟数据不存在' }, 404);
+	}
+	return c.json(row);
+});
+
+app.post(mockTablePath, async (c) => {
+	const table = getMockTable(c.req.param('resource'));
+	if (!table) {
+		return c.json({ message: '模拟数据表不存在' }, 404);
+	}
+	const body = await parseJsonBody(c);
+	const row = { ...body, key: String(body.key || randomUUID()) } as MockRow;
+	table.rows.push(row);
+	return c.json({ message: '新增成功', data: row }, 201);
+});
+
+app.put(`${mockTablePath}/:id`, async (c) => {
+	const table = getMockTable(c.req.param('resource'));
+	const index = table?.rows.findIndex((item) => item.key === c.req.param('id')) ?? -1;
+	if (!table || index < 0) {
+		return c.json({ message: '模拟数据不存在' }, 404);
+	}
+	const body = await parseJsonBody(c);
+	table.rows[index] = { ...table.rows[index], ...body, key: table.rows[index].key };
+	return c.json({ message: '保存成功', data: table.rows[index] });
+});
+
+app.delete(mockTablePath, async (c) => {
+	const table = getMockTable(c.req.param('resource'));
+	if (!table) {
+		return c.json({ message: '模拟数据表不存在' }, 404);
+	}
+	const body = await c.req.json<unknown>().catch(() => []);
+	const ids = Array.isArray(body) ? body.map(String) : [];
+	table.rows = table.rows.filter((row) => !ids.includes(row.key));
+	return c.json({ message: '删除成功' });
+});
+
 const getPageMetadata = (pathname: string) => {
 	if (pathname === '/') {
 		return { title: '首页', description: 'Quick React 项目首页' };
@@ -96,7 +233,15 @@ const renderDocument = (c: Context<AppEnv>) => {
 	const publicOrigin = process.env.PUBLIC_ORIGIN;
 	const canonical = publicOrigin ? new URL(c.req.path, publicOrigin).toString() : undefined;
 	c.header('Cache-Control', 'no-cache');
-	return c.html(renderIndexHtml({ ...metadata, canonical, menu: menuItems }));
+	return c.html(renderIndexHtml({
+		...metadata,
+		canonical,
+		initialData: {
+			siteNavigation: menuItems,
+			managementMenu: getManagementMenu(c),
+			pages: getPageDefinitions(c),
+		},
+	}));
 };
 
 app.get('/api/health', (c) => c.json({ ok: true }));

@@ -2,7 +2,6 @@ import type React from 'react';
 import type { MenuProps } from 'antd';
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Route, Routes } from 'react-router-dom';
 import {
 	AppstoreOutlined,
 	MailOutlined,
@@ -12,7 +11,6 @@ import {
 import { Breadcrumb, Layout, Menu, theme } from 'antd';
 import { Button } from 'antd';
 const { Header, Content, Footer, Sider } = Layout;
-import DescribeInstances from './DescribeInstances.js';
 
 const App1 = () => {
 	const navigate = useNavigate();
@@ -42,7 +40,11 @@ const items: MenuItem[] = [
 	},
 ];
 
-function AppRouter() {
+type AppRouterProps = {
+	children?: React.ReactNode;
+};
+
+function AppRouter({ children }: AppRouterProps) {
 	const location = useLocation(); // 获取当前 URL 路径
 	const [current, setCurrent] = useState(location.pathname); // 同步选中状态
 	const navigate = useNavigate();
@@ -101,10 +103,7 @@ function AppRouter() {
 					height: '100%',
 					overflowY: 'scroll',
 				}}>
-					<Routes>
-						<Route path="/" element={<App1 />} />
-						<Route path="/DescribeInstances" element={<DescribeInstances />} />
-					</Routes>
+					{children ?? <App1 />}
 				</Content>
 				<Footer style={{
 					height: '30px',
