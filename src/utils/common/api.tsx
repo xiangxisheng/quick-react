@@ -1,3 +1,4 @@
+import type React from 'react';
 import { Modal, ModalFuncProps } from 'antd';
 import { message } from 'antd';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
@@ -56,7 +57,7 @@ export interface CommonApi {
 	apiFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 }
 
-export function useCommonApi(): [CommonApi, JSX.Element] {
+export function useCommonApi(): [CommonApi, React.JSX.Element] {
 	const [modalApi, contextHolderModal] = Modal.useModal();
 	const [messageApi, contextHolderMessage] = message.useMessage();
 

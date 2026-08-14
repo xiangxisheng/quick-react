@@ -3,6 +3,9 @@
 	"version": "1.0.0",
 	"description": "quick react",
 	"main": "esbuild.js",
+	"engines": {
+		"node": ">=18.14.1"
+	},
 	"scripts": {
 		"build": "node esbuild.js",
 		"dev": "node esbuild.js --watch",
@@ -25,13 +28,13 @@
 	"homepage": "https://github.com/xiangxisheng/quick-react#readme",
 	"devDependencies": {
 		"@types/node": "^26.2.0",
-		"@types/react": "^18.3.14",
-		"@types/react-dom": "^18.3.3",
-		"antd": "^5.22.4",
+		"@types/react": "^19.2.18",
+		"@types/react-dom": "^19.2.4",
+		"antd": "^6.6.0",
 		"esbuild": "^0.28.2",
-		"react": "^18.3.1",
-		"react-dom": "^18.3.1",
-		"react-router-dom": "^7.0.2"
+		"react": "^19.2.8",
+		"react-dom": "^19.2.8",
+		"react-router-dom": "^7.18.2"
 	},
 	"dependencies": {
 		"@hono/node-server": "^2.1.1",

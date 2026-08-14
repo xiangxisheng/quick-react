@@ -29,7 +29,7 @@ const main = async () => {
 	const backend = await createBuildContext('server/app.mts', 'server.mjs', {
 		platform: 'node',
 		format: 'esm',
-		target: 'node24',
+		target: 'node18',
 		packages: 'external',
 	});
 

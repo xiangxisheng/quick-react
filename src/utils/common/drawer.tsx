@@ -1,3 +1,4 @@
+import type React from 'react';
 import type { CommonApi, DataType, ResJsonTableColumn } from '@/utils/common/api';
 import type { Dayjs } from 'dayjs';
 import { useState, useRef } from 'react';
@@ -20,12 +21,12 @@ export interface DrawerFuncProps {
 	columns: ResJsonTableColumn[],
 }
 
-export function useDrawer(commonApi: CommonApi): [drawerType, JSX.Element] {
+export function useDrawer(commonApi: CommonApi): [drawerType, React.JSX.Element] {
 	const [open, setOpen] = useState(false);
 	const [columns, setColumns] = useState<ResJsonTableColumn[]>([]);
 	const [row, setRow] = useState<DataType>({});
 	const [title, setTitle] = useState<string>('');
-	const resolveRef = useRef<(value?: DataType) => void>(); // 使用 useRef 持久化 resolve
+	const resolveRef = useRef<((value?: DataType) => void) | undefined>(undefined); // 使用 useRef 持久化 resolve
 	const [loading, setLoading] = useState<boolean>(false);
 	const [submitting‌, setSubmitting‌] = useState<boolean>(false);
 
