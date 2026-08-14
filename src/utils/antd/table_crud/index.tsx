@@ -1,16 +1,16 @@
 import type React from 'react';
-import type { FilterValue } from 'antd/es/table/interface';
+import type { FilterValue } from 'antd/es/table/interface.js';
 import type { TableProps, TablePaginationConfig } from 'antd';
 import type { TableColumnsType } from 'antd';
-import type { ResJSON, DataType, ResJsonTable } from '@/utils/common/api';
-import type { ResJsonTableOption } from '@/utils/common/api';
-import type { CommonApi, ResJsonTableColumn } from '@/utils/common/api';
+import type { ResJSON, DataType, ResJsonTable } from '@/utils/common/api.js';
+import type { ResJsonTableOption } from '@/utils/common/api.js';
+import type { CommonApi, ResJsonTableColumn } from '@/utils/common/api.js';
 
 import { useState, useEffect } from 'react';
 import { Table, Button, Flex, Space, Tag } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
-import { useDrawer } from '@/utils/common/drawer';
+import { useDrawer } from '@/utils/common/drawer.js';
 import dayjs from 'dayjs';
 
 // 定义TableCRUD的传参

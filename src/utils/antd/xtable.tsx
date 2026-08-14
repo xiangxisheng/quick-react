@@ -1,5 +1,5 @@
 import type React from 'react';
-import type { FilterValue } from 'antd/es/table/interface';
+import type { FilterValue } from 'antd/es/table/interface.js';
 import type { TableProps, TablePaginationConfig } from 'antd';
 import { useState, useEffect } from 'react';
 import { Table } from 'antd';

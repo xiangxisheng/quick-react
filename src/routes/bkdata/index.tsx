@@ -1,6 +1,6 @@
-import type { CommonApi } from '@/utils/common/api';
+import type { CommonApi } from '@/utils/common/api.js';
 import { Routes, Route } from 'react-router-dom';
-import Panel from './panel';
+import Panel from './panel/index.js';
 
 type AppType = {
 	commonApi: CommonApi;

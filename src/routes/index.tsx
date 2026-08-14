@@ -1,14 +1,14 @@
 import type React from 'react';
 import type { MenuProps } from 'antd';
-import type { CommonApi } from '@/utils/common/api';
+import type { CommonApi } from '@/utils/common/api.js';
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Layout, Menu } from 'antd';
 import { AppstoreOutlined, MailOutlined } from '@ant-design/icons';
-import AliyunIndex from './aliyun/index';
-import Sign from './sign';
-import Panel from './panel';
+import AliyunIndex from './aliyun/index.js';
+import Sign from './sign.js';
+import Panel from './panel/index.js';
 const { Content } = Layout;
 
 interface RouteConfig {
@@ -114,12 +114,12 @@ const App = ({ commonApi }: AppType) => {
 };
 
 // 使用 Router 包裹应用
-import type { Config } from '@/config';
+import type { Config } from '@/config.js';
 type RouteIndexType = {
 	config: Config;
 };
 
-import { useCommonApi } from '@/utils/common/api'
+import { useCommonApi } from '@/utils/common/api.js'
 
 const RouteIndex = ({ config }: RouteIndexType) => {
 	const [commonApi, contextHolder] = useCommonApi();

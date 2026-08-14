@@ -12,7 +12,7 @@ import {
 import { Breadcrumb, Layout, Menu, theme } from 'antd';
 import { Button } from 'antd';
 const { Header, Content, Footer, Sider } = Layout;
-import DescribeInstances from './DescribeInstances';
+import DescribeInstances from './DescribeInstances.js';
 
 const App1 = () => {
 	const navigate = useNavigate();

@@ -4,7 +4,7 @@
 
 ```bash
 npm install
-node esbuild.js
+node esbuild.cjs
 ```
 
 默认端口是 `8088`，也可以通过 `HTTP_PORT` 修改。

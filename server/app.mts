@@ -9,14 +9,13 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { compress } from 'hono/compress';
 import { etag } from 'hono/etag';
 import { Hono, type Context } from 'hono';
+import { renderIndexHtml } from './templates/index.mjs';
 
 type AppEnv = { Bindings: HttpBindings | Http2Bindings };
 const app = new Hono<AppEnv>();
 const port = Number(process.env.HTTP_PORT) || 8088;
 const domain = process.env.DOMAIN || 'anan.cc';
-const distDir = fileURLToPath(new URL('../dist/', import.meta.url));
 const publicDir = fileURLToPath(new URL('../public/', import.meta.url));
-const indexTemplatePath = fileURLToPath(new URL('../server/templates/index.html', import.meta.url));
 const mapAllowedIps = new Set([
 	'127.0.0.1',
 	'::1',
@@ -73,18 +72,35 @@ const menuItems = [
 	{ label: '登录', key: '/sign', icon: 'appstore' },
 ];
 
-const renderIndexHtml = async () => {
-	const template = await readFile(indexTemplatePath, 'utf8');
-	const menuJson = JSON.stringify(menuItems).replaceAll('<', '\\u003c');
-	const bootstrapScript = `<script>window.__INITIAL_MENU__=${menuJson};</script>`;
-	return template.replace('<script src="/bundle.js"></script>', `${bootstrapScript}\n  <script src="/bundle.js"></script>`);
+const getPageMetadata = (pathname: string) => {
+	if (pathname === '/') {
+		return { title: '首页', description: 'Quick React 项目首页' };
+	}
+	if (pathname.startsWith('/aliyun')) {
+		return { title: '阿里云管理', description: '阿里云资源管理控制台' };
+	}
+	if (pathname.startsWith('/panel')) {
+		return { title: '管理后台', description: 'Quick React 管理后台' };
+	}
+	if (pathname === '/about') {
+		return { title: '关于', description: '关于 Quick React 项目' };
+	}
+	if (pathname === '/sign') {
+		return { title: '登录', description: '登录 Quick React' };
+	}
+	return { title: 'Quick React', description: 'Quick React 应用' };
+};
+
+const renderDocument = (c: Context<AppEnv>) => {
+	const metadata = getPageMetadata(c.req.path);
+	const publicOrigin = process.env.PUBLIC_ORIGIN;
+	const canonical = publicOrigin ? new URL(c.req.path, publicOrigin).toString() : undefined;
+	c.header('Cache-Control', 'no-cache');
+	return c.html(renderIndexHtml({ ...metadata, canonical, menu: menuItems }));
 };
 
 app.get('/api/health', (c) => c.json({ ok: true }));
-app.get('/', async (c) => {
-	c.header('Cache-Control', 'no-cache');
-	return c.html(await renderIndexHtml());
-});
+app.get('/', (c) => renderDocument(c));
 
 app.use('*', compress());
 app.use('*', etag());
@@ -106,7 +122,7 @@ app.get('*', async (c, next) => {
 		return next();
 	}
 	c.header('Cache-Control', 'no-cache');
-	return c.html(await renderIndexHtml());
+	return renderDocument(c);
 });
 
 app.notFound((c) => {

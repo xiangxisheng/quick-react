@@ -1,6 +1,6 @@
 import type React from 'react';
 import type { MenuProps } from 'antd';
-import type { CommonApi } from '@/utils/common/api';
+import type { CommonApi } from '@/utils/common/api.js';
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Route, Routes } from 'react-router-dom';
@@ -13,7 +13,7 @@ import {
 import { Breadcrumb, Layout, Menu, theme } from 'antd';
 import { Button } from 'antd';
 const { Header, Content, Footer, Sider } = Layout;
-import TableCRUD from '@/utils/antd/table_crud';
+import TableCRUD from '@/utils/antd/table_crud/index.js';
 
 const App1 = () => {
 	const navigate = useNavigate();

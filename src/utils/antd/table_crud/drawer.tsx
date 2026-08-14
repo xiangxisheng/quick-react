@@ -1,5 +1,5 @@
-import type { DataType, ResJsonTableColumn } from '@/utils/common/api';
-import type { CommonApi } from '@/utils/common/api';
+import type { DataType, ResJsonTableColumn } from '@/utils/common/api.js';
+import type { CommonApi } from '@/utils/common/api.js';
 import type { UploadProps } from 'antd';
 
 import { InboxOutlined } from '@ant-design/icons';

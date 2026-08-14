@@ -9,7 +9,7 @@ npm install
 启动构建和服务：
 
 ```bash
-node esbuild.js
+node esbuild.cjs
 ```
 
 启动监听模式：

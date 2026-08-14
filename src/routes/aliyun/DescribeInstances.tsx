@@ -1,11 +1,11 @@
 import type React from 'react';
-import type { AliyunResponse, AliyunInstance } from '@/utils/api/aliyuncs';
+import type { AliyunResponse, AliyunInstance } from '@/utils/api/aliyuncs.js';
 import type { TableProps } from 'antd';
-import type { FetchApiParams, FetchApiResult } from '@/utils/antd/xtable';
+import type { FetchApiParams, FetchApiResult } from '@/utils/antd/xtable.js';
 import { Space } from 'antd';
-import { XTable } from '@/utils/antd/xtable';
-import { AliyunApi } from '@/utils/api/aliyuncs';
-import { getColumnSearchProps } from '@/utils/antd/getColumnSearchProps';
+import { XTable } from '@/utils/antd/xtable.js';
+import { AliyunApi } from '@/utils/api/aliyuncs.js';
+import { getColumnSearchProps } from '@/utils/antd/getColumnSearchProps.js';
 
 interface DataType extends AliyunInstance { };
 

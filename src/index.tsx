@@ -1,8 +1,8 @@
 // src/index.tsx
 import type React from 'react';
 import ReactDOM from 'react-dom/client';
-import RouteIndex from './routes/index';
-import { config } from './config';
+import RouteIndex from './routes/index.js';
+import { config } from './config.js';
 
 // 修改 root 元素的 CSS
 const rootElement = document.getElementById('root');

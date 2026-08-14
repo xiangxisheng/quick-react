@@ -1,4 +1,4 @@
-import type { FilterDropdownProps } from 'antd/es/table/interface';
+import type { FilterDropdownProps } from 'antd/es/table/interface.js';
 import type { InputRef, TableColumnType } from 'antd';
 import { useRef } from 'react';
 import { SearchOutlined } from '@ant-design/icons';

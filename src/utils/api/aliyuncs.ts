@@ -1,4 +1,4 @@
-import { signHmacSha1ToBase64 } from '@/utils/common/crypto';
+import { signHmacSha1ToBase64 } from '@/utils/common/crypto.js';
 
 // 生成签名
 const generateSignature = async (params: Record<string, string>, accessKeySecret: string): Promise<string> => {

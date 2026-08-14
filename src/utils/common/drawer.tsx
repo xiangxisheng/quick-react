@@ -1,8 +1,8 @@
 import type React from 'react';
-import type { CommonApi, DataType, ResJsonTableColumn } from '@/utils/common/api';
+import type { CommonApi, DataType, ResJsonTableColumn } from '@/utils/common/api.js';
 import type { Dayjs } from 'dayjs';
 import { useState, useRef } from 'react';
-import DrawerForm from '@/utils/antd/table_crud/drawer';
+import DrawerForm from '@/utils/antd/table_crud/drawer.js';
 import dayjs from 'dayjs';
 
 interface testType {

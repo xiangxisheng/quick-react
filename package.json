@@ -2,16 +2,17 @@
 	"name": "quick-react",
 	"version": "1.0.0",
 	"description": "quick react",
-	"main": "esbuild.js",
+	"type": "module",
+	"main": "esbuild.cjs",
 	"engines": {
 		"node": ">=20"
 	},
 	"scripts": {
-		"build": "node esbuild.js",
-		"dev": "node esbuild.js --watch",
+		"build": "node esbuild.cjs",
+		"dev": "node esbuild.cjs --watch",
 		"start": "node dist/server.mjs",
 		"typecheck": "tsc --noEmit",
-		"test": "node esbuild.js"
+		"test": "node esbuild.cjs"
 	},
 	"repository": {
 		"type": "git",
