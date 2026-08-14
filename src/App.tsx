@@ -126,8 +126,8 @@ const App = ({ commonApi }: AppType) => {
 			/>
 			<Content>
 				<Routes>
-					{memoizedRoutes.map((route, index) => (
-						<Route key={index} path={route.path} element={route.element} />
+					{memoizedRoutes.map((route) => (
+						<Route key={route.path} path={route.path} element={route.element} />
 					))}
 				</Routes>
 			</Content>

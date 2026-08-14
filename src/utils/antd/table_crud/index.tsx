@@ -212,7 +212,7 @@ export default ({ commonApi }: TableCrudType) => {
 
 	useEffect(() => {
 		fetchData();
-	}, [filters, pagination.pageSize, pagination.current]);
+	}, [apiPath, filters, pagination.pageSize, pagination.current]);
 	const onChange: TableProps<DataType>['onChange'] = (_pagination: TablePaginationConfig, _filters, _sorter, _extra) => {
 		// console.log('onChange-params', { _pagination, _filters, _sorter, _extra });
 		setPagination((prev) => ({ ...prev, pageSize: _pagination.pageSize, current: _pagination.current }));
