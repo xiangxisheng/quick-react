@@ -2,6 +2,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
 const esbuild = require('esbuild');
+const { generate: generateWorkerRegistryFile } = require('./scripts/generate-worker-registry.cjs');
 
 const projectDir = __dirname;
 const distDir = path.join(projectDir, 'dist');
@@ -104,6 +105,7 @@ const createBuildContext = async (entryPoint, outputDir, outfile, options = {}) 
 
 const main = async () => {
 	const watch = process.argv.includes('--watch');
+	generateWorkerRegistryFile();
 	const frontend = await createBuildContext('src/index.tsx', publicDir, 'bundle.js', {
 		minify: true,
 	});
@@ -113,8 +115,13 @@ const main = async () => {
 		target: 'node18',
 		packages: 'external',
 	});
+	const worker = await createBuildContext('server/worker.mts', distDir, 'worker.mjs', {
+		platform: 'neutral',
+		format: 'esm',
+		target: 'es2022',
+	});
 	const apiBuilds = await Promise.all(createApiBuilds());
-	const builds = [frontend, backend, ...apiBuilds];
+	const builds = [frontend, backend, worker, ...apiBuilds];
 	const contexts = builds.map(({ context }) => context);
 	if (watch) {
 		await Promise.all(contexts.map((context) => context.watch()));

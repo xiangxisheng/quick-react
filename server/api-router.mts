@@ -9,11 +9,11 @@ export type ApiHandler = (
 	params: Record<string, string>,
 ) => Response | Promise<Response | undefined> | undefined;
 
-type ApiModule = {
+export type ApiModule = {
 	default?: ApiHandler;
 };
 
-type ApiRoute = {
+export type ApiRoute = {
 	path: string;
 	files: string[];
 };
@@ -22,8 +22,11 @@ type ApiManifest = {
 	routes: ApiRoute[];
 };
 
-const manifestModule = await import(new URL('./api-manifest.mjs', import.meta.url).href) as { default: ApiManifest };
-const manifest = manifestModule.default;
+let manifest: ApiManifest | undefined;
+const loadManifest = async () => {
+	manifest ??= (await import(new URL('./api-manifest.mjs', import.meta.url).href) as { default: ApiManifest }).default;
+	return manifest;
+};
 
 const normalizeApiPath = (path: string, apiSuffix: string) => {
 	if (!apiSuffix) return path;
@@ -34,13 +37,31 @@ const normalizeApiPath = (path: string, apiSuffix: string) => {
 	return segments.join('/');
 };
 
-const findRoute = (path: string, apiSuffix: string) => {
+type RouteMatcher = {
+	exact: Map<string, ApiRoute>;
+	byLength: Map<number, ApiRoute[]>;
+};
+
+const createRouteMatcher = (routes: ApiRoute[]): RouteMatcher => {
+	const exact = new Map<string, ApiRoute>();
+	const byLength = new Map<number, ApiRoute[]>();
+	for (const route of routes) {
+		if (!route.path.includes('/:')) exact.set(route.path, route);
+		const length = route.path.split('/').filter(Boolean).length;
+		const candidates = byLength.get(length) ?? [];
+		candidates.push(route);
+		byLength.set(length, candidates);
+	}
+	return { exact, byLength };
+};
+
+const findRoute = (path: string, apiSuffix: string, matcher: RouteMatcher) => {
 	const normalizedPath = normalizeApiPath(path, apiSuffix);
-	const exactRoute = manifest.routes.find((route) => route.path === normalizedPath);
+	const exactRoute = matcher.exact.get(normalizedPath);
 	if (exactRoute) return { route: exactRoute, params: {} };
 
 	const requestSegments = normalizedPath.split('/').filter(Boolean);
-	for (const route of manifest.routes) {
+	for (const route of matcher.byLength.get(requestSegments.length) ?? []) {
 		const routeSegments = route.path.split('/').filter(Boolean);
 		if (routeSegments.length !== requestSegments.length) continue;
 		const params: Record<string, string> = {};
@@ -60,13 +81,21 @@ const findRoute = (path: string, apiSuffix: string) => {
 	return undefined;
 };
 
-export const createApiGateway = (getApiSuffix: () => string) => async (c: Context<AppEnv>, _next: Next) => {
-	const route = findRoute(c.req.path, getApiSuffix());
+export const createApiGateway = (
+	getApiSuffix: () => string,
+	options: { routes?: ApiRoute[]; loadModule?: (file: string) => Promise<ApiModule> } = {},
+) => {
+	let matcherPromise: Promise<RouteMatcher> | undefined;
+	const getMatcher = () => matcherPromise ??= (async () => createRouteMatcher(options.routes ?? (await loadManifest()).routes))();
+	return async (c: Context<AppEnv>, _next: Next) => {
+	const route = findRoute(c.req.path, getApiSuffix(), await getMatcher());
 	if (!route) return c.json({ message: 'API route not found' }, 404);
 
 	const execute = async (index: number): Promise<Response> => {
 		const file = route.route.files[index];
-		const module = await import(new URL(`./${file}`, import.meta.url).href) as ApiModule;
+		const module = options.loadModule
+			? await options.loadModule(file)
+			: await import(new URL(`./${file}`, import.meta.url).href) as ApiModule;
 		if (typeof module.default !== 'function') {
 			throw new Error(`API route module must export a default handler: ${file}`);
 		}
@@ -81,4 +110,5 @@ export const createApiGateway = (getApiSuffix: () => string) => async (c: Contex
 	};
 
 	return execute(0);
+	};
 };

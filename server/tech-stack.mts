@@ -1,6 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { memoryConfigStore, type ConfigStore } from './config-store.mjs';
 
 export type TechStackConfig = {
 	nginx: boolean;
@@ -9,14 +7,23 @@ export type TechStackConfig = {
 	pageSuffix: string;
 };
 
-const defaultConfig: TechStackConfig = {
-	nginx: process.env.MASK_NGINX === '1',
-	phpVersion: process.env.MASK_PHP_VERSION || '',
-	apiSuffix: process.env.API_ROUTE_SUFFIX ?? '.php',
-	pageSuffix: process.env.PAGE_ROUTE_SUFFIX ?? '.html',
-};
-const configPath = process.env.TECH_STACK_CONFIG_FILE || join(homedir(), '.quick-react', 'tech-stack.json');
+let defaultConfig: TechStackConfig = { nginx: false, phpVersion: '', apiSuffix: '.php', pageSuffix: '.html' };
 let config: TechStackConfig = { ...defaultConfig };
+let store: ConfigStore = memoryConfigStore;
+let configuredDefaults = '';
+let loadedAt = 0;
+const cacheTtl = 30_000;
+
+export const configureTechStack = (options: { store?: ConfigStore; defaults?: Partial<TechStackConfig> }) => {
+	const nextStore = options.store ?? memoryConfigStore;
+	const nextDefaults = JSON.stringify(options.defaults ?? {});
+	if (store === nextStore && configuredDefaults === nextDefaults) return;
+	store = nextStore;
+	configuredDefaults = nextDefaults;
+	defaultConfig = { nginx: false, phpVersion: '', apiSuffix: '.php', pageSuffix: '.html', ...options.defaults };
+	config = { ...defaultConfig };
+	loadedAt = 0;
+};
 
 const normalize = (value: unknown): TechStackConfig => ({
 	nginx: value && typeof value === 'object' && 'nginx' in value ? Boolean((value as { nginx?: unknown }).nginx) : defaultConfig.nginx,
@@ -41,11 +48,9 @@ const normalize = (value: unknown): TechStackConfig => ({
 });
 
 export const loadTechStackConfig = async () => {
-	try {
-		config = normalize(JSON.parse(await readFile(configPath, 'utf8')));
-	} catch {
-		config = { ...defaultConfig };
-	}
+	if (loadedAt && Date.now() - loadedAt < cacheTtl) return { ...config };
+	config = normalize(await store.get('tech-stack'));
+	loadedAt = Date.now();
 	return { ...config };
 };
 
@@ -53,10 +58,8 @@ export const getTechStackConfig = () => ({ ...config });
 
 export const saveTechStackConfig = async (value: unknown) => {
 	config = normalize(value);
-	await mkdir(dirname(configPath), { recursive: true });
-	const temporaryPath = `${configPath}.${process.pid}.tmp`;
-	await writeFile(temporaryPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
-	await rename(temporaryPath, configPath);
+	await store.put('tech-stack', config);
+	loadedAt = Date.now();
 	return { ...config };
 };
 

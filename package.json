@@ -9,9 +9,10 @@
 	},
 	"scripts": {
 		"build": "node esbuild.cjs",
+		"build:worker": "SKIP_SERVER_LISTEN=1 node esbuild.cjs",
 		"dev": "node esbuild.cjs --watch",
 		"start": "node dist/server.mjs",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "node scripts/generate-worker-registry.cjs && tsc --noEmit",
 		"test": "node esbuild.cjs"
 	},
 	"repository": {

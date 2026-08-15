@@ -5,100 +5,70 @@ import { fileURLToPath } from 'node:url';
 import { createSecureServer } from 'node:http2';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { compress } from 'hono/compress';
-import { etag } from 'hono/etag';
-import { Hono, type Context } from 'hono';
-import { renderIndexHtml } from './templates/index.mjs';
-import { createApiGateway } from './api-router.mjs';
+import { Hono } from 'hono';
 import { getClientIp } from './client-ip.mjs';
-import { getPageMetadata, menuItems } from './navigation.mjs';
+import worker from './worker.mjs';
+import { createJsonFileStore } from './node-config-store.mjs';
+import { configureSystemConfig, loadSystemConfig } from './system-config.mjs';
+import { configureTechStack, loadTechStackConfig } from './tech-stack.mjs';
+import type { WorkerBindings } from './worker.mjs';
 import type { AppEnv } from './types.mjs';
-import { applyTechStackHeaders, getTechStackConfig, loadTechStackConfig } from './tech-stack.mjs';
-import { loadSystemConfig } from './system-config.mjs';
 
-export const app = new Hono<AppEnv>();
+const env = process.env;
+const configDirectory = join(homedir(), '.quick-react');
+configureSystemConfig({
+	store: createJsonFileStore(env.SYSTEM_CONFIG_FILE || join(configDirectory, 'system-config.json')),
+	defaults: {
+		httpPort: env.HTTP_PORT || '8088',
+		domain: env.DOMAIN || 'anan.cc',
+		publicOrigin: env.PUBLIC_ORIGIN || '',
+		trustedProxyIps: env.TRUSTED_PROXY_IPS || '127.0.0.1,::1,::ffff:127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
+		mapAllowedIps: env.MAP_ALLOWED_IPS || '127.0.0.1,::1,::ffff:127.0.0.1',
+	},
+});
+configureTechStack({
+	store: createJsonFileStore(env.TECH_STACK_CONFIG_FILE || join(configDirectory, 'tech-stack.json')),
+	defaults: {
+		nginx: env.MASK_NGINX === '1',
+		phpVersion: env.MASK_PHP_VERSION || '',
+		apiSuffix: env.API_ROUTE_SUFFIX ?? '.php',
+		pageSuffix: env.PAGE_ROUTE_SUFFIX ?? '.html',
+	},
+});
+
 const systemConfig = await loadSystemConfig();
-const port = Number(systemConfig.httpPort) || 8088;
-const domain = systemConfig.domain || 'anan.cc';
+await loadTechStackConfig();
 const publicDir = fileURLToPath(new URL('../public/', import.meta.url));
 const mapAllowedIps = new Set([
-	'127.0.0.1',
-	'::1',
-	'::ffff:127.0.0.1',
+	'127.0.0.1', '::1', '::ffff:127.0.0.1',
 	...systemConfig.mapAllowedIps.split(',').map((ip) => ip.trim()).filter(Boolean),
 ]);
+const trustedProxyRules = systemConfig.trustedProxyIps.split(',').map((ip) => ip.trim()).filter(Boolean);
 
-const defaultTrustedProxyRules = '127.0.0.1,::1,::ffff:127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16';
-
-const trustedProxyRules = (systemConfig.trustedProxyIps || defaultTrustedProxyRules)
-	.split(',').map((ip) => ip.trim()).filter(Boolean);
-
-const renderDocument = (c: Context<AppEnv>) => {
-	const siteConfig = getTechStackConfig();
-	const metadata = getPageMetadata(c.req.path, siteConfig.pageSuffix);
-	const publicOrigin = systemConfig.publicOrigin || undefined;
-	const canonical = publicOrigin ? new URL(c.req.path, publicOrigin).toString() : undefined;
-	c.header('Cache-Control', 'no-cache');
-	return c.html(renderIndexHtml({
-		...metadata,
-		canonical,
-		initialData: {
-			apiSuffix: siteConfig.apiSuffix,
-			pageSuffix: siteConfig.pageSuffix,
-			siteNavigation: menuItems,
-		},
-	}));
-};
-
-await loadTechStackConfig();
-
-app.use('*', async (c, next) => {
-	// API 路由是独立构建产物，不能依赖与主服务共享内存；每次请求从持久化配置同步一次。
-	await loadTechStackConfig();
-	await next();
-	applyTechStackHeaders(c.res.headers, c.req.path);
-});
-
-const apiGateway = createApiGateway(() => getTechStackConfig().apiSuffix);
-app.all('/api', apiGateway);
-app.all('/api/*', apiGateway);
-app.get('/', (c) => renderDocument(c));
-
-app.use('*', compress());
-app.use('*', etag());
-app.use('/bundle.js', async (c, next) => {
+const nodeApp = new Hono<AppEnv>();
+nodeApp.use('/bundle.js', async (c, next) => {
 	c.header('Cache-Control', 'no-cache');
 	await next();
 });
-app.use('/bundle.js.map', async (c, next) => {
+nodeApp.use('/bundle.js.map', async (c, next) => {
 	const clientIp = getClientIp(c, trustedProxyRules);
 	if (!clientIp || !mapAllowedIps.has(clientIp)) return c.text('Not Found', 404);
 	return next();
 });
-app.use('*', serveStatic({ root: publicDir }));
+nodeApp.use('*', serveStatic({ root: publicDir }));
+nodeApp.all('*', (c) => worker.fetch(c.req.raw, {} as WorkerBindings));
 
-app.get('*', async (c, next) => {
-	if (c.req.path.startsWith('/api/') || !c.req.header('accept')?.includes('text/html')) return next();
-	c.header('Cache-Control', 'no-cache');
-	return renderDocument(c);
-});
+export const app = nodeApp;
 
-app.notFound((c) => {
-	if (c.req.path.startsWith('/api/')) return c.json({ message: 'Not Found' }, 404);
-	return c.text('Not Found', 404);
-});
-
-const getAcmeServerOptions = async () => {
-	const baseDir = join(homedir(), '.acme.sh', `${domain}_ecc`);
-	return {
-		key: await readFile(join(baseDir, `${domain}.key`)),
-		cert: await readFile(join(baseDir, 'fullchain.cer')),
-	};
-};
-
+const domain = systemConfig.domain || 'anan.cc';
+const port = Number(systemConfig.httpPort) || 8088;
 const listen = async () => {
 	try {
-		const serverOptions = await getAcmeServerOptions();
+		const baseDir = join(homedir(), '.acme.sh', `${domain}_ecc`);
+		const serverOptions = {
+			key: await readFile(join(baseDir, `${domain}.key`)),
+			cert: await readFile(join(baseDir, 'fullchain.cer')),
+		};
 		serve({ fetch: app.fetch, port, hostname: '0.0.0.0', createServer: createSecureServer, serverOptions }, (info) => {
 			console.log(`HTTP/2 Listening on ${domain}:${info.port}`);
 		});
@@ -109,6 +79,4 @@ const listen = async () => {
 	}
 };
 
-if (process.env.SKIP_SERVER_LISTEN !== '1') {
-	await listen();
-}
+if (process.env.SKIP_SERVER_LISTEN !== '1') await listen();

@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import type { Context } from 'hono';
 import type { AppEnv, MockRow, MockTable } from './types.mjs';
 
@@ -55,7 +54,7 @@ export const getMockTableResponse = (table: MockTable, pageNum: number, pageSize
 };
 
 export const addRow = (table: MockTable, body: Record<string, unknown>) => {
-	const row = { ...body, key: String(body.key || randomUUID()) } as MockRow;
+	const row = { ...body, key: String(body.key || globalThis.crypto.randomUUID()) } as MockRow;
 	table.rows.push(row);
 	return row;
 };

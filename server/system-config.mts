@@ -1,6 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { memoryConfigStore, type ConfigStore } from './config-store.mjs';
 
 export type SystemConfig = {
 	httpPort: string;
@@ -10,15 +8,32 @@ export type SystemConfig = {
 	mapAllowedIps: string;
 };
 
-const defaultConfig: SystemConfig = {
-	httpPort: process.env.HTTP_PORT || '8088',
-	domain: process.env.DOMAIN || 'anan.cc',
-	publicOrigin: process.env.PUBLIC_ORIGIN || '',
-	trustedProxyIps: process.env.TRUSTED_PROXY_IPS || '127.0.0.1,::1,::ffff:127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
-	mapAllowedIps: process.env.MAP_ALLOWED_IPS || '127.0.0.1,::1,::ffff:127.0.0.1',
+let defaultConfig: SystemConfig = {
+	httpPort: '8088', domain: 'anan.cc', publicOrigin: '',
+	trustedProxyIps: '127.0.0.1,::1,::ffff:127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
+	mapAllowedIps: '127.0.0.1,::1,::ffff:127.0.0.1',
 };
-const configPath = process.env.SYSTEM_CONFIG_FILE || join(homedir(), '.quick-react', 'system-config.json');
 let config = { ...defaultConfig };
+let store: ConfigStore = memoryConfigStore;
+let configuredDefaults = '';
+let loadedAt = 0;
+const cacheTtl = 30_000;
+
+export const configureSystemConfig = (options: { store?: ConfigStore; defaults?: Partial<SystemConfig> }) => {
+	const nextStore = options.store ?? memoryConfigStore;
+	const nextDefaults = JSON.stringify(options.defaults ?? {});
+	if (store === nextStore && configuredDefaults === nextDefaults) return;
+	store = nextStore;
+	configuredDefaults = nextDefaults;
+	defaultConfig = {
+		httpPort: '8088', domain: 'anan.cc', publicOrigin: '',
+		trustedProxyIps: '127.0.0.1,::1,::ffff:127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
+		mapAllowedIps: '127.0.0.1,::1,::ffff:127.0.0.1',
+		...options.defaults,
+	};
+	config = { ...defaultConfig };
+	loadedAt = 0;
+};
 
 const normalize = (value: unknown): SystemConfig => {
 	const source = value && typeof value === 'object' ? value as Record<string, unknown> : {};
@@ -32,20 +47,17 @@ const normalize = (value: unknown): SystemConfig => {
 };
 
 export const loadSystemConfig = async () => {
-	try {
-		config = normalize(JSON.parse(await readFile(configPath, 'utf8')));
-	} catch {
-		config = { ...defaultConfig };
-	}
+	if (loadedAt && Date.now() - loadedAt < cacheTtl) return { ...config };
+	config = normalize(await store.get('system-config'));
+	loadedAt = Date.now();
 	return { ...config };
 };
+
+export const getSystemConfig = () => ({ ...config });
 
 export const saveSystemConfig = async (value: unknown) => {
 	config = normalize(value);
-	await mkdir(dirname(configPath), { recursive: true });
-	const temporaryPath = `${configPath}.${process.pid}.tmp`;
-	await writeFile(temporaryPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
-	await rename(temporaryPath, configPath);
+	await store.put('system-config', config);
+	loadedAt = Date.now();
 	return { ...config };
 };
-

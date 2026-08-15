@@ -8,3 +8,5 @@ package-lock.json
 dist/
 public/bundle.js
 public/bundle.js.map
+/server/worker-api-registry.mts
+/server/.generated/
