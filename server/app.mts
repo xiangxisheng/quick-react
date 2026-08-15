@@ -1,5 +1,4 @@
 import { readFile } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,8 +10,11 @@ import { compress } from 'hono/compress';
 import { etag } from 'hono/etag';
 import { Hono, type Context } from 'hono';
 import { renderIndexHtml } from './templates/index.mjs';
+import { getClientIp } from './client-ip.mjs';
+import { getManagementMenu, getPageDefinitions, getPageMetadata, menuItems } from './navigation.mjs';
+import { registerPanelRoutes } from './panel-routes.mjs';
+import type { AppEnv } from './types.mjs';
 
-type AppEnv = { Bindings: HttpBindings | Http2Bindings };
 const app = new Hono<AppEnv>();
 const port = Number(process.env.HTTP_PORT) || 8088;
 const domain = process.env.DOMAIN || 'anan.cc';
@@ -23,226 +25,10 @@ const mapAllowedIps = new Set([
 	'::ffff:127.0.0.1',
 	...(process.env.MAP_ALLOWED_IPS || '').split(',').map((ip) => ip.trim()).filter(Boolean),
 ]);
+
 const defaultTrustedProxyRules = '127.0.0.1,::1,::ffff:127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16';
 const trustedProxyRules = (process.env.TRUSTED_PROXY_IPS || defaultTrustedProxyRules)
 	.split(',').map((ip) => ip.trim()).filter(Boolean);
-
-const ipv4ToNumber = (ip: string) => {
-	const parts = ip.split('.');
-	if (parts.length !== 4 || parts.some((part) => !/^\d+$/.test(part) || Number(part) > 255)) {
-		return undefined;
-	}
-	return parts.reduce((value, part) => (value * 256) + Number(part), 0) >>> 0;
-};
-
-const isIpInRule = (ip: string, rule: string) => {
-	if (!rule.includes('/')) {
-		return ip === rule;
-	}
-	const [network, prefixText] = rule.split('/');
-	const address = ipv4ToNumber(ip);
-	const networkAddress = ipv4ToNumber(network);
-	const prefix = Number(prefixText);
-	if (address === undefined || networkAddress === undefined || !Number.isInteger(prefix) || prefix < 0 || prefix > 32) {
-		return false;
-	}
-	const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
-	return (address & mask) === (networkAddress & mask);
-};
-
-const isTrustedProxy = (ip: string) => trustedProxyRules.some((rule) => isIpInRule(ip, rule));
-
-const getClientIp = (c: Context<AppEnv>) => {
-	const remoteAddress = c.env.incoming.socket.remoteAddress;
-	if (!remoteAddress) {
-		return undefined;
-	}
-	if (!isTrustedProxy(remoteAddress)) {
-		return remoteAddress;
-	}
-	// Only trust forwarded client IP headers when the immediate peer is a trusted proxy.
-	return c.req.header('cf-connecting-ip')?.trim()
-		|| c.req.header('x-real-ip')?.trim()
-		|| c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
-};
-const menuItems = [
-	{ label: '首页', key: '/', icon: 'mail' },
-	{ label: '阿里云', key: '/aliyun', icon: 'appstore' },
-	{ label: '管理后台', key: '/panel', icon: 'appstore' },
-	{ label: '关于', key: '/about', icon: 'appstore' },
-	{ label: '登录', key: '/sign', icon: 'appstore' },
-];
-
-const getManagementMenu = (_c: Context<AppEnv>) => [
-	{ label: '首页', key: '/panel', icon: 'mail' },
-	{ label: '表列管理', key: '/panel/data/columns', icon: 'appstore' },
-	{ label: '数据管理', key: '/panel/data/rows', icon: 'appstore' },
-];
-
-const getPageDefinitions = (_c: Context<AppEnv>) => [
-	{ path: '/', component: 'home', title: '首页' },
-	{ path: '/aliyun', component: 'aliyun', title: '阿里云管理' },
-	{ path: '/aliyun/DescribeInstances', component: 'aliyunDescribeInstances', title: '阿里云管理' },
-	{ path: '/panel', component: 'dashboard', title: '管理后台' },
-	{ path: '/panel/data/columns', component: 'table', title: '表列管理' },
-	{ path: '/panel/data/rows', component: 'table', title: '数据管理' },
-	{ path: '/about', component: 'about', title: '关于' },
-	{ path: '/sign', component: 'sign', title: '登录' },
-];
-
-type MockRow = Record<string, unknown> & { key: string };
-type MockColumn = {
-	dataIndex: string;
-	title: string;
-	component?: string;
-	dataType?: string;
-	dayjsFormat?: string;
-};
-type MockTable = {
-	columns: MockColumn[];
-	rows: MockRow[];
-};
-
-const mockTables: Record<string, MockTable> = {
-	columns: {
-		columns: [
-			{ dataIndex: 'key', title: '标识' },
-			{ dataIndex: 'dataIndex', title: '字段名' },
-			{ dataIndex: 'title', title: '标题' },
-			{ dataIndex: 'component', title: '表单组件' },
-			{ dataIndex: 'dataType', title: '数据类型' },
-		],
-		rows: [
-			{ key: 'column-1', dataIndex: 'name', title: '名称', component: 'textbox', dataType: 'string' },
-			{ key: 'column-2', dataIndex: 'status', title: '状态', component: 'select', dataType: 'string' },
-			{ key: 'column-3', dataIndex: 'createdAt', title: '创建时间', component: 'datepicker', dataType: 'datetime' },
-		],
-	},
-	rows: {
-		columns: [
-			{ dataIndex: 'key', title: '标识' },
-			{ dataIndex: 'name', title: '名称', component: 'textbox', dataType: 'string' },
-			{ dataIndex: 'status', title: '状态', component: 'select', dataType: 'string' },
-			{ dataIndex: 'createdAt', title: '创建时间', component: 'datepicker', dataType: 'datetime', dayjsFormat: 'YYYY-MM-DD HH:mm:ss' },
-		],
-		rows: [
-			{ key: 'row-1', name: '示例数据一', status: 'enabled', createdAt: '2026-01-01T08:00:00.000Z' },
-			{ key: 'row-2', name: '示例数据二', status: 'disabled', createdAt: '2026-01-02T08:00:00.000Z' },
-			{ key: 'row-3', name: '示例数据三', status: 'enabled', createdAt: '2026-01-03T08:00:00.000Z' },
-		],
-	},
-};
-
-const getMockTable = (resource: string) => mockTables[resource];
-
-const parseJsonBody = async (c: Context<AppEnv>) => {
-	try {
-		return await c.req.json<Record<string, unknown>>();
-	} catch {
-		return {};
-	}
-};
-
-const getMockTableResponse = (table: MockTable, pageNum: number, pageSize: number) => {
-	const start = Math.max(0, (pageNum - 1) * pageSize);
-	return {
-		table: {
-			option: { rowKey: 'key' },
-			columns: table.columns,
-			dataSource: table.rows.slice(start, start + pageSize),
-			totalRecords: table.rows.length,
-		},
-	};
-};
-
-const mockTablePath = '/api/panel/data/:resource';
-
-app.get(mockTablePath, (c) => {
-	const table = getMockTable(c.req.param('resource'));
-	if (!table) {
-		return c.json({ message: '模拟数据表不存在' }, 404);
-	}
-	const pageNum = Math.max(1, Number(c.req.query('pageNum')) || 1);
-	const pageSize = Math.max(1, Number(c.req.query('pageSize')) || 10);
-	return c.json(getMockTableResponse(table, pageNum, pageSize));
-});
-
-app.get(`${mockTablePath}/:id`, (c) => {
-	const table = getMockTable(c.req.param('resource'));
-	const row = table?.rows.find((item) => item.key === c.req.param('id'));
-	if (!row) {
-		return c.json({ message: '模拟数据不存在' }, 404);
-	}
-	return c.json(row);
-});
-
-app.get('/api/panel/dashboard', (c) => {
-	const rows = mockTables.rows.rows;
-	const enabledRows = rows.filter((row) => row.status === 'enabled').length;
-	return c.json({
-		dashboard: {
-			title: '管理后台',
-			statistics: [
-				{ key: 'columns', label: '字段定义', value: mockTables.columns.rows.length },
-				{ key: 'rows', label: '数据记录', value: rows.length },
-				{ key: 'enabledRows', label: '启用记录', value: enabledRows },
-			],
-			recentRows: rows.slice(-5).reverse(),
-		},
-	});
-});
-
-app.post(mockTablePath, async (c) => {
-	const table = getMockTable(c.req.param('resource'));
-	if (!table) {
-		return c.json({ message: '模拟数据表不存在' }, 404);
-	}
-	const body = await parseJsonBody(c);
-	const row = { ...body, key: String(body.key || randomUUID()) } as MockRow;
-	table.rows.push(row);
-	return c.json({ message: '新增成功', data: row }, 201);
-});
-
-app.put(`${mockTablePath}/:id`, async (c) => {
-	const table = getMockTable(c.req.param('resource'));
-	const index = table?.rows.findIndex((item) => item.key === c.req.param('id')) ?? -1;
-	if (!table || index < 0) {
-		return c.json({ message: '模拟数据不存在' }, 404);
-	}
-	const body = await parseJsonBody(c);
-	table.rows[index] = { ...table.rows[index], ...body, key: table.rows[index].key };
-	return c.json({ message: '保存成功', data: table.rows[index] });
-});
-
-app.delete(mockTablePath, async (c) => {
-	const table = getMockTable(c.req.param('resource'));
-	if (!table) {
-		return c.json({ message: '模拟数据表不存在' }, 404);
-	}
-	const body = await c.req.json<unknown>().catch(() => []);
-	const ids = Array.isArray(body) ? body.map(String) : [];
-	table.rows = table.rows.filter((row) => !ids.includes(row.key));
-	return c.json({ message: '删除成功' });
-});
-
-const getPageMetadata = (pathname: string) => {
-	if (pathname === '/') {
-		return { title: '首页', description: 'Quick React 项目首页' };
-	}
-	if (pathname.startsWith('/aliyun')) {
-		return { title: '阿里云管理', description: '阿里云资源管理控制台' };
-	}
-	if (pathname.startsWith('/panel')) {
-		return { title: '管理后台', description: 'Quick React 管理后台' };
-	}
-	if (pathname === '/about') {
-		return { title: '关于', description: '关于 Quick React 项目' };
-	}
-	if (pathname === '/sign') {
-		return { title: '登录', description: '登录 Quick React' };
-	}
-	return { title: 'Quick React', description: 'Quick React 应用' };
-};
 
 const renderDocument = (c: Context<AppEnv>) => {
 	const metadata = getPageMetadata(c.req.path);
@@ -254,12 +40,13 @@ const renderDocument = (c: Context<AppEnv>) => {
 		canonical,
 		initialData: {
 			siteNavigation: menuItems,
-			managementMenu: getManagementMenu(c),
-			pages: getPageDefinitions(c),
+			managementMenu: getManagementMenu(),
+			pages: getPageDefinitions(),
 		},
 	}));
 };
 
+registerPanelRoutes(app);
 app.get('/api/health', (c) => c.json({ ok: true }));
 app.get('/', (c) => renderDocument(c));
 
@@ -270,26 +57,20 @@ app.use('/bundle.js', async (c, next) => {
 	await next();
 });
 app.use('/bundle.js.map', async (c, next) => {
-	const clientIp = getClientIp(c);
-	if (!clientIp || !mapAllowedIps.has(clientIp)) {
-		return c.text('Not Found', 404);
-	}
+	const clientIp = getClientIp(c, trustedProxyRules);
+	if (!clientIp || !mapAllowedIps.has(clientIp)) return c.text('Not Found', 404);
 	return next();
 });
 app.use('*', serveStatic({ root: publicDir }));
 
 app.get('*', async (c, next) => {
-	if (c.req.path.startsWith('/api/') || !c.req.header('accept')?.includes('text/html')) {
-		return next();
-	}
+	if (c.req.path.startsWith('/api/') || !c.req.header('accept')?.includes('text/html')) return next();
 	c.header('Cache-Control', 'no-cache');
 	return renderDocument(c);
 });
 
 app.notFound((c) => {
-	if (c.req.path.startsWith('/api/')) {
-		return c.json({ message: 'Not Found' }, 404);
-	}
+	if (c.req.path.startsWith('/api/')) return c.json({ message: 'Not Found' }, 404);
 	return c.text('Not Found', 404);
 });
 
@@ -304,21 +85,11 @@ const getAcmeServerOptions = async () => {
 const listen = async () => {
 	try {
 		const serverOptions = await getAcmeServerOptions();
-		serve({
-			fetch: app.fetch,
-			port,
-			hostname: '0.0.0.0',
-			createServer: createSecureServer,
-			serverOptions,
-		}, (info) => {
+		serve({ fetch: app.fetch, port, hostname: '0.0.0.0', createServer: createSecureServer, serverOptions }, (info) => {
 			console.log(`HTTP/2 Listening on ${domain}:${info.port}`);
 		});
 	} catch {
-		serve({
-			fetch: app.fetch,
-			port,
-			hostname: '0.0.0.0',
-		}, (info) => {
+		serve({ fetch: app.fetch, port, hostname: '0.0.0.0' }, (info) => {
 			console.log(`HTTP/1 Listening on 127.0.0.1:${info.port}`);
 		});
 	}

@@ -102,6 +102,12 @@ function AppRouter({ commonApi, children }: AppType) {
 		setCurrent(location.pathname); // URL 变化时同步菜单高亮
 	}, [location.pathname]);
 
+	const currentMenuItem = initialData?.managementMenu.find((item) => item.key === location.pathname);
+	const breadcrumbItems = [
+		{ title: '管理后台' },
+		...(location.pathname === '/panel' || !currentMenuItem ? [] : [{ title: currentMenuItem.label }]),
+	];
+
 	const onClick: MenuProps['onClick'] = (e) => {
 		console.log('click ', e);
 		setCurrent(e.key);
@@ -147,6 +153,7 @@ function AppRouter({ commonApi, children }: AppType) {
 					height: '100%',
 					overflowY: 'scroll',
 				}}>
+					<Breadcrumb items={breadcrumbItems} style={{ marginBottom: '8px' }} />
 					{children ?? <Dashboard commonApi={commonApi} />}
 				</Content>
 				<Footer style={{
