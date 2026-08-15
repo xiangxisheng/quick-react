@@ -14,15 +14,15 @@ server/templates/   -> 动态首页响应
 
 ## 请求流程
 
-访问 `/` 时，后端生成 `initialData`，由 `server/templates/index.mts` 通过 `window.__INITIAL_DATA__` 注入页面。数据包含页面定义 `pages`、网站导航 `siteNavigation` 和后台菜单 `managementMenu`；页面定义指定路径和组件名称，前端通过组件注册表渲染，后台菜单由服务端生成，后续可在生成函数中按当前用户权限过滤。
+访问 `/` 时，后端生成 `initialData`，由 `server/templates/index.mts` 通过 `window.__INITIAL_DATA__` 注入页面。数据只包含 `apiSuffix`、`pageSuffix` 和 `siteNavigation`；导航树同时定义菜单、路由路径、页面组件和页面元信息，前端递归导航树生成路由并通过组件注册表渲染，后续可在生成函数中按当前用户权限过滤。
 
 静态文件只从 `public/` 提供，`dist/server.mjs` 不在静态目录中。
 
 ## 后端驱动页面
 
-普通后台页面由后端提供菜单、页面定义、表格列和数据接口；前端只负责通用布局、表格和表单渲染。新增常规 CRUD 页面时，优先在 `server/navigation.mts` 增加页面/菜单配置，并在 `server/api/` 下增加对应接口文件，无需修改前端。
+普通后台页面由后端提供导航、组件标识、表格列和数据接口；前端只负责通用布局、表格和表单渲染。新增常规 CRUD 页面时，优先在 `server/navigation.mts` 增加导航配置，并在 `server/api/` 下增加对应接口文件，无需修改路由配置。
 
-API 使用物理目录作为分层中间件链。构建阶段扫描 `server/api.mts` 和 `server/api/`，生成 `dist/api-manifest.mjs`；运行时只查 manifest，不再扫描文件系统。请求 `/api/panel/data/rows` 会按顺序执行 `server/api.mts`、`server/api/panel.mts`、`server/api/panel/data.mts` 和 `server/api/panel/data/rows.mts`；任一层直接返回失败响应都会终止后续执行。动态 ID 作为参数传给已匹配的叶子处理文件，例如 `/api/panel/data/rows/row-1` 仍由 `rows.mts` 处理。
+API 使用物理目录作为分层中间件链。构建阶段扫描 `server/api.mts` 和 `server/api/`，生成 `dist/api-manifest.mjs`；运行时只查 manifest，不再扫描文件系统。请求 `/api/panel/admin/data/rows` 会按顺序执行 `server/api.mts`、`server/api/panel.mts`、`server/api/panel/admin.mts`、`server/api/panel/admin/data.mts` 和 `server/api/panel/admin/data/rows.mts`；任一层直接返回失败响应都会终止后续执行。动态 ID 作为参数传给已匹配的叶子处理文件，例如 `/api/panel/admin/data/rows/row-1` 仍由 `rows.mts` 处理。
 
 ## 开发监听
 
