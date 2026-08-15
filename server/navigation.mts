@@ -9,7 +9,14 @@ export const menuItems = [
 
 export const getManagementMenu = () => [
 	{ label: '首页', key: '/panel', icon: 'mail', component: 'dashboard', title: '管理后台', description: 'Quick React 管理后台' },
-	{ label: '技术栈伪装', key: '/panel/tech-stack', icon: 'appstore', component: 'techStack', title: '技术栈伪装', description: '配置 HTTP 技术栈响应头伪装' },
+	{
+		label: '技术栈伪装',
+		key: '/panel/tech-stack',
+		icon: 'appstore',
+		component: 'settings',
+		title: '技术栈伪装',
+		description: '配置 HTTP 技术栈响应头伪装',
+	},
 	{
 		label: '数据管理',
 		key: '/panel/data',

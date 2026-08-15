@@ -11,7 +11,7 @@ import DescribeInstances from './components/aliyun/DescribeInstances.js';
 import Sign from './components/Sign.js';
 import Panel from './components/panel/PanelLayout.js';
 import TableCRUD from '@/utils/antd/table_crud/index.js';
-import TechStack from './components/panel/TechStack.js';
+import SettingsForm from './components/panel/SettingsForm.js';
 const { Content } = Layout;
 
 // 定义路由对应的页面组件
@@ -86,15 +86,24 @@ const App = ({ commonApi }: AppType) => {
 		aliyun: AliyunIndex,
 		aliyunDescribeInstances: () => <AliyunIndex><DescribeInstances /></AliyunIndex>,
 		 dashboard: () => <Panel commonApi={commonApi} />,
-		 techStack: () => <Panel commonApi={commonApi}><TechStack commonApi={commonApi} /></Panel>,
 		about: About,
 		sign: Sign,
 	};
 	const routes = initialData.pages.flatMap((page) => {
 		const Component = page.component === 'table' ? undefined : componentRegistry[page.component];
-		if (!Component && page.component !== 'table') return [];
+		if (!Component && page.component !== 'table' && page.component !== 'settings') return [];
 		const element = page.component === 'table'
 			? <Panel commonApi={commonApi}><TableCRUD commonApi={commonApi} resourcePath={page.path} /></Panel>
+			: page.component === 'settings'
+				? <Panel commonApi={commonApi}><SettingsForm
+					commonApi={commonApi}
+					apiPath={`/api${page.path}${initialData.apiSuffix}`}
+					title={page.title}
+					onSaved={(values) => {
+						const pageSuffix = typeof values.pageSuffix === 'string' ? values.pageSuffix : initialData.pageSuffix;
+						window.location.assign(`${page.path}${pageSuffix}`);
+					}}
+				/></Panel>
 			: Component ? <Component /> : null;
 		if (!element) return [];
 		return [{ path: pageUrl(page.path), element }];
