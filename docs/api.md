@@ -14,6 +14,14 @@ GET /api/health
 {"ok":true}
 ```
 
+## 管理后台 Dashboard
+
+```text
+GET /api/panel/dashboard
+```
+
+返回管理后台统计数据和最近记录，数据由后端当前数据源实时计算。
+
 前端目前还引用了以下待实现接口：
 
 ```text

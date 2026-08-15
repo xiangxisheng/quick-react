@@ -28,7 +28,7 @@ interface InitialMenuItem {
 interface InitialData {
 	siteNavigation: InitialMenuItem[];
 	managementMenu: InitialMenuItem[];
-	pages: Array<{ path: string; component: string }>;
+	pages: Array<{ path: string; component: string; title: string }>;
 }
 
 const fallbackData: InitialData = {
@@ -41,14 +41,14 @@ const fallbackData: InitialData = {
 	],
 	managementMenu: [],
 	pages: [
-		{ path: '/', component: 'home' },
-		{ path: '/aliyun', component: 'aliyun' },
-		{ path: '/aliyun/DescribeInstances', component: 'aliyunDescribeInstances' },
-		{ path: '/panel', component: 'dashboard' },
-		{ path: '/panel/data/columns', component: 'table' },
-		{ path: '/panel/data/rows', component: 'table' },
-		{ path: '/about', component: 'about' },
-		{ path: '/sign', component: 'sign' },
+		{ path: '/', component: 'home', title: '首页' },
+		{ path: '/aliyun', component: 'aliyun', title: '阿里云管理' },
+		{ path: '/aliyun/DescribeInstances', component: 'aliyunDescribeInstances', title: '阿里云管理' },
+		{ path: '/panel', component: 'dashboard', title: '管理后台' },
+		{ path: '/panel/data/columns', component: 'table', title: '表列管理' },
+		{ path: '/panel/data/rows', component: 'table', title: '数据管理' },
+		{ path: '/about', component: 'about', title: '关于' },
+		{ path: '/sign', component: 'sign', title: '登录' },
 	],
 };
 
@@ -101,6 +101,10 @@ const App = ({ commonApi }: AppType) => {
 				setCurrent((item?.key ?? '').toString());
 				continue;
 			}
+		}
+		const page = initialData.pages.find((item) => item.path === location.pathname);
+		if (page) {
+			document.title = `${page.title} | Quick React`;
 		}
 	}, [location.pathname]);
 

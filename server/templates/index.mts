@@ -9,7 +9,7 @@ interface MenuItem {
 interface InitialData {
 	siteNavigation: MenuItem[];
 	managementMenu: MenuItem[];
-	pages: Array<{ path: string; component: string }>;
+	pages: Array<{ path: string; component: string; title: string }>;
 }
 
 interface IndexData {

@@ -9,7 +9,7 @@ import {
 	MenuFoldOutlined,
 	MenuUnfoldOutlined,
 } from '@ant-design/icons';
-import { Breadcrumb, Layout, Menu, theme } from 'antd';
+import { Breadcrumb, Card, Col, Layout, Menu, Row, Statistic, Table, theme } from 'antd';
 import { Button } from 'antd';
 const { Header, Content, Footer, Sider } = Layout;
 
@@ -39,6 +39,54 @@ type AppType = {
 	commonApi: CommonApi;
 	children?: React.ReactNode;
 };
+
+interface DashboardData {
+	statistics: Array<{ key: string; label: string; value: number }>;
+	recentRows: Array<{ key: string; name: string; status: string; createdAt: string }>;
+}
+
+function Dashboard({ commonApi }: { commonApi: CommonApi }) {
+	const [data, setData] = useState<DashboardData>();
+	const [loading, setLoading] = useState(true);
+
+	useEffect(() => {
+		let active = true;
+		commonApi.apiFetch('/api/panel/dashboard')
+			.then(async (response) => {
+				const result = await response.json() as { dashboard?: DashboardData };
+				if (active) {
+					setData(result.dashboard);
+				}
+			})
+			.catch((error) => console.error('加载 dashboard 数据失败', error))
+			.finally(() => {
+				if (active) setLoading(false);
+			});
+		return () => { active = false; };
+	}, [commonApi]);
+
+	const columns = [
+		{ title: '名称', dataIndex: 'name', key: 'name' },
+		{ title: '状态', dataIndex: 'status', key: 'status' },
+		{ title: '创建时间', dataIndex: 'createdAt', key: 'createdAt' },
+	];
+
+	return (
+		<div>
+			<h1>Dashboard</h1>
+			<Row gutter={[16, 16]}>
+				{data?.statistics.map((item) => (
+					<Col xs={24} sm={8} key={item.key}>
+						<Card loading={loading}><Statistic title={item.label} value={item.value} /></Card>
+					</Col>
+				))}
+			</Row>
+			<Card title="最近数据" style={{ marginTop: 16 }} loading={loading}>
+				<Table rowKey="key" columns={columns} dataSource={data?.recentRows ?? []} pagination={false} />
+			</Card>
+		</div>
+	);
+}
 
 function AppRouter({ commonApi, children }: AppType) {
 	const location = useLocation(); // 获取当前 URL 路径
@@ -99,7 +147,7 @@ function AppRouter({ commonApi, children }: AppType) {
 					height: '100%',
 					overflowY: 'scroll',
 				}}>
-					{children ?? <h1>Dashboard</h1>}
+					{children ?? <Dashboard commonApi={commonApi} />}
 				</Content>
 				<Footer style={{
 					height: '30px',
