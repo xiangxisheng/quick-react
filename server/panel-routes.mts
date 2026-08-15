@@ -83,6 +83,7 @@ export const registerPanelRoutes = (app: Hono<AppEnv>) => {
 					{ key: 'rows', label: '数据记录', value: rows.length },
 					{ key: 'enabledRows', label: '启用记录', value: enabledRows },
 				],
+				recentColumns: mockTables.rows.columns,
 				recentRows: rows.slice(-5).reverse(),
 			},
 		});

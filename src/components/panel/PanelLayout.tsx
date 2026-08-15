@@ -10,6 +10,7 @@ import {
 	MenuUnfoldOutlined,
 } from '@ant-design/icons';
 import { Breadcrumb, Card, Col, Layout, Menu, Row, Statistic, Table, theme } from 'antd';
+import type { TableColumnsType } from 'antd';
 import { Button } from 'antd';
 const { Header, Content, Footer, Sider } = Layout;
 
@@ -66,7 +67,8 @@ type AppType = {
 
 interface DashboardData {
 	statistics: Array<{ key: string; label: string; value: number }>;
-	recentRows: Array<{ key: string; name: string; status: string; createdAt: string }>;
+	recentColumns: Array<{ dataIndex: string; title: string; key?: string }>;
+	recentRows: Array<Record<string, unknown> & { key: string }>;
 }
 
 function Dashboard({ commonApi }: { commonApi: CommonApi }) {
@@ -89,11 +91,7 @@ function Dashboard({ commonApi }: { commonApi: CommonApi }) {
 		return () => { active = false; };
 	}, [commonApi]);
 
-	const columns = [
-		{ title: '名称', dataIndex: 'name', key: 'name' },
-		{ title: '状态', dataIndex: 'status', key: 'status' },
-		{ title: '创建时间', dataIndex: 'createdAt', key: 'createdAt' },
-	];
+	const columns: TableColumnsType<DashboardData['recentRows'][number]> = data?.recentColumns ?? [];
 
 	return (
 		<div>
