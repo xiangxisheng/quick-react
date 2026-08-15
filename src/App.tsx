@@ -23,6 +23,7 @@ interface InitialMenuItem {
 	label: string;
 	key: string;
 	icon: 'mail' | 'appstore';
+	children?: InitialMenuItem[];
 }
 
 interface InitialData {
@@ -59,11 +60,13 @@ const iconComponents = {
 	mail: <MailOutlined />,
 	appstore: <AppstoreOutlined />,
 };
-const items: MenuItem[] = siteNavigation.map((item) => ({
+const toMenuItems = (menu: InitialMenuItem[]): MenuItem[] => menu.map((item) => ({
 	label: item.label,
 	key: item.key,
 	icon: iconComponents[item.icon],
+	children: item.children ? toMenuItems(item.children) : undefined,
 }));
+const items: MenuItem[] = toMenuItems(siteNavigation);
 
 
 type AppType = {

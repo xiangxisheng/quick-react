@@ -8,8 +8,15 @@ export const menuItems = [
 
 export const getManagementMenu = () => [
 	{ label: '首页', key: '/panel', icon: 'mail' },
-	{ label: '表列管理', key: '/panel/data/columns', icon: 'appstore' },
-	{ label: '数据管理', key: '/panel/data/rows', icon: 'appstore' },
+	{
+		label: '数据管理',
+		key: '/panel/data',
+		icon: 'appstore',
+		children: [
+			{ label: '表列管理', key: '/panel/data/columns', icon: 'appstore' },
+			{ label: '数据管理', key: '/panel/data/rows', icon: 'appstore' },
+		],
+	},
 ];
 
 export const getPageDefinitions = () => [

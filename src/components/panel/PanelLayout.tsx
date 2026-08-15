@@ -20,6 +20,7 @@ interface InitialMenuItem {
 	label: string;
 	key: string;
 	icon: 'mail' | 'appstore';
+	children?: InitialMenuItem[];
 }
 
 const initialData = (window as Window & {
@@ -29,11 +30,34 @@ const iconComponents = {
 	mail: <MailOutlined />,
 	appstore: <AppstoreOutlined />,
 };
-const items: MenuItem[] = (initialData?.managementMenu ?? []).map((item) => ({
+const toMenuItems = (menu: InitialMenuItem[]): MenuItem[] => menu.map((item) => ({
 	label: item.label,
 	key: item.key,
 	icon: iconComponents[item.icon],
+	children: item.children ? toMenuItems(item.children) : undefined,
 }));
+const managementMenu = initialData?.managementMenu ?? [];
+const items: MenuItem[] = toMenuItems(managementMenu);
+
+const findMenuItem = (menu: InitialMenuItem[], pathname: string): InitialMenuItem | undefined => {
+	for (const item of menu) {
+		if (item.key === pathname) return item;
+		const child = item.children && findMenuItem(item.children, pathname);
+		if (child) return child;
+	}
+	return undefined;
+};
+
+const findParentKeys = (menu: InitialMenuItem[], pathname: string, parents: string[] = []): string[] => {
+	for (const item of menu) {
+		if (item.key === pathname) return parents;
+		if (item.children) {
+			const result = findParentKeys(item.children, pathname, [...parents, item.key]);
+			if (result.length) return result;
+		}
+	}
+	return [];
+};
 
 type AppType = {
 	commonApi: CommonApi;
@@ -91,6 +115,7 @@ function Dashboard({ commonApi }: { commonApi: CommonApi }) {
 function AppRouter({ commonApi, children }: AppType) {
 	const location = useLocation(); // 获取当前 URL 路径
 	const [current, setCurrent] = useState(location.pathname); // 同步选中状态
+	const [openKeys, setOpenKeys] = useState<string[]>(() => findParentKeys(managementMenu, location.pathname));
 	const navigate = useNavigate();
 
 	const [collapsed, setCollapsed] = useState(false);
@@ -100,9 +125,10 @@ function AppRouter({ commonApi, children }: AppType) {
 
 	useEffect(() => {
 		setCurrent(location.pathname); // URL 变化时同步菜单高亮
+		setOpenKeys(findParentKeys(managementMenu, location.pathname));
 	}, [location.pathname]);
 
-	const currentMenuItem = initialData?.managementMenu.find((item) => item.key === location.pathname);
+	const currentMenuItem = findMenuItem(managementMenu, location.pathname);
 	const breadcrumbItems = [
 		{ title: '管理后台' },
 		...(location.pathname === '/panel' || !currentMenuItem ? [] : [{ title: currentMenuItem.label }]),
@@ -129,6 +155,8 @@ function AppRouter({ commonApi, children }: AppType) {
 				<Menu
 					onClick={onClick}
 					selectedKeys={[current]}
+					openKeys={openKeys}
+					onOpenChange={(keys) => setOpenKeys(keys as string[])}
 					mode="inline"
 					theme="dark"
 					inlineCollapsed={collapsed}
