@@ -223,6 +223,7 @@ CREATE TABLE global_sites (
   status TEXT NOT NULL DEFAULT 'enabled',
   migration_status TEXT NOT NULL DEFAULT 'ready',
   is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
+  is_system INTEGER NOT NULL DEFAULT 0 CHECK (is_system IN (0, 1)),
   CHECK (site_key GLOB '[a-z]*' AND site_key NOT GLOB '*[^a-z0-9_]*')
 );
 
@@ -238,6 +239,30 @@ CREATE TABLE global_hosts (
   FOREIGN KEY (site_key) REFERENCES global_sites(site_key)
 );
 ```
+
+`global` 是系统控制面引导站点，不依赖管理员先创建数据。`global` migration 必须幂等写入以下记录：
+
+```text
+site_key: global
+name: 全局控制面
+base_site_key: base
+dsn: ''
+status: enabled
+migration_status: ready
+is_default: 1
+is_system: 1
+```
+
+SQLite/D1 migration 使用等价于以下语义的幂等插入；其他数据库方言由迁移生成器产生等价 SQL：
+
+```sql
+INSERT INTO global_sites (
+  site_key, name, base_site_key, dsn, status, migration_status, is_default, is_system
+) VALUES ('global', '全局控制面', 'base', '', 'enabled', 'ready', 1, 1)
+ON CONFLICT(site_key) DO NOTHING;
+```
+
+系统记录不可删除、不可禁用、不可修改 `site_key`，并且必须始终是唯一的启用默认站点。生产初始化任务必须在站点上线前为它写入至少一个明确的 `global_hosts` 控制面 Host；默认站点回退仍按本节匹配规则处理未绑定 Host，用于首次配置和明确允许的默认入口。
 
 `hostname` 支持精确 Host 和通配符 Host：
 
@@ -279,6 +304,7 @@ Host 标准化规则：
 | `site_key` | 稳定的程序标识、路由和表前缀标识 | 原则上不修改 |
 | `global_sites.name` | 后台显示的站点名称 | 可以修改 |
 | `global_sites.base_site_key` | 当前站点未覆盖时使用的基础层或父站点 | 原则上不修改 |
+| `global_sites.is_system` | 系统引导站点标记；系统站点不可删除、禁用或改标识 | 不允许修改 |
 | `dsn` | 不含密码的数据库连接地址；为空时使用默认 SQLite | 可以修改 |
 | `dsn_password` | 单独保存的数据库密码；接口不返回真实值 | 可以修改 |
 
@@ -525,7 +551,7 @@ database/default.sqlite
 
 新增站点或切换到新的数据库时，必须先执行完整 migration，再允许站点接收请求。创建流程必须使用状态机：先创建 `migration_status = creating` 的站点，迁移任务将其更新为 `migrating`，成功后原子更新为 `ready` 并可启用 Host；失败则更新为 `failed`，请求一律不路由到该站点。
 
-全局数据库包含 `global` migration：
+全局数据库包含 `global` migration；该 migration 除创建表结构外，还必须幂等初始化 `global` 系统控制面站点，使空数据库可立即通过默认站点进入系统：
 
 ```text
 database/default.sqlite
@@ -550,17 +576,19 @@ Prisma 生成的 SQL 需要检查 D1 兼容性，必要时手动调整后再部�
 10. 增加 Host 管理接口和后台页面。
 11. 验证 Node、Worker、D1 migration、通配符 Host 和默认站点行为。
 
-## 12. 审核重点
+## 12. 验收重点
 
-- 是否采用单 D1/单 SQLite + 表前缀作为默认模型，独立 D1 仅作为固定站点的可选部署方式。
-- 空 DSN 是否始终连接 Node 的 `default.sqlite` 或 Worker 的 `DEFAULT_DB`；非空 DSN 是否仅由 Node 运行时连接。
-- 新增站点时是否通过受控迁移任务创建表前缀并执行完整 migration，且只有 `ready` 状态才可路由。
-- 多数据库模式下是否允许不同站点使用不同 schema 版本。
-- 通配符是否只匹配一层子域名。
-- 未匹配 Host 是否允许回退默认站点。
-- Host 缓存刷新间隔是否固定为 30 秒。
-- 是否只保留角色级访问控制，不增加权限表和细粒度权限管理。
-- `database/` 是否作为纯运行时目录并完全忽略 Git。
-- Prisma schema 是否只用于模型定义和 migration，不进入 Worker runtime。
+- 默认模型为单 D1/单 SQLite 加表前缀；独立 D1 只允许作为预声明 Binding 的固定站点部署方式。
+- 空 DSN 必须连接 Node 的 `default.sqlite` 或 Worker 的 `DEFAULT_DB`；非空 DSN 只能由 Node 运行时连接。
+- 新增站点必须通过受控迁移任务创建表结构并完成 migration；只有 `migration_status = 'ready'` 的站点可参与路由。
+- `global` migration 必须幂等创建唯一的 `global` 系统控制面记录，并将其设为启用默认站点；该记录不可删除、禁用或修改 `site_key`。
+- 生产初始化任务必须为 `global` 写入至少一个明确的控制面 Host；默认回退仅作为首次配置和明确允许的默认入口。
+- 通配符 Host 只能匹配一层子域名。
+- 未匹配 Host 时，存在启用默认站点则回退；否则返回 404。
+- Host 路由快照最大刷新间隔为 30 秒，普通请求不查询数据库。
+- 只实现角色级访问控制，不增加权限表和细粒度权限管理；受保护 API 必须独立进行角色校验。
+- `database/` 是纯运行时目录，必须完全忽略 Git。
+- Prisma schema 只用于模型定义、校验和 migration，不进入 Worker runtime。
+- 不支持不同站点长期运行不同 schema 版本。同一发布版本下，所有可路由的共享库和独立库必须满足该版本要求的 migration 基线；独立库迁移完成前保持不可路由。
 
 多个 Prisma schema 可以共同描述同一个数据库，但 migration 必须由统一的构建或迁移流程编排：先校验所有 schema 的模型名和表名前缀，再按 `global -> base -> 父站点 -> 当前站点` 顺序生成或执行 SQL，不能让各个 schema 独立维护互相不知情的 migration 历史。
