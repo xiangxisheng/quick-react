@@ -47,6 +47,7 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 			apiSuffix: siteConfig.apiSuffix,
 			pageSuffix: siteConfig.pageSuffix,
 			siteNavigation: menuItems,
+			footer: `Ant Design ©${new Date().getFullYear()} Created by Ant UED`,
 		},
 	}));
 };

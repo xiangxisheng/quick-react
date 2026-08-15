@@ -10,6 +10,8 @@ export type FormField = {
 	extra?: React.ReactNode;
 	placeholder?: string;
 	maxLength?: number;
+	checkedChildren?: React.ReactNode;
+	unCheckedChildren?: React.ReactNode;
 };
 
 const formatCountdown = (value: string | number) => Math.max(0, Number(value) / 1000).toFixed(1);
@@ -45,12 +47,14 @@ type FormResponse = {
 	currentValues?: Record<string, unknown>;
 	form?: {
 		description?: React.ReactNode;
+		submitLabel?: React.ReactNode;
 		refreshAfterSave?: number | null;
 		submitHint?: React.ReactNode;
 		saveFeedback?: {
 			component?: 'inline' | 'message' | 'modal' | 'none';
 			type?: AlertProps['type'];
 			showIcon?: boolean;
+			title?: string;
 			message?: string;
 		};
 		initialValues: Record<string, unknown>;
@@ -82,7 +86,7 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 
 	useEffect(() => {
 		if (!saved || formConfig?.saveFeedback?.component !== 'message') return;
-		const feedbackMessage = formConfig.saveFeedback.message ?? '保存成功';
+		const feedbackMessage = formConfig.saveFeedback.message ?? '';
 		const countdown = refreshDeadline && refreshTarget
 			? <CountdownDisplay deadline={refreshDeadline} onFinish={() => window.location.assign(refreshTarget)} />
 			: null;
@@ -94,14 +98,14 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 
 	useEffect(() => {
 		if (!saved || formConfig?.saveFeedback?.component !== 'modal') return;
-		const feedbackMessage = formConfig.saveFeedback.message ?? '保存成功';
+		const feedbackMessage = formConfig.saveFeedback.message ?? '';
 		const countdown = refreshDeadline && refreshTarget
 			? <CountdownDisplay deadline={refreshDeadline} onFinish={() => window.location.assign(refreshTarget)} />
 			: null;
 		const refreshValue = countdown ?? (formConfig.refreshAfterSave == null ? '' : formatCountdown(formConfig.refreshAfterSave * 1000));
 		const content = renderTemplate(feedbackMessage, { refreshAfterSave: refreshValue });
 		Modal.destroyAll();
-		modalApi.success({ title: '保存结果', content });
+		modalApi.success({ title: formConfig.saveFeedback.title ?? '', content });
 		return () => Modal.destroyAll();
 	}, [formConfig, modalApi, refreshDeadline, refreshTarget, saved]);
 
@@ -146,7 +150,7 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 	};
 
 	const feedback = formConfig?.saveFeedback;
-	const feedbackMessage = feedback?.message ?? '保存成功';
+	const feedbackMessage = feedback?.message ?? '';
 	const alertCountdown = refreshDeadline && refreshTarget
 		? <CountdownDisplay deadline={refreshDeadline} onFinish={() => window.location.assign(refreshTarget)} />
 		: null;
@@ -171,12 +175,12 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 					valuePropName={field.type === 'switch' ? 'checked' : 'value'}
 				>
 					{field.type === 'switch'
-						? <Switch checkedChildren="开启" unCheckedChildren="关闭" />
+						? <Switch checkedChildren={field.checkedChildren} unCheckedChildren={field.unCheckedChildren} />
 						: <Input placeholder={field.placeholder} maxLength={field.maxLength} />}
 				</Form.Item>
 			))}
 			<Space>
-				<Button type="primary" htmlType="submit" loading={saving}>保存配置</Button>
+				<Button type="primary" htmlType="submit" loading={saving}>{formConfig?.submitLabel}</Button>
 				{formConfig?.submitHint ? <Typography.Text type="secondary">{formConfig.submitHint}</Typography.Text> : null}
 			</Space>
 		</Form>

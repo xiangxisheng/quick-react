@@ -10,7 +10,6 @@ import {
 	MenuUnfoldOutlined,
 } from '@ant-design/icons';
 import { Breadcrumb, Layout, Menu, theme } from 'antd';
-import { Button } from 'antd';
 const { Header, Content, Footer, Sider } = Layout;
 
 // 定义菜单项
@@ -24,7 +23,7 @@ interface InitialMenuItem {
 }
 
 const initialData = (window as Window & {
-	__INITIAL_DATA__?: { apiSuffix?: string };
+	__INITIAL_DATA__?: { apiSuffix?: string; footer?: string };
 }).__INITIAL_DATA__;
 const apiSuffix = initialData?.apiSuffix ?? '';
 const pageSuffix = (window as Window & { __INITIAL_DATA__?: { pageSuffix?: string } }).__INITIAL_DATA__?.pageSuffix ?? '';
@@ -82,9 +81,8 @@ function AppRouter({ commonApi, children, navigation = [], dashboardPath, title 
 
 	const [collapsed, setCollapsed] = useState(false);
 	const {
-		token: { colorBgContainer, borderRadiusLG },
+		token: { colorBgContainer },
 	} = theme.useToken();
-
 	useEffect(() => {
 		const nextLogicalPath = pageSuffix && location.pathname.endsWith(pageSuffix)
 			? location.pathname.slice(0, -pageSuffix.length)
@@ -131,33 +129,19 @@ function AppRouter({ commonApi, children, navigation = [], dashboardPath, title 
 				/>
 			</Sider>
 			<Layout>
-				<Header style={{
-					height: 0,
-					padding: 0,
-					background: colorBgContainer,
-					overflow: 'hidden',
-				}}>
-					<Breadcrumb style={{ margin: '4px' }}>
-						<Breadcrumb.Item>User</Breadcrumb.Item>
-						<Breadcrumb.Item>Bill</Breadcrumb.Item>
-					</Breadcrumb>
+				<Header style={{ height: 48, padding: '0 24px', lineHeight: '48px', display: 'flex', alignItems: 'center', background: colorBgContainer }}>
+					<Breadcrumb items={breadcrumbItems} />
 				</Header>
 				<Content style={{
 					margin: '8px',
 					height: '100%',
 					overflowY: 'scroll',
 				}}>
-					<Breadcrumb items={breadcrumbItems} style={{ marginBottom: '8px' }} />
 					{children}
 				</Content>
-				<Footer style={{
-					height: '30px',
-					padding: '2px',
-					textAlign: 'center',
-					overflow: 'hidden',
-				}}>
-					Ant Design ©{new Date().getFullYear()} Created by Ant UED
-				</Footer>
+				{initialData?.footer ? <Footer style={{ height: '30px', padding: '2px', textAlign: 'center', overflow: 'hidden' }}>
+					{initialData.footer}
+				</Footer> : null}
 			</Layout>
 		</Layout>
 	);

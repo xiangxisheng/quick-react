@@ -10,6 +10,7 @@ interface InitialData {
 	apiSuffix: string;
 	pageSuffix: string;
 	siteNavigation: MenuItem[];
+	footer?: string;
 }
 
 interface IndexData {

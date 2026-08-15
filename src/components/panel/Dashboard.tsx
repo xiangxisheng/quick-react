@@ -4,12 +4,14 @@ import type { TableColumnsType } from 'antd';
 import type { CommonApi } from '@/utils/common/api.js';
 
 interface DashboardData {
+	title?: string;
+	recentTitle?: string;
 	statistics: Array<{ key: string; label: string; value: number }>;
 	recentColumns: Array<{ dataIndex: string; title: string; key?: string }>;
 	recentRows: Array<Record<string, unknown> & { key: string }>;
 }
 
-export default function Dashboard({ commonApi, apiPath }: { commonApi: CommonApi; apiPath: string }) {
+export default function Dashboard({ commonApi, apiPath, fallbackTitle }: { commonApi: CommonApi; apiPath: string; fallbackTitle?: string }) {
 	const [data, setData] = useState<DashboardData>();
 	const [loading, setLoading] = useState(true);
 
@@ -31,7 +33,7 @@ export default function Dashboard({ commonApi, apiPath }: { commonApi: CommonApi
 
 	return (
 		<div>
-			<h1>Dashboard</h1>
+			<h1>{data?.title ?? fallbackTitle}</h1>
 			<Row gutter={[16, 16]}>
 				{data?.statistics.map((item) => (
 					<Col xs={24} sm={8} key={item.key}>
@@ -39,9 +41,9 @@ export default function Dashboard({ commonApi, apiPath }: { commonApi: CommonApi
 					</Col>
 				))}
 			</Row>
-			<Card title="最近数据" style={{ marginTop: 16 }} loading={loading}>
-				<Table rowKey="key" columns={columns} dataSource={data?.recentRows ?? []} pagination={false} />
-			</Card>
+			{data?.recentTitle ? <Card title={data.recentTitle} style={{ marginTop: 16 }} loading={loading}>
+				<Table rowKey="key" columns={columns} dataSource={data.recentRows ?? []} pagination={false} />
+			</Card> : null}
 		</div>
 	);
 }

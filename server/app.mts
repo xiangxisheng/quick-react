@@ -6,6 +6,8 @@ import { createSecureServer } from 'node:http2';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
+import { compress } from 'hono/compress';
+import { etag } from 'hono/etag';
 import { getClientIp } from './client-ip.mjs';
 import worker from './worker.mjs';
 import { createJsonFileStore } from './node-config-store.mjs';
@@ -55,6 +57,8 @@ nodeApp.use('/bundle.js.map', async (c, next) => {
 	if (!clientIp || !mapAllowedIps.has(clientIp)) return c.text('Not Found', 404);
 	return next();
 });
+nodeApp.use('*', compress());
+nodeApp.use('*', etag());
 nodeApp.use('*', serveStatic({ root: publicDir }));
 nodeApp.all('*', (c) => worker.fetch(c.req.raw, {} as WorkerBindings));
 
