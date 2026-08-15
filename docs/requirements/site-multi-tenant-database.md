@@ -27,6 +27,7 @@ server/
   site-router.mts                # Host 到站点的解析
   worker.mts
   templates/
+    index.mts                    # HTML 文档模板
   database/
     index.mts                    # 数据库抽象
     d1.mts                       # Cloudflare D1 适配器
@@ -42,7 +43,7 @@ server/
             sites.mts
             hosts.mts
     base/
-      api.mts                    # 基础层根中间件
+      api.mts                    # 基础层 API 根中间件，只影响 /api/*
       navigation.mts             # 基础层导航
       api/
         health.mts
@@ -80,6 +81,20 @@ database/
 
 ## 4. 站点 API 路径
 
+## 4.0 页面渲染与 API 中间件
+
+页面 HTML 继续由现有的公共模板和文档渲染逻辑处理：
+
+```text
+server/templates/index.mts  # HTML 拼接和 __INITIAL_DATA__ 输出
+Worker 文档渲染逻辑         # 根据请求路径生成页面元数据并调用模板
+```
+
+这里不新增 `index.mts` 页面路由，也不新增站点级 `templates/` 目录；页面路径仍由现有的 Worker 文档路由统一处理。站点目录只用于 API、导航和业务覆盖。
+
+`base/api.mts` 是基础层 API 根中间件，只作用于 `/api/*`。API 子路径是否存在处理器由实际 API 文件决定，不要求额外创建 `api/index.mts`，缺少某个路径处理器也不影响其他子路径。
+
+
 ## 4.1 global 控制面与 base 基础层
 
 `global` 是可访问的控制面站点，`base` 是不可直接访问的基础代码层：
@@ -100,7 +115,7 @@ global 覆盖实现
 
 例如 `global` 没有登录接口时，自动使用 `base` 的登录接口；`global` 只需要额外提供站点和 Host 管理接口即可。`site1` 也可以直接以 `base` 作为基础，不需要继承 `global`。
 
-`global` 和普通业务站点默认都使用 `default.sqlite`。其中 `global_*` 保存站点注册信息，`base_*` 保存跨站点共用的用户、会话和通行证数据，`site1_*` 等前缀保存对应站点的业务数据。代码继承和表前缀选择是两个独立维度；只有显式配置了自定义 DSN 的站点才使用外部独立数据库。
+`global` 和普通业务站点默认都使用 `default.sqlite`。其中 `global_*` 保存站点注册信息，`base_*` 保存共享数据库中跨站点共用的用户、会话和通行证数据，`site1_*` 等前缀保存对应站点的业务数据。代码继承和表前缀选择是两个独立维度；只有 Node 运行时显式配置了自定义 DSN 的站点才使用外部独立数据库。
 
 创建业务站点时，不复制 `base` 的 API 文件，只需要：
 
@@ -152,6 +167,8 @@ base/api/panel/admin.mts
 site2 -> site1 -> base
 ```
 
+每个业务表固定归属其声明代码级站点，继承不会把该表重映射为子站点前缀。例如，登录能力和 `base_system_users` 由 `base` 声明；`site1` 继承登录 API 时，仍通过 `base` 的 Repository 与 `base_*` 表执行。`site2` 继承 `site1` 的 API 时，`site1` 声明的表仍为 `site1_*`。因此，共享数据库中的继承站点会共享其父站点声明表中的业务数据；需要独立业务数据时，应在子站点声明自己的 `site2_*` 表和覆盖 API，而不是依赖自动改写表前缀。
+
 构建阶段必须检查父站点存在、继承链无循环且不超过最大深度。数据库中新建或修改站点时也必须执行同样的校验。
 
 请求解析需要区分代码级站点和业务站点：
@@ -173,7 +190,7 @@ Host
 server/sites/base/api/panel/admin/settings/system-config.mts
 ```
 
-对应的请求路径仍然是：
+对应的请求路径仍然是（`apiSuffix` 默认配置为 `.php` 时）：
 
 ```text
 /api/panel/admin/settings/system-config.php
@@ -197,13 +214,20 @@ server/sites/base/api/panel/admin/settings/system-config.mts
 
 ```sql
 CREATE TABLE global_sites (
-  site_key TEXT PRIMARY KEY,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  site_key TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   base_site_key TEXT,
   dsn TEXT NOT NULL DEFAULT '',
   dsn_password TEXT,
-  status TEXT NOT NULL DEFAULT 'enabled'
+  status TEXT NOT NULL DEFAULT 'enabled',
+  migration_status TEXT NOT NULL DEFAULT 'ready',
+  is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
+  CHECK (site_key GLOB '[a-z]*' AND site_key NOT GLOB '*[^a-z0-9_]*')
 );
+
+CREATE UNIQUE INDEX global_sites_one_default
+  ON global_sites(is_default) WHERE is_default = 1 AND status = 'enabled';
 
 CREATE TABLE global_hosts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -234,6 +258,8 @@ www.example.com
 
 `*.example.com` 默认只匹配一层子域名，不匹配 `example.com` 和 `a.b.example.com`。
 
+只有 `status = 'enabled'` 且 `migration_status = 'ready'` 的 Host 和站点可参与解析。默认站点为唯一的启用 `global_sites.is_default = 1` 记录；没有默认站点时不回退。
+
 Host 标准化规则：
 
 - 转为小写。
@@ -246,7 +272,7 @@ Host 标准化规则：
 
 ## 6. 站点名、站点标识和数据库
 
-站点显示名称和站点标识必须分开；默认数据库固定为 `default.sqlite`，不由站点名称或 `site_key` 推导。`site_key` 主要用于路由、表前缀和站点 schema：
+站点显示名称和站点标识必须分开；默认数据库固定为 `default.sqlite`，不由站点名称或 `site_key` 推导。`site_key` 主要用于路由、表前缀和站点 schema。它是受控的程序标识，创建后不可修改；只允许小写 ASCII 字母、数字和下划线，必须以字母开头。Repository 只可使用构建期路由注册表和已校验的 `site_key` 生成 SQL 标识符，绝不能把请求参数或未经校验的后台输入拼接为表名：
 
 | 字段 | 用途 | 是否允许修改 |
 | --- | --- | --- |
@@ -259,9 +285,9 @@ Host 标准化规则：
 例如，独立数据库首次为 `site2` 建库时：
 
 ```text
-site_key:  site1
-site name: 业务站点 1
-database:  database/default.sqlite
+site_key:  site2
+site name: 业务站点 2
+database:  postgres://db.example.com:5432/site2
 ```
 
 不能使用站点显示名称作为数据库标识，因为显示名称可能被管理员修改。默认所有站点使用 `default.sqlite`；只有配置自定义 DSN 时才使用外部数据库。
@@ -275,20 +301,22 @@ base_system_sessions
 site1_orders
 ```
 
-如果未来支持 MySQL 或 PostgreSQL，`dsn` 保存不含密码的连接地址，`dsn_password` 单独保存密码。`dsn` 为空时自动使用 `sqlite://database/default.sqlite`。后台接口不返回真实密码，日志中的 DSN 也必须脱敏。
+如果未来支持 MySQL 或 PostgreSQL，`dsn` 保存不含密码的连接地址，`dsn_password` 单独保存密码。`dsn` 为空时自动使用 `sqlite://database/default.sqlite`。后台接口不返回真实密码，日志中的 DSN 也必须脱敏。任意 DSN 只允许 Node 运行时连接；Worker 不读取或使用它。
 
-`dsn` 为空时使用默认的 `sqlite://database/default.sqlite`；自定义 DSN 只影响当前站点的数据库连接。自定义数据库中仍需应用该站点继承链对应的 `base_*` 和站点专属 migration。
+`dsn` 为空时使用默认的 `sqlite://database/default.sqlite`；自定义 DSN 只影响当前站点的数据库连接。自定义数据库中仍需应用该站点继承链对应的 `base_*` 和站点专属 migration。独立数据库中的 `base_system_users`、会话和成员关系只在该库内有效，不与默认共享数据库或其他独立数据库共享。
 
 ## 7. Host 内存缓存
 
-服务启动或首次请求时，把 `hosts` 整表加载到内存并建立索引：
+服务启动或首次请求时，把可路由的站点配置和 `hosts` 整表加载到内存并建立不可变路由快照：
 
 ```text
 exactHosts: Map<hostname, siteKey>
 wildcardHosts: 按后缀长度降序排列
+sites: Map<siteKey, { status, migrationStatus, baseSiteKey, databaseTarget }>
+defaultSiteKey?: siteKey
 ```
 
-普通请求只进行内存匹配，不访问数据库。
+普通请求只读取该路由快照，不访问数据库；快照同时提供 Host、站点状态、继承链和数据库目标，避免 Host 命中后再次查询 `global_sites`。
 
 数据库访问时机：
 
@@ -323,9 +351,9 @@ site1_orders / site1_configs
 site2_orders / site2_configs
 ```
 
-Cloudflare 使用一个 `DEFAULT_DB` D1 Binding；Node 使用一个 `default.sqlite`。两种运行时都通过 Repository 选择表前缀，而不是每次请求创建或查询站点数据库。
+Cloudflare Worker 只使用 `DEFAULT_DB` 或部署时预先声明的站点 D1 Binding；它不支持、也不得尝试通过 `dsn` 动态连接任意数据库。Node 使用一个 `default.sqlite`，并可按站点连接已配置的自定义 DSN。两种运行时都通过 Repository 选择已校验的表前缀，而不是每次请求创建或查询站点数据库。
 
-如果确实需要物理隔离，可以让站点配置自定义 DSN；这属于可选的独立数据库模式，不是默认的多站点模型。
+如果确实需要物理隔离，Node 部署可让站点配置自定义 DSN；Worker 部署只能选用预声明的站点 D1 Binding。这属于可选的独立数据库模式，不是默认的多站点模型。
 
 Cloudflare 也可以使用每站点一个 D1，但每个站点需要预先声明独立 Binding，适合站点数量固定的场景，不作为动态建站的默认方案。
 
@@ -377,7 +405,8 @@ site1.prisma   -> 所有 Model 以 site1_ 开头，表名就是模型名
 
 ```prisma
 model global_sites {
-  id Int @id @default(autoincrement())
+  id       Int    @id @default(autoincrement())
+  site_key String @unique
 }
 
 model base_system_users {
@@ -494,7 +523,7 @@ database/default.sqlite
 
 如果站点配置了自定义 DSN，则把 `base`、父站点和当前站点的继承链 migration 应用到该站点对应的数据库中。`global_sites` 和 `global_hosts` 仍保留在默认数据库中，用于 Host 解析和数据库路由。
 
-新增站点或切换到新的数据库时，必须先执行完整 migration，再允许站点接收请求。
+新增站点或切换到新的数据库时，必须先执行完整 migration，再允许站点接收请求。创建流程必须使用状态机：先创建 `migration_status = creating` 的站点，迁移任务将其更新为 `migrating`，成功后原子更新为 `ready` 并可启用 Host；失败则更新为 `failed`，请求一律不路由到该站点。
 
 全局数据库包含 `global` migration：
 
@@ -503,7 +532,7 @@ database/default.sqlite
   └── global migrations
 ```
 
-Node 可以在启动时对默认共享数据库执行未应用的 migration；Cloudflare D1 使用 Wrangler 的 `d1_migrations` 记录已应用 migration，在部署阶段执行，不在每个请求中执行。自定义 DSN 站点需要对其目标数据库单独执行对应 migration。
+Node 可以在启动时对默认共享数据库执行未应用的 migration；Cloudflare D1 使用 Wrangler 的 `d1_migrations` 记录已应用 migration，在部署阶段执行，不在每个请求中执行。Worker 不能因后台动态创建站点而自行执行 D1 migration：动态建站必须由受控的 Node 迁移任务或 CI/CD 部署流程完成。自定义 DSN 站点需要由 Node 迁移任务对其目标数据库单独执行对应 migration。
 
 Prisma 生成的 SQL 需要检查 D1 兼容性，必要时手动调整后再部署。
 
@@ -524,8 +553,8 @@ Prisma 生成的 SQL 需要检查 D1 兼容性，必要时手动调整后再部�
 ## 12. 审核重点
 
 - 是否采用单 D1/单 SQLite + 表前缀作为默认模型，独立 D1 仅作为固定站点的可选部署方式。
-- 空 DSN 是否始终连接 `default.sqlite`/`DEFAULT_DB`，非空 DSN 再切换到外部数据库。
-- 新增站点时是否自动创建表前缀并执行完整 migration。
+- 空 DSN 是否始终连接 Node 的 `default.sqlite` 或 Worker 的 `DEFAULT_DB`；非空 DSN 是否仅由 Node 运行时连接。
+- 新增站点时是否通过受控迁移任务创建表前缀并执行完整 migration，且只有 `ready` 状态才可路由。
 - 多数据库模式下是否允许不同站点使用不同 schema 版本。
 - 通配符是否只匹配一层子域名。
 - 未匹配 Host 是否允许回退默认站点。
