@@ -10,7 +10,6 @@ interface InitialData {
 	apiSuffix: string;
 	pageSuffix: string;
 	siteNavigation: MenuItem[];
-	pages: Array<{ path: string; component: string; title: string; description?: string; navigation?: MenuItem[] }>;
 }
 
 interface IndexData {

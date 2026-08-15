@@ -28,6 +28,10 @@ interface InitialMenuItem {
 	hidden?: boolean;
 	component?: string;
 	title?: string;
+	description?: string;
+	navigationGroup?: string;
+	navigation?: InitialMenuItem[];
+	dashboardPath?: string;
 	children?: InitialMenuItem[];
 }
 
@@ -35,13 +39,28 @@ interface InitialData {
 	apiSuffix: string;
 	pageSuffix: string;
 	siteNavigation: InitialMenuItem[];
-	pages: Array<{ path: string; component: string; title: string; navigation?: InitialMenuItem[]; dashboardPath?: string }>;
 }
 
 const serverData = (window as Window & { __INITIAL_DATA__?: InitialData }).__INITIAL_DATA__;
-	const initialData = serverData ?? { apiSuffix: '', pageSuffix: '', siteNavigation: [], pages: [] };
+	const initialData = serverData ?? { apiSuffix: '', pageSuffix: '', siteNavigation: [] };
 const siteNavigation = initialData.siteNavigation;
 const pageUrl = (path: string) => path === '/' ? path : `${path}${initialData.pageSuffix}`;
+
+type PageDefinition = InitialMenuItem & { path: string; component: string; title: string; navigation: InitialMenuItem[]; dashboardPath?: string };
+
+const collectPages = (items: InitialMenuItem[], navigation: InitialMenuItem[] = items, dashboardPath?: string): PageDefinition[] => items.flatMap((item) => {
+	const pageNavigation = item.component === 'panel' ? item.children ?? [] : navigation;
+	const pageDashboardPath = item.component === 'panel'
+		? item.children?.find((child) => child.component === 'dashboard')?.key
+		: dashboardPath;
+	const page = item.component && item.title
+		? [{ ...item, path: item.key, component: item.component, title: item.title, navigation: pageNavigation, dashboardPath: pageDashboardPath }]
+		: [];
+	const children = item.children ? collectPages(item.children, pageNavigation, pageDashboardPath) : [];
+	return [...page, ...children];
+});
+
+const pages = collectPages(siteNavigation);
 const iconComponents = {
 	mail: <MailOutlined />,
 	appstore: <AppstoreOutlined />,
@@ -60,7 +79,7 @@ type AppType = {
 };
 
 const App = ({ commonApi }: AppType) => {
-	const pageRenderers: Record<string, (page: InitialData['pages'][number]) => React.ReactNode> = {
+	const pageRenderers: Record<string, (page: PageDefinition) => React.ReactNode> = {
 		home: () => <Home />,
 		about: () => <About />,
 		sign: () => <Sign />,
@@ -78,7 +97,7 @@ const App = ({ commonApi }: AppType) => {
 		/></Panel>,
 		aliyunDescribeInstances: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><DescribeInstances /></Panel>,
 	};
-	const routes = initialData.pages.flatMap((page) => {
+	const routes = pages.flatMap((page) => {
 		const render = pageRenderers[page.component];
 		if (!render) return [];
 		return [{ path: pageUrl(page.path), element: render(page) }];
@@ -111,7 +130,7 @@ const App = ({ commonApi }: AppType) => {
 				setCurrent(item.key);
 			}
 		}
-		const page = initialData.pages.find((item) => item.path === logicalPath);
+		const page = pages.find((item) => item.path === logicalPath);
 		if (page) {
 			document.title = `${page.title} | Quick React`;
 		}

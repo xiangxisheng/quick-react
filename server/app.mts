@@ -11,7 +11,7 @@ import { Hono, type Context } from 'hono';
 import { renderIndexHtml } from './templates/index.mjs';
 import { createApiGateway } from './api-router.mjs';
 import { getClientIp } from './client-ip.mjs';
-import { getPageDefinitions, getPageMetadata, menuItems } from './navigation.mjs';
+import { getPageMetadata, menuItems } from './navigation.mjs';
 import type { AppEnv } from './types.mjs';
 import { applyTechStackHeaders, getTechStackConfig, loadTechStackConfig } from './tech-stack.mjs';
 import { loadSystemConfig } from './system-config.mjs';
@@ -46,7 +46,6 @@ const renderDocument = (c: Context<AppEnv>) => {
 			apiSuffix: siteConfig.apiSuffix,
 			pageSuffix: siteConfig.pageSuffix,
 			siteNavigation: menuItems,
-			pages: getPageDefinitions(),
 		},
 	}));
 };
