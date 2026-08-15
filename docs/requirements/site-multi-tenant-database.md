@@ -32,8 +32,8 @@ server/
     d1.mts                       # Cloudflare D1 适配器
     sqlite.mts                   # Node SQLite 适配器
   sites/
-    system/
-      api.mts                    # 系统控制面站点
+    global/
+      api.mts                    # global 控制面站点
       navigation.mts
       api/
         health.mts
@@ -42,8 +42,8 @@ server/
             sites.mts
             hosts.mts
     base/
-      api.mts                    # 基础站点根中间件
-      navigation.mts             # 站点导航
+      api.mts                    # 基础层根中间件
+      navigation.mts             # 基础层导航
       api/
         health.mts
         panel.mts
@@ -62,7 +62,7 @@ server/
 
 prisma/
   global.prisma                  # default.sqlite 的站点和 Host 模型
-  base.prisma                    # base 基础代码站点模型
+  base.prisma                    # base 基础层模型
   site1.prisma                   # site1 自己的业务模型
   site2.prisma                   # site2 自己的业务模型
 
@@ -80,25 +80,27 @@ database/
 
 ## 4. 站点 API 路径
 
-## 4.1 system 控制面与 base 基础站点
+## 4.1 global 控制面与 base 基础层
 
-`system` 和 `base` 是两类特殊代码级站点：
+`global` 是可访问的控制面站点，`base` 是不可直接访问的基础代码层：
 
-```text
-base     提供登录、用户、会话、配置和默认后台功能
-system   继承 base，并额外管理 global_sites、global_hosts 和站点生命周期
-```
-
-`system` 不能作为完全独立的空站点，因为系统管理员仍然需要使用 `base` 提供的登录、用户和会话接口。其 API 和导航继承关系为：
+可路由的代码级站点只有 `global` 和各业务站点，例如 `site1`、`site2`；`base` 只作为公共基础层参与继承，不注册为站点，不绑定 Host，也不单独生成站点路由。
 
 ```text
-system 覆盖实现
-  -> base 实现
+base     提供登录、用户、会话、配置和默认后台功能，不作为独立站点路由
+global   继承 base，并额外管理 global_sites、global_hosts 和站点生命周期
 ```
 
-例如 `system` 没有登录接口时，自动使用 `base` 的登录接口；`system` 只需要额外提供站点和 Host 管理接口即可。
+`base` 不是可绑定 Host 的站点，不直接出现在 `global_hosts` 中。`global` 使用 `base` 提供的登录、用户和会话接口，再覆盖站点和 Host 管理接口。其 API 和导航继承关系为：
 
-`system` 和普通业务站点默认都使用 `default.sqlite`。其中 `global_*` 保存站点注册信息，`base_*` 保存跨站点共用的用户、会话和通行证数据，`site1_*` 等前缀保存对应站点的业务数据。代码继承和表前缀选择是两个独立维度；只有显式配置了自定义 DSN 的站点才使用外部独立数据库。
+```text
+global 覆盖实现
+  -> base 基础层实现
+```
+
+例如 `global` 没有登录接口时，自动使用 `base` 的登录接口；`global` 只需要额外提供站点和 Host 管理接口即可。`site1` 也可以直接以 `base` 作为基础，不需要继承 `global`。
+
+`global` 和普通业务站点默认都使用 `default.sqlite`。其中 `global_*` 保存站点注册信息，`base_*` 保存跨站点共用的用户、会话和通行证数据，`site1_*` 等前缀保存对应站点的业务数据。代码继承和表前缀选择是两个独立维度；只有显式配置了自定义 DSN 的站点才使用外部独立数据库。
 
 创建业务站点时，不复制 `base` 的 API 文件，只需要：
 
@@ -158,7 +160,7 @@ site2 -> site1 -> base
 Host
   -> global_hosts
   -> site_key
-  -> base_site_key 继承链（system/site1 -> base）
+  -> base_site_key 继承链（global/site1 -> base 基础层）
   -> 选择代码级 API
   -> 选择共享数据库及对应表前缀
 ```
@@ -181,13 +183,13 @@ server/sites/base/api/panel/admin/settings/system-config.mts
 
 ```ts
 {
-  site: 'base',
+  site: 'global',
   path: '/api/panel/admin/settings/system-config',
   files: [...]
 }
 ```
 
-同一代码级站点内仍然按照物理目录执行中间件链。`health` 也属于 `system` 或 `base` 站点，因此旧的 `server/api` 目录整体废弃，不再保留全局业务 API。
+同一代码级站点内仍然按照物理目录执行中间件链。`health` 属于 `global` 或具体业务站点；未覆盖时回退到 `base` 基础层。因此旧的 `server/api` 目录整体废弃，不再保留全局业务 API。
 
 ## 5. Host 绑定
 
@@ -250,7 +252,7 @@ Host 标准化规则：
 | --- | --- | --- |
 | `site_key` | 稳定的程序标识、路由和表前缀标识 | 原则上不修改 |
 | `global_sites.name` | 后台显示的站点名称 | 可以修改 |
-| `global_sites.base_site_key` | 当前站点未覆盖时使用的基础站点 | 原则上不修改 |
+| `global_sites.base_site_key` | 当前站点未覆盖时使用的基础层或父站点 | 原则上不修改 |
 | `dsn` | 不含密码的数据库连接地址；为空时使用默认 SQLite | 可以修改 |
 | `dsn_password` | 单独保存的数据库密码；接口不返回真实值 | 可以修改 |
 
@@ -268,8 +270,8 @@ Node 模式默认只有一个共享数据库，站点通过表前缀隔离：
 
 ```text
 database/default.sqlite
-base_users
-base_sessions
+base_system_users
+base_system_sessions
 site1_orders
 ```
 
@@ -316,7 +318,7 @@ database/default.sqlite
 
 ```text
 global_sites / global_hosts
-base_users / base_sessions / base_configs
+base_system_users / base_system_sessions / base_system_configs
 site1_orders / site1_configs
 site2_orders / site2_configs
 ```
@@ -349,13 +351,13 @@ global_hosts
 `base.prisma` 定义所有继承站点共用的通行证基础表，模型名直接使用数据库表名，并且只在目标数据库中生成一份：
 
 ```text
-base_users
-base_sessions
-base_site_memberships
-base_configs
+base_system_users
+base_system_sessions
+base_system_site_memberships
+base_system_configs
 ```
 
-因此 `site1`、`site2` 和 `system` 都使用 `base_users` 完成登录和通行证身份识别，不生成 `site1_users`、`site2_users` 或 `global_users`。如果某个站点需要扩展用户资料，应新增 `site1_user_profiles` 之类的站点表，通过 `user_id` 关联 `base_users`。
+因此 `global`、`site1` 和 `site2` 都使用 `base_system_users` 完成登录和通行证身份识别，不生成 `site1_users`、`site2_users` 或 `global_users`。如果某个站点需要扩展用户资料，应新增 `site1_user_profiles` 之类的站点表，通过 `user_id` 关联 `base_system_users`。
 
 ### Prisma schema 命名校验
 
@@ -367,7 +369,7 @@ base.prisma    -> 所有 Model 以 base_ 开头，表名就是模型名
 site1.prisma   -> 所有 Model 以 site1_ 开头，表名就是模型名
 ```
 
-例如 `site1.prisma` 只能定义 `model site1_orders`、`model site1_products` 等模型，模型名就是实际表名。站点 schema 只定义当前站点新增的业务表，不重复定义继承来的 `base_users`、`base_sessions` 等模型。
+例如 `site1.prisma` 只能定义 `model site1_orders`、`model site1_products` 等模型，模型名就是实际表名。站点 schema 只定义当前站点新增的业务表，不重复定义继承来的 `base_system_users`、`base_system_sessions` 等模型。
 
 在默认共享数据库中，`global.prisma`、`base.prisma` 和所有启用站点的 schema 可以共同生成到 `default.sqlite`；在独立 DSN 数据库中，则按该站点的继承链生成 `base.prisma`、父站点 schema 和当前站点 schema。无论采用哪种模式，`base_*` 表都只在目标数据库中生成一份。
 
@@ -378,7 +380,7 @@ model global_sites {
   id Int @id @default(autoincrement())
 }
 
-model base_users {
+model base_system_users {
   id Int @id @default(autoincrement())
 }
 ```
@@ -414,7 +416,7 @@ Prisma 仅作为开发期工具使用，生成或检查 migration；运行时使
 }
 ```
 
-用户身份保存在 `base_users` 中；如果角色需要按站点区分，则保存在 `base_site_memberships` 中。角色名称由后端代码约定，导航生成时根据当前用户在当前站点的角色过滤菜单。
+用户身份保存在 `base_system_users` 中；如果角色需要按站点区分，则保存在 `base_system_site_memberships` 中。角色名称由后端代码约定，导航生成时根据当前用户在当前站点的角色过滤菜单。
 
 角色分为三类：
 
@@ -475,7 +477,7 @@ default.sqlite
   + site2 migration（生成 site2_*）
 ```
 
-站点继承只继承表结构和代码能力，不复制业务数据。`site2 -> site1 -> base` 时，独立数据库按完整继承链执行 migration；共享 `default.sqlite` 已经存在父站点表时，只执行缺失的 migration，不能重复创建 `base_*` 或 `site1_*`。当前站点始终只生成自己的 `site2_*` 表，`base_users` 等通行证表始终只有一份。
+站点继承只继承表结构和代码能力，不复制业务数据。`site2 -> site1 -> base` 时，独立数据库按完整继承链执行 migration；共享 `default.sqlite` 已经存在父站点表时，只执行缺失的 migration，不能重复创建 `base_*` 或 `site1_*`。当前站点始终只生成自己的 `site2_*` 表，`base_system_users` 等通行证表始终只有一份。
 
 因此迁移规划器需要根据目标数据库已有的 migration 记录和表前缀，区分以下两种情况：
 
@@ -512,7 +514,7 @@ Prisma 生成的 SQL 需要检查 D1 兼容性，必要时手动调整后再部�
 3. 抽象 D1/SQLite 统一数据库接口。
 4. 增加 Node SQLite 连接缓存，并将数据库文件移动到 `database/`。
 5. 增加站点解析器和 `hosts` 内存缓存。
-6. 将 `server/api` 整体迁移到 `server/sites/base/api`，并增加 `system` 控制面站点。
+6. 将 `server/api` 整体迁移到 `server/sites/base/api`，并增加 `global` 控制面站点。
 7. 修改 API 注册器，生成带 `site` 字段的路由表。
 8. 增加 Prisma schema 命名和表名校验。
 9. 将导航和站点配置迁移到 `server/sites/base/`，实现站点覆盖和多级继承。
