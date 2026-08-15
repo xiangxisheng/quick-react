@@ -1,8 +1,11 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { loadSystemConfig, saveSystemConfig } from '@server/system-config.mjs';
 
-const settings = {
+const form = {
 	description: '系统运行参数。修改后需要重启服务才能生效。',
+	refreshAfterSave: null,
+	saveFeedback: { component: 'inline', type: 'success', showIcon: true, message: '系统配置已保存，重启服务后生效' },
+	submitHint: '部分配置需要重启服务后生效',
 	initialValues: { httpPort: '8088', domain: 'anan.cc', publicOrigin: '', trustedProxyIps: '', mapAllowedIps: '' },
 	fields: [
 		{ name: 'httpPort', label: 'HTTP 端口', type: 'text', extra: '修改后需要重启服务，例如 8088。', placeholder: '8088', maxLength: 5 },
@@ -14,11 +17,11 @@ const settings = {
 };
 
 const handler: ApiHandler = async (c, next) => {
-	if (c.req.method === 'GET') return c.json({ config: await loadSystemConfig(), settings });
+	if (c.req.method === 'GET') return c.json({ currentValues: await loadSystemConfig(), form });
 	if (c.req.method === 'PUT') {
 		const body = await c.req.json<unknown>().catch(() => ({}));
 		const config = await saveSystemConfig(body);
-		return c.json({ title: '保存成功', message: '系统配置已保存，部分配置需要重启服务后生效', config });
+		return c.json({ currentValues: config });
 	}
 	return next();
 };

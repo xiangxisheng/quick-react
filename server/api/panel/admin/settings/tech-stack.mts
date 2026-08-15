@@ -1,8 +1,11 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { loadTechStackConfig, saveTechStackConfig } from '@server/tech-stack.mjs';
 
-const settings = {
+const form = {
 	description: '配置会作用于后续 HTTP 响应，并保存到服务器配置文件。仅用于兼容性测试、演示或隐藏真实服务实现。',
+	refreshAfterSave: 3,
+	saveFeedback: { component: 'modal', type: 'info', message: '保存成功，页面将在 {refreshAfterSave} 秒后刷新' },
+	submitHint: '修改后立即生效',
 	initialValues: { nginx: false, phpVersion: '', apiSuffix: '.php', pageSuffix: '.html' },
 	fields: [
 		{ name: 'nginx', label: 'Nginx', type: 'switch', extra: '开启后返回 Server: nginx。' },
@@ -13,11 +16,11 @@ const settings = {
 };
 
 const handler: ApiHandler = async (c, next) => {
-	if (c.req.method === 'GET') return c.json({ config: await loadTechStackConfig(), settings });
+	if (c.req.method === 'GET') return c.json({ currentValues: await loadTechStackConfig(), form });
 	if (c.req.method === 'PUT') {
 		const body = await c.req.json<unknown>().catch(() => ({}));
 		const config = await saveTechStackConfig(body);
-		return c.json({ title: '保存成功', message: '技术栈伪装配置已生效', config });
+		return c.json({ currentValues: config });
 	}
 	return next();
 };

@@ -11,7 +11,7 @@ import Sign from './components/Sign.js';
 import Panel from './components/panel/PanelLayout.js';
 import Dashboard from './components/panel/Dashboard.js';
 import TableCRUD from '@/utils/antd/table_crud/index.js';
-import SettingsForm from './components/panel/SettingsForm.js';
+import FormPage from './components/panel/Form.js';
 const { Content } = Layout;
 
 // 定义路由对应的页面组件
@@ -86,13 +86,13 @@ const App = ({ commonApi }: AppType) => {
 		panel: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><Dashboard commonApi={commonApi} apiPath={`/api${page.dashboardPath ?? ''}${initialData.apiSuffix}`} /></Panel>,
 		dashboard: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><Dashboard commonApi={commonApi} apiPath={`/api${page.dashboardPath ?? ''}${initialData.apiSuffix}`} /></Panel>,
 		table: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><TableCRUD commonApi={commonApi} resourcePath={page.path} /></Panel>,
-		settings: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><SettingsForm
+		form: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><FormPage
 			commonApi={commonApi}
 			apiPath={`/api${page.path}${initialData.apiSuffix}`}
-			title={page.title}
+			 title={page.title}
 			onSaved={(values) => {
 				const pageSuffix = typeof values.pageSuffix === 'string' ? values.pageSuffix : initialData.pageSuffix;
-				window.location.assign(`${page.path}${pageSuffix}`);
+				return `${page.path}${pageSuffix}`;
 			}}
 		/></Panel>,
 		aliyunDescribeInstances: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><DescribeInstances /></Panel>,
