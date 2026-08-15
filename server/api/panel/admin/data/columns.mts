@@ -22,10 +22,7 @@ const handler: ApiHandler = async (c, next, params) => {
 		const pageSize = Math.max(1, Number(c.req.query('pageSize')) || 10);
 		return c.json(getMockTableResponse(currentTable, pageNum, pageSize));
 	}
-	if (c.req.method === 'POST') {
-		const row = addRow(currentTable, await parseJsonBody(c));
-		return c.json({ message: '新增成功', data: row }, 201);
-	}
+	if (c.req.method === 'POST') return c.json({ message: '新增成功', data: addRow(currentTable, await parseJsonBody(c)) }, 201);
 	if (c.req.method === 'DELETE') {
 		const body = await c.req.json<unknown>().catch(() => []);
 		const ids = Array.isArray(body) ? body.map(String) : [];

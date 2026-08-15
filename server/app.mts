@@ -14,26 +14,29 @@ import { getClientIp } from './client-ip.mjs';
 import { getManagementMenu, getPageDefinitions, getPageMetadata, menuItems } from './navigation.mjs';
 import type { AppEnv } from './types.mjs';
 import { applyTechStackHeaders, getTechStackConfig, loadTechStackConfig } from './tech-stack.mjs';
+import { loadSystemConfig } from './system-config.mjs';
 
 export const app = new Hono<AppEnv>();
-const port = Number(process.env.HTTP_PORT) || 8088;
-const domain = process.env.DOMAIN || 'anan.cc';
+const systemConfig = await loadSystemConfig();
+const port = Number(systemConfig.httpPort) || 8088;
+const domain = systemConfig.domain || 'anan.cc';
 const publicDir = fileURLToPath(new URL('../public/', import.meta.url));
 const mapAllowedIps = new Set([
 	'127.0.0.1',
 	'::1',
 	'::ffff:127.0.0.1',
-	...(process.env.MAP_ALLOWED_IPS || '').split(',').map((ip) => ip.trim()).filter(Boolean),
+	...systemConfig.mapAllowedIps.split(',').map((ip) => ip.trim()).filter(Boolean),
 ]);
 
 const defaultTrustedProxyRules = '127.0.0.1,::1,::ffff:127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16';
-const trustedProxyRules = (process.env.TRUSTED_PROXY_IPS || defaultTrustedProxyRules)
+
+const trustedProxyRules = (systemConfig.trustedProxyIps || defaultTrustedProxyRules)
 	.split(',').map((ip) => ip.trim()).filter(Boolean);
 
 const renderDocument = (c: Context<AppEnv>) => {
 	const siteConfig = getTechStackConfig();
 	const metadata = getPageMetadata(c.req.path, siteConfig.pageSuffix);
-	const publicOrigin = process.env.PUBLIC_ORIGIN;
+	const publicOrigin = systemConfig.publicOrigin || undefined;
 	const canonical = publicOrigin ? new URL(c.req.path, publicOrigin).toString() : undefined;
 	c.header('Cache-Control', 'no-cache');
 	return c.html(renderIndexHtml({

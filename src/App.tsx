@@ -44,7 +44,7 @@ const fallbackData: InitialData = {
 	siteNavigation: [
 		{ label: '首页', key: '/', icon: 'mail', component: 'home', title: '首页' },
 		{ label: '阿里云', key: '/aliyun', icon: 'appstore', component: 'aliyun', title: '阿里云管理' },
-		{ label: '管理后台', key: '/panel', icon: 'appstore', component: 'dashboard', title: '管理后台' },
+		{ label: '管理后台', key: '/panel/admin', icon: 'appstore', component: 'dashboard', title: '管理后台' },
 		{ label: '关于', key: '/about', icon: 'appstore', component: 'about', title: '关于' },
 		{ label: '登录', key: '/sign', icon: 'appstore', component: 'sign', title: '登录' },
 	],
@@ -53,7 +53,7 @@ const fallbackData: InitialData = {
 		{ path: '/', component: 'home', title: '首页' },
 		{ path: '/aliyun', component: 'aliyun', title: '阿里云管理' },
 		{ path: '/aliyun/DescribeInstances', component: 'aliyunDescribeInstances', title: '阿里云管理' },
-		{ path: '/panel', component: 'dashboard', title: '管理后台' },
+		{ path: '/panel/admin', component: 'dashboard', title: '管理后台' },
 		{ path: '/about', component: 'about', title: '关于' },
 		{ path: '/sign', component: 'sign', title: '登录' },
 	],

@@ -2,31 +2,51 @@ export const menuItems = [
 	{ label: '首页', key: '/', icon: 'mail', component: 'home', title: '首页', description: 'Quick React 项目首页' },
 	{ label: '阿里云', key: '/aliyun', icon: 'appstore', component: 'aliyun', title: '阿里云管理', description: '阿里云资源管理控制台' },
 	{ label: '阿里云实例详情', key: '/aliyun/DescribeInstances', icon: 'appstore', hidden: true, component: 'aliyunDescribeInstances', title: '阿里云管理', description: '阿里云资源管理控制台' },
-	{ label: '管理后台', key: '/panel', icon: 'appstore', component: 'dashboard', title: '管理后台', description: 'Quick React 管理后台' },
+	{ label: '管理后台', key: '/panel/admin', icon: 'appstore', component: 'dashboard', title: '管理后台', description: 'Quick React 管理后台' },
 	{ label: '关于', key: '/about', icon: 'appstore', component: 'about', title: '关于', description: '关于 Quick React 项目' },
 	{ label: '登录', key: '/sign', icon: 'appstore', component: 'sign', title: '登录', description: '登录 Quick React' },
 ];
 
-export const getManagementMenu = () => [
-	{ label: '首页', key: '/panel', icon: 'mail', component: 'dashboard', title: '管理后台', description: 'Quick React 管理后台' },
+type MenuNode = {
+	label: string;
+	key: string;
+	icon: string;
+	children?: MenuNode[];
+	[key: string]: unknown;
+};
+
+const rawManagementMenu = (): MenuNode[] => [
+	{ label: '首页', key: '/panel/admin', icon: 'mail', component: 'dashboard', title: '管理后台', description: 'Quick React 管理后台' },
 	{
-		label: '技术栈伪装',
-		key: '/panel/tech-stack',
+		label: '系统设置',
+		key: '/panel/admin/settings',
 		icon: 'appstore',
-		component: 'settings',
-		title: '技术栈伪装',
-		description: '配置 HTTP 技术栈响应头伪装',
+		children: [
+			{ label: '技术栈伪装', key: 'tech-stack', icon: 'appstore', component: 'settings', title: '技术栈伪装', description: '配置 HTTP 技术栈响应头伪装' },
+			{ label: '系统配置', key: 'system-config', icon: 'appstore', component: 'settings', title: '系统配置', description: '配置 Quick React 服务运行参数' },
+		],
 	},
 	{
 		label: '数据管理',
-		key: '/panel/data',
+		key: '/panel/admin/data',
 		icon: 'appstore',
 		children: [
-			{ label: '表列管理', key: '/panel/data/columns', icon: 'appstore', component: 'table', title: '表列管理', description: 'Quick React 管理后台' },
-			{ label: '数据管理', key: '/panel/data/rows', icon: 'appstore', component: 'table', title: '数据管理', description: 'Quick React 管理后台' },
+			{ label: '表列管理', key: 'columns', icon: 'appstore', component: 'table', title: '表列管理', description: 'Quick React 管理后台' },
+			{ label: '数据管理', key: 'rows', icon: 'appstore', component: 'table', title: '数据管理', description: 'Quick React 管理后台' },
 		],
 	},
 ];
+
+const resolveMenuPaths = (items: MenuNode[], parentPath = ''): MenuNode[] => items.map((item) => {
+	const key = String(item.key ?? '');
+	const path = key.startsWith('/') ? key : `${parentPath}/${key}`.replaceAll('//', '/');
+	const children = Array.isArray(item.children)
+		? resolveMenuPaths(item.children, path)
+		: undefined;
+	return { ...item, key: path, children };
+});
+
+export const getManagementMenu = () => resolveMenuPaths(rawManagementMenu());
 
 export type PageDefinition = {
 	path: string;

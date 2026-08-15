@@ -42,6 +42,7 @@ const toMenuItems = (menu: InitialMenuItem[]): MenuItem[] => menu.map((item) => 
 const pageUrl = (path: string) => path === '/' ? path : `${path}${pageSuffix}`;
 const managementMenu = initialData?.managementMenu ?? [];
 const items: MenuItem[] = toMenuItems(managementMenu);
+const dashboardApiPath = `/api${managementMenu[0]?.key ?? '/panel/admin'}/dashboard${apiSuffix}`;
 
 const findMenuItem = (menu: InitialMenuItem[], pathname: string): InitialMenuItem | undefined => {
 	for (const item of menu) {
@@ -80,7 +81,7 @@ function Dashboard({ commonApi }: { commonApi: CommonApi }) {
 
 	useEffect(() => {
 		let active = true;
-		commonApi.apiFetch(`/api/panel/dashboard${apiSuffix}`)
+		commonApi.apiFetch(dashboardApiPath)
 			.then(async (response) => {
 				const result = await response.json() as { dashboard?: DashboardData };
 				if (active) {
