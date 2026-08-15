@@ -8,7 +8,7 @@ import type { CommonApi, ResJsonTableColumn } from '@/utils/common/api.js';
 
 import { useRef, useState, useEffect } from 'react';
 import { Table, Button, Flex, Space, Tag } from 'antd';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useDrawer } from '@/utils/common/drawer.js';
 import dayjs from 'dayjs';
@@ -16,12 +16,15 @@ import dayjs from 'dayjs';
 // 定义TableCRUD的传参
 type TableCrudType = {
 	commonApi: CommonApi;
+	resourcePath: string;
 };
 
 
-export default ({ commonApi }: TableCrudType) => {
-	const location = useLocation();
-	const apiPath = `/api${location.pathname}`;
+export default ({ commonApi, resourcePath }: TableCrudType) => {
+	const initialData = (window as Window & {
+		__INITIAL_DATA__?: { apiSuffix?: string };
+	}).__INITIAL_DATA__;
+	const apiPath = `/api${resourcePath}${initialData?.apiSuffix ?? ''}`;
 	const [drawer, contextHolderDrawer] = useDrawer(commonApi);
 
 	const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);

@@ -20,7 +20,9 @@ server/templates/   -> 动态首页响应
 
 ## 后端驱动页面
 
-普通后台页面由后端提供菜单、页面定义、表格列和数据接口；前端只负责通用布局、表格和表单渲染。新增常规 CRUD 页面时，优先在 `server/navigation.mts` 增加页面/菜单配置，并在 `server/panel-routes.mts` 提供对应数据接口，无需修改前端。
+普通后台页面由后端提供菜单、页面定义、表格列和数据接口；前端只负责通用布局、表格和表单渲染。新增常规 CRUD 页面时，优先在 `server/navigation.mts` 增加页面/菜单配置，并在 `server/api/` 下增加对应接口文件，无需修改前端。
+
+API 使用物理目录作为分层中间件链。构建阶段扫描 `server/api.mts` 和 `server/api/`，生成 `dist/api-manifest.mjs`；运行时只查 manifest，不再扫描文件系统。请求 `/api/panel/data/rows` 会按顺序执行 `server/api.mts`、`server/api/panel.mts`、`server/api/panel/data.mts` 和 `server/api/panel/data/rows.mts`；任一层直接返回失败响应都会终止后续执行。动态 ID 作为参数传给已匹配的叶子处理文件，例如 `/api/panel/data/rows/row-1` 仍由 `rows.mts` 处理。
 
 ## 开发监听
 

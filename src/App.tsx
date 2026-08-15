@@ -11,6 +11,7 @@ import DescribeInstances from './components/aliyun/DescribeInstances.js';
 import Sign from './components/Sign.js';
 import Panel from './components/panel/PanelLayout.js';
 import TableCRUD from '@/utils/antd/table_crud/index.js';
+import TechStack from './components/panel/TechStack.js';
 const { Content } = Layout;
 
 // 定义路由对应的页面组件
@@ -23,31 +24,36 @@ interface InitialMenuItem {
 	label: string;
 	key: string;
 	icon: 'mail' | 'appstore';
+	hidden?: boolean;
+	component?: string;
+	title?: string;
 	children?: InitialMenuItem[];
 }
 
 interface InitialData {
+	apiSuffix: string;
+	pageSuffix: string;
 	siteNavigation: InitialMenuItem[];
 	managementMenu: InitialMenuItem[];
 	pages: Array<{ path: string; component: string; title: string }>;
 }
 
 const fallbackData: InitialData = {
+	apiSuffix: '',
+	pageSuffix: '.html',
 	siteNavigation: [
-		{ label: '首页', key: '/', icon: 'mail' },
-		{ label: '阿里云', key: '/aliyun', icon: 'appstore' },
-		{ label: '管理后台', key: '/panel', icon: 'appstore' },
-		{ label: '关于', key: '/about', icon: 'appstore' },
-		{ label: '登录', key: '/sign', icon: 'appstore' },
+		{ label: '首页', key: '/', icon: 'mail', component: 'home', title: '首页' },
+		{ label: '阿里云', key: '/aliyun', icon: 'appstore', component: 'aliyun', title: '阿里云管理' },
+		{ label: '管理后台', key: '/panel', icon: 'appstore', component: 'dashboard', title: '管理后台' },
+		{ label: '关于', key: '/about', icon: 'appstore', component: 'about', title: '关于' },
+		{ label: '登录', key: '/sign', icon: 'appstore', component: 'sign', title: '登录' },
 	],
-	managementMenu: [],
+	managementMenu: [{ label: '首页', key: '/panel', icon: 'mail', component: 'dashboard', title: '管理后台' }],
 	pages: [
 		{ path: '/', component: 'home', title: '首页' },
 		{ path: '/aliyun', component: 'aliyun', title: '阿里云管理' },
 		{ path: '/aliyun/DescribeInstances', component: 'aliyunDescribeInstances', title: '阿里云管理' },
 		{ path: '/panel', component: 'dashboard', title: '管理后台' },
-		{ path: '/panel/data/columns', component: 'table', title: '表列管理' },
-		{ path: '/panel/data/rows', component: 'table', title: '数据管理' },
 		{ path: '/about', component: 'about', title: '关于' },
 		{ path: '/sign', component: 'sign', title: '登录' },
 	],
@@ -56,11 +62,12 @@ const fallbackData: InitialData = {
 const serverData = (window as Window & { __INITIAL_DATA__?: InitialData }).__INITIAL_DATA__;
 const initialData = serverData ?? fallbackData;
 const siteNavigation = initialData.siteNavigation;
+const pageUrl = (path: string) => path === '/' ? path : `${path}${initialData.pageSuffix}`;
 const iconComponents = {
 	mail: <MailOutlined />,
 	appstore: <AppstoreOutlined />,
 };
-const toMenuItems = (menu: InitialMenuItem[]): MenuItem[] => menu.map((item) => ({
+const toMenuItems = (menu: InitialMenuItem[]): MenuItem[] => menu.filter((item) => !item.hidden).map((item) => ({
 	label: item.label,
 	key: item.key,
 	icon: iconComponents[item.icon],
@@ -78,14 +85,19 @@ const App = ({ commonApi }: AppType) => {
 		home: Home,
 		aliyun: AliyunIndex,
 		aliyunDescribeInstances: () => <AliyunIndex><DescribeInstances /></AliyunIndex>,
-		dashboard: () => <Panel commonApi={commonApi} />,
-		table: () => <Panel commonApi={commonApi}><TableCRUD commonApi={commonApi} /></Panel>,
+		 dashboard: () => <Panel commonApi={commonApi} />,
+		 techStack: () => <Panel commonApi={commonApi}><TechStack commonApi={commonApi} /></Panel>,
 		about: About,
 		sign: Sign,
 	};
 	const routes = initialData.pages.flatMap((page) => {
-		const Component = componentRegistry[page.component];
-		return Component ? [{ path: page.path, element: <Component /> }] : [];
+		const Component = page.component === 'table' ? undefined : componentRegistry[page.component];
+		if (!Component && page.component !== 'table') return [];
+		const element = page.component === 'table'
+			? <Panel commonApi={commonApi}><TableCRUD commonApi={commonApi} resourcePath={page.path} /></Panel>
+			: Component ? <Component /> : null;
+		if (!element) return [];
+		return [{ path: pageUrl(page.path), element }];
 	});
 
 	const location = useLocation(); // 获取当前 URL 路径
@@ -105,7 +117,16 @@ const App = ({ commonApi }: AppType) => {
 				continue;
 			}
 		}
-		const page = initialData.pages.find((item) => item.path === location.pathname);
+		const logicalPath = initialData.pageSuffix && location.pathname.endsWith(initialData.pageSuffix)
+			? location.pathname.slice(0, -initialData.pageSuffix.length)
+			: location.pathname;
+		for (const item of items) {
+			if (!item || typeof item.key !== 'string') continue;
+			if ((logicalPath + '/').indexOf(`${item.key}/`) === 0) {
+				setCurrent(item.key);
+			}
+		}
+		const page = initialData.pages.find((item) => item.path === logicalPath);
 		if (page) {
 			document.title = `${page.title} | Quick React`;
 		}
@@ -117,7 +138,7 @@ const App = ({ commonApi }: AppType) => {
 
 		// 对非外部链接的菜单项手动导航
 		if (!e.keyPath.some((key) => key === 'external')) {
-			navigate(e.key); // 使用 e.key 作为路径
+			navigate(pageUrl(e.key));
 		}
 	};
 

@@ -25,8 +25,10 @@ interface InitialMenuItem {
 }
 
 const initialData = (window as Window & {
-	__INITIAL_DATA__?: { managementMenu: InitialMenuItem[] };
+	__INITIAL_DATA__?: { apiSuffix?: string; managementMenu: InitialMenuItem[] };
 }).__INITIAL_DATA__;
+const apiSuffix = initialData?.apiSuffix ?? '';
+const pageSuffix = (window as Window & { __INITIAL_DATA__?: { pageSuffix?: string } }).__INITIAL_DATA__?.pageSuffix ?? '';
 const iconComponents = {
 	mail: <MailOutlined />,
 	appstore: <AppstoreOutlined />,
@@ -37,6 +39,7 @@ const toMenuItems = (menu: InitialMenuItem[]): MenuItem[] => menu.map((item) => 
 	icon: iconComponents[item.icon],
 	children: item.children ? toMenuItems(item.children) : undefined,
 }));
+const pageUrl = (path: string) => path === '/' ? path : `${path}${pageSuffix}`;
 const managementMenu = initialData?.managementMenu ?? [];
 const items: MenuItem[] = toMenuItems(managementMenu);
 
@@ -77,7 +80,7 @@ function Dashboard({ commonApi }: { commonApi: CommonApi }) {
 
 	useEffect(() => {
 		let active = true;
-		commonApi.apiFetch('/api/panel/dashboard')
+		commonApi.apiFetch(`/api/panel/dashboard${apiSuffix}`)
 			.then(async (response) => {
 				const result = await response.json() as { dashboard?: DashboardData };
 				if (active) {
@@ -112,8 +115,11 @@ function Dashboard({ commonApi }: { commonApi: CommonApi }) {
 
 function AppRouter({ commonApi, children }: AppType) {
 	const location = useLocation(); // 获取当前 URL 路径
-	const [current, setCurrent] = useState(location.pathname); // 同步选中状态
-	const [openKeys, setOpenKeys] = useState<string[]>(() => findParentKeys(managementMenu, location.pathname));
+	const logicalPath = pageSuffix && location.pathname.endsWith(pageSuffix)
+		? location.pathname.slice(0, -pageSuffix.length)
+		: location.pathname;
+	const [current, setCurrent] = useState(logicalPath); // 同步选中状态
+	const [openKeys, setOpenKeys] = useState<string[]>(() => findParentKeys(managementMenu, logicalPath));
 	const navigate = useNavigate();
 
 	const [collapsed, setCollapsed] = useState(false);
@@ -122,14 +128,17 @@ function AppRouter({ commonApi, children }: AppType) {
 	} = theme.useToken();
 
 	useEffect(() => {
-		setCurrent(location.pathname); // URL 变化时同步菜单高亮
-		setOpenKeys(findParentKeys(managementMenu, location.pathname));
+		const nextLogicalPath = pageSuffix && location.pathname.endsWith(pageSuffix)
+			? location.pathname.slice(0, -pageSuffix.length)
+			: location.pathname;
+		setCurrent(nextLogicalPath); // URL 变化时同步菜单高亮
+		setOpenKeys(findParentKeys(managementMenu, nextLogicalPath));
 	}, [location.pathname]);
 
-	const currentMenuItem = findMenuItem(managementMenu, location.pathname);
+	const currentMenuItem = findMenuItem(managementMenu, logicalPath);
 	const breadcrumbItems = [
 		{ title: '管理后台' },
-		...(location.pathname === '/panel' || !currentMenuItem ? [] : [{ title: currentMenuItem.label }]),
+		...(currentMenuItem?.key === managementMenu[0]?.key || !currentMenuItem ? [] : [{ title: currentMenuItem.label }]),
 	];
 
 	const onClick: MenuProps['onClick'] = (e) => {
@@ -138,7 +147,7 @@ function AppRouter({ commonApi, children }: AppType) {
 
 		// 对非外部链接的菜单项手动导航
 		if (!e.keyPath.some((key) => key === 'external')) {
-			navigate(e.key); // 使用 e.key 作为路径
+			navigate(pageUrl(e.key));
 		}
 	};
 	return (

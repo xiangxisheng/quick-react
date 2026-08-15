@@ -5,9 +5,6 @@ node_modules/
 package-lock.json
 
 # TypeScript build output
-dist/*.js
-dist/*.js.map
-dist/*.mjs
-dist/*.mjs.map
+dist/
 public/bundle.js
 public/bundle.js.map
