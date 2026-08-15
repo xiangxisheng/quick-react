@@ -5,7 +5,8 @@ const form = {
 	description: '配置会作用于后续 HTTP 响应，并保存到服务器配置文件。仅用于兼容性测试、演示或隐藏真实服务实现。',
 	refreshAfterSave: 3,
 	submitLabel: '保存配置',
-	saveFeedback: { component: 'modal', type: 'info', title: '保存结果', message: '保存成功，页面将在 {refreshAfterSave} 秒后刷新' },
+	confirmOnUnchangedSubmit: '当前未修改，仍要提交吗？',
+	saveFeedback: { component: 'modal', type: 'info', title: '保存结果', message: '保存成功，页面将在 {refreshAfterSave} 秒后刷新', refreshNowLabel: '立即刷新', cancelRefreshLabel: '取消' },
 	submitHint: '修改后立即生效',
 	initialValues: { nginx: false, phpVersion: '', apiSuffix: '.php', pageSuffix: '.html' },
 	fields: [

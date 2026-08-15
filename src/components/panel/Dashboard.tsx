@@ -4,14 +4,13 @@ import type { TableColumnsType } from 'antd';
 import type { CommonApi } from '@/utils/common/api.js';
 
 interface DashboardData {
-	title?: string;
 	recentTitle?: string;
 	statistics: Array<{ key: string; label: string; value: number }>;
 	recentColumns: Array<{ dataIndex: string; title: string; key?: string }>;
 	recentRows: Array<Record<string, unknown> & { key: string }>;
 }
 
-export default function Dashboard({ commonApi, apiPath, fallbackTitle }: { commonApi: CommonApi; apiPath: string; fallbackTitle?: string }) {
+export default function Dashboard({ commonApi, apiPath }: { commonApi: CommonApi; apiPath: string }) {
 	const [data, setData] = useState<DashboardData>();
 	const [loading, setLoading] = useState(true);
 
@@ -33,7 +32,6 @@ export default function Dashboard({ commonApi, apiPath, fallbackTitle }: { commo
 
 	return (
 		<div>
-			<h1>{data?.title ?? fallbackTitle}</h1>
 			<Row gutter={[16, 16]}>
 				{data?.statistics.map((item) => (
 					<Col xs={24} sm={8} key={item.key}>

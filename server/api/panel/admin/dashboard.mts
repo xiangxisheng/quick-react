@@ -6,7 +6,6 @@ const handler: ApiHandler = (c) => {
 	const enabledRows = rows.filter((row) => row.status === 'enabled').length;
 	return c.json({
 		dashboard: {
-			title: '管理后台',
 			recentTitle: '最近数据',
 			statistics: [
 				{ key: 'columns', label: '字段定义', value: mockTables.columns.rows.length },

@@ -48,6 +48,7 @@ type FormResponse = {
 	form?: {
 		description?: React.ReactNode;
 		submitLabel?: React.ReactNode;
+		confirmOnUnchangedSubmit?: string;
 		refreshAfterSave?: number | null;
 		submitHint?: React.ReactNode;
 		saveFeedback?: {
@@ -56,6 +57,8 @@ type FormResponse = {
 			showIcon?: boolean;
 			title?: string;
 			message?: string;
+			refreshNowLabel?: React.ReactNode;
+			cancelRefreshLabel?: React.ReactNode;
 		};
 		initialValues: Record<string, unknown>;
 		fields: FormField[];
@@ -73,6 +76,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> => (
 	Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 );
 
+const areValuesEqual = (left: Record<string, unknown>, right: Record<string, unknown>) => (
+	JSON.stringify(left) === JSON.stringify(right)
+);
+
 export default function FormPage({ commonApi, apiPath, title, onSaved }: FormProps) {
 	const [form] = Form.useForm<Record<string, unknown>>();
 	const [messageApi, messageContextHolder] = message.useMessage();
@@ -80,9 +87,22 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [formConfig, setFormConfig] = useState<FormResponse['form']>();
+	const [initialValues, setInitialValues] = useState<Record<string, unknown>>({});
+	const [dirty, setDirty] = useState(false);
 	const [refreshTarget, setRefreshTarget] = useState<string>();
 	const [refreshDeadline, setRefreshDeadline] = useState<number>();
+	const [refreshCancelled, setRefreshCancelled] = useState(false);
 	const [saved, setSaved] = useState(false);
+
+	useEffect(() => {
+		setLoading(true);
+		setSaved(false);
+		setRefreshTarget(undefined);
+		setRefreshDeadline(undefined);
+		setRefreshCancelled(false);
+		Modal.destroyAll();
+		messageApi.destroy('form-save-feedback');
+	}, [apiPath, messageApi]);
 
 	useEffect(() => {
 		if (!saved || formConfig?.saveFeedback?.component !== 'message') return;
@@ -98,24 +118,35 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 
 	useEffect(() => {
 		if (!saved || formConfig?.saveFeedback?.component !== 'modal') return;
+		if (refreshCancelled) return;
 		const feedbackMessage = formConfig.saveFeedback.message ?? '';
-		const countdown = refreshDeadline && refreshTarget
+		const countdown = refreshDeadline && refreshTarget && !refreshCancelled
 			? <CountdownDisplay deadline={refreshDeadline} onFinish={() => window.location.assign(refreshTarget)} />
 			: null;
-		const refreshValue = countdown ?? (formConfig.refreshAfterSave == null ? '' : formatCountdown(formConfig.refreshAfterSave * 1000));
+		const refreshValue = refreshCancelled ? '' : countdown ?? (formConfig.refreshAfterSave == null ? '' : formatCountdown(formConfig.refreshAfterSave * 1000));
 		const content = renderTemplate(feedbackMessage, { refreshAfterSave: refreshValue });
 		Modal.destroyAll();
-		modalApi.success({ title: formConfig.saveFeedback.title ?? '', content });
+		modalApi.confirm({
+			title: formConfig.saveFeedback.title ?? '',
+			content,
+			okText: formConfig.saveFeedback.refreshNowLabel,
+			cancelText: formConfig.saveFeedback.cancelRefreshLabel,
+			onOk: () => window.location.assign(refreshTarget ?? window.location.href),
+			onCancel: () => setRefreshCancelled(true),
+		});
 		return () => Modal.destroyAll();
-	}, [formConfig, modalApi, refreshDeadline, refreshTarget, saved]);
+	}, [formConfig, modalApi, refreshCancelled, refreshDeadline, refreshTarget, saved]);
 
 	useEffect(() => {
 		let active = true;
 		commonApi.apiFetch(apiPath).then(async (response) => {
 			const result = await response.json() as FormResponse;
 			if (active && result.form) {
+				const values = isRecord(result.currentValues) ? result.currentValues : result.form.initialValues;
 				setFormConfig(result.form);
-				form.setFieldsValue(isRecord(result.currentValues) ? result.currentValues : result.form.initialValues);
+				setInitialValues(values);
+				setDirty(false);
+				form.setFieldsValue(values);
 			}
 		}).catch((error) => console.error(`加载配置失败: ${apiPath}`, error)).finally(() => {
 			if (active) setLoading(false);
@@ -124,6 +155,10 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 	}, [apiPath, commonApi, form]);
 
 	const onFinish = async (values: Record<string, unknown>) => {
+		if (!dirty && formConfig?.confirmOnUnchangedSubmit) {
+			const confirmed = await commonApi.modalConfirm([formConfig.confirmOnUnchangedSubmit]);
+			if (!confirmed) return;
+		}
 		setSaving(true);
 		try {
 			await commonApi.apiFetch(apiPath, {
@@ -132,9 +167,12 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 				body: JSON.stringify(values),
 			});
 			const target = await onSaved?.(values);
+			setInitialValues(values);
+			setDirty(false);
 			setSaved(true);
 			const refreshAfterSave = formConfig?.refreshAfterSave ?? null;
 			if (target && refreshAfterSave !== null) {
+				setRefreshCancelled(false);
 				const seconds = Number.isFinite(refreshAfterSave) ? Math.max(0, Math.floor(refreshAfterSave)) : 0;
 				if (seconds === 0) window.location.assign(target);
 				else {
@@ -165,7 +203,13 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 		{modalContextHolder}
 		{saveFeedback}
 		{formConfig?.description ? <Alert type="info" showIcon message={formConfig.description} style={{ marginBottom: 24 }} /> : null}
-		<Form form={form} layout="vertical" onFinish={onFinish} initialValues={formConfig?.initialValues}>
+		<Form
+			form={form}
+			layout="vertical"
+			onFinish={onFinish}
+			initialValues={formConfig?.initialValues}
+			onValuesChange={(_, values) => setDirty(!areValuesEqual(values, initialValues))}
+		>
 			{formConfig?.fields.map((field) => (
 				<Form.Item
 					key={field.name}

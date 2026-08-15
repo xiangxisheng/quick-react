@@ -1,7 +1,8 @@
 import type React from 'react';
-import { Modal, ModalFuncProps } from 'antd';
+import { Modal, ModalFuncProps, Spin } from 'antd';
 import { message } from 'antd';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
+import { useState } from 'react';
 
 /* 前端类型定义开始 */
 export interface DataType extends Record<string, unknown> { }
@@ -60,6 +61,7 @@ export interface CommonApi {
 export function useCommonApi(): [CommonApi, React.JSX.Element] {
 	const [modalApi, contextHolderModal] = Modal.useModal();
 	const [messageApi, contextHolderMessage] = message.useMessage();
+	const [pendingRequests, setPendingRequests] = useState(0);
 
 	const getContentLine = (aContentLine: string[]): React.ReactNode => {
 		return aContentLine.map((line, index) => (
@@ -102,6 +104,7 @@ export function useCommonApi(): [CommonApi, React.JSX.Element] {
 	};
 
 	const apiFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+		setPendingRequests((count) => count + 1);
 		try {
 			const res: Response = await fetch(input, init);
 			const resJSON: ResJSON = await getJsonByRes(res);
@@ -135,6 +138,8 @@ export function useCommonApi(): [CommonApi, React.JSX.Element] {
 			}
 			//modalError([ex.toString()]);
 			throw ex;
+		} finally {
+			setPendingRequests((count) => Math.max(0, count - 1));
 		}
 	};
 
@@ -147,6 +152,7 @@ export function useCommonApi(): [CommonApi, React.JSX.Element] {
 	return [
 		commonApi,
 		<>
+			<Spin fullscreen spinning={pendingRequests > 0} />
 			{contextHolderModal}
 			{contextHolderMessage}
 		</>,
