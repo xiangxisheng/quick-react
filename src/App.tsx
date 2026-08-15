@@ -6,10 +6,10 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Layout, Menu } from 'antd';
 import { AppstoreOutlined, MailOutlined } from '@ant-design/icons';
-import AliyunIndex from './components/aliyun/AliyunLayout.js';
 import DescribeInstances from './components/aliyun/DescribeInstances.js';
 import Sign from './components/Sign.js';
 import Panel from './components/panel/PanelLayout.js';
+import Dashboard from './components/panel/Dashboard.js';
 import TableCRUD from '@/utils/antd/table_crud/index.js';
 import SettingsForm from './components/panel/SettingsForm.js';
 const { Content } = Layout;
@@ -24,6 +24,7 @@ interface InitialMenuItem {
 	label: string;
 	key: string;
 	icon: 'mail' | 'appstore';
+	dropdown?: boolean;
 	hidden?: boolean;
 	component?: string;
 	title?: string;
@@ -34,46 +35,24 @@ interface InitialData {
 	apiSuffix: string;
 	pageSuffix: string;
 	siteNavigation: InitialMenuItem[];
-	managementMenu: InitialMenuItem[];
-	pages: Array<{ path: string; component: string; title: string }>;
+	pages: Array<{ path: string; component: string; title: string; navigation?: InitialMenuItem[]; dashboardPath?: string }>;
 }
 
-const fallbackData: InitialData = {
-	apiSuffix: '',
-	pageSuffix: '.html',
-	siteNavigation: [
-		{ label: '首页', key: '/', icon: 'mail', component: 'home', title: '首页' },
-		{ label: '阿里云', key: '/aliyun', icon: 'appstore', component: 'aliyun', title: '阿里云管理' },
-		{ label: '管理后台', key: '/panel/admin', icon: 'appstore', component: 'dashboard', title: '管理后台' },
-		{ label: '关于', key: '/about', icon: 'appstore', component: 'about', title: '关于' },
-		{ label: '登录', key: '/sign', icon: 'appstore', component: 'sign', title: '登录' },
-	],
-	managementMenu: [{ label: '首页', key: '/panel', icon: 'mail', component: 'dashboard', title: '管理后台' }],
-	pages: [
-		{ path: '/', component: 'home', title: '首页' },
-		{ path: '/aliyun', component: 'aliyun', title: '阿里云管理' },
-		{ path: '/aliyun/DescribeInstances', component: 'aliyunDescribeInstances', title: '阿里云管理' },
-		{ path: '/panel/admin', component: 'dashboard', title: '管理后台' },
-		{ path: '/about', component: 'about', title: '关于' },
-		{ path: '/sign', component: 'sign', title: '登录' },
-	],
-};
-
 const serverData = (window as Window & { __INITIAL_DATA__?: InitialData }).__INITIAL_DATA__;
-const initialData = serverData ?? fallbackData;
+	const initialData = serverData ?? { apiSuffix: '', pageSuffix: '', siteNavigation: [], pages: [] };
 const siteNavigation = initialData.siteNavigation;
 const pageUrl = (path: string) => path === '/' ? path : `${path}${initialData.pageSuffix}`;
 const iconComponents = {
 	mail: <MailOutlined />,
 	appstore: <AppstoreOutlined />,
 };
-const toMenuItems = (menu: InitialMenuItem[]): MenuItem[] => menu.filter((item) => !item.hidden).map((item) => ({
+const toMenuItems = (menu: InitialMenuItem[], onTitleClick?: (key: string) => void): MenuItem[] => menu.filter((item) => !item.hidden).map((item) => ({
 	label: item.label,
 	key: item.key,
 	icon: iconComponents[item.icon],
-	children: item.children ? toMenuItems(item.children) : undefined,
+	children: item.children && item.dropdown !== false ? toMenuItems(item.children, onTitleClick) : undefined,
+	...(item.children && onTitleClick ? { onTitleClick: () => onTitleClick(item.key) } : {}),
 }));
-const items: MenuItem[] = toMenuItems(siteNavigation);
 
 
 type AppType = {
@@ -81,37 +60,34 @@ type AppType = {
 };
 
 const App = ({ commonApi }: AppType) => {
-	const componentRegistry: Record<string, React.ComponentType> = {
-		home: Home,
-		aliyun: AliyunIndex,
-		aliyunDescribeInstances: () => <AliyunIndex><DescribeInstances /></AliyunIndex>,
-		 dashboard: () => <Panel commonApi={commonApi} />,
-		about: About,
-		sign: Sign,
+	const pageRenderers: Record<string, (page: InitialData['pages'][number]) => React.ReactNode> = {
+		home: () => <Home />,
+		about: () => <About />,
+		sign: () => <Sign />,
+		panel: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><Dashboard commonApi={commonApi} apiPath={`/api${page.dashboardPath ?? ''}${initialData.apiSuffix}`} /></Panel>,
+		dashboard: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><Dashboard commonApi={commonApi} apiPath={`/api${page.dashboardPath ?? ''}${initialData.apiSuffix}`} /></Panel>,
+		table: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><TableCRUD commonApi={commonApi} resourcePath={page.path} /></Panel>,
+		settings: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><SettingsForm
+			commonApi={commonApi}
+			apiPath={`/api${page.path}${initialData.apiSuffix}`}
+			title={page.title}
+			onSaved={(values) => {
+				const pageSuffix = typeof values.pageSuffix === 'string' ? values.pageSuffix : initialData.pageSuffix;
+				window.location.assign(`${page.path}${pageSuffix}`);
+			}}
+		/></Panel>,
+		aliyunDescribeInstances: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><DescribeInstances /></Panel>,
 	};
 	const routes = initialData.pages.flatMap((page) => {
-		const Component = page.component === 'table' ? undefined : componentRegistry[page.component];
-		if (!Component && page.component !== 'table' && page.component !== 'settings') return [];
-		const element = page.component === 'table'
-			? <Panel commonApi={commonApi}><TableCRUD commonApi={commonApi} resourcePath={page.path} /></Panel>
-			: page.component === 'settings'
-				? <Panel commonApi={commonApi}><SettingsForm
-					commonApi={commonApi}
-					apiPath={`/api${page.path}${initialData.apiSuffix}`}
-					title={page.title}
-					onSaved={(values) => {
-						const pageSuffix = typeof values.pageSuffix === 'string' ? values.pageSuffix : initialData.pageSuffix;
-						window.location.assign(`${page.path}${pageSuffix}`);
-					}}
-				/></Panel>
-			: Component ? <Component /> : null;
-		if (!element) return [];
-		return [{ path: pageUrl(page.path), element }];
+		const render = pageRenderers[page.component];
+		if (!render) return [];
+		return [{ path: pageUrl(page.path), element: render(page) }];
 	});
 
 	const location = useLocation(); // 获取当前 URL 路径
 	const [current, setCurrent] = useState(location.pathname); // 同步选中状态
 	const navigate = useNavigate();
+	const items: MenuItem[] = toMenuItems(siteNavigation, (key) => navigate(pageUrl(key)));
 
 	useEffect(() => {
 		// 设置 body 的 margin 为 0
@@ -150,7 +126,6 @@ const App = ({ commonApi }: AppType) => {
 			navigate(pageUrl(e.key));
 		}
 	};
-
 	const memoizedRoutes = useMemo(() => routes, []);
 
 	return (

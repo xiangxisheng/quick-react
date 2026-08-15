@@ -9,8 +9,7 @@ import {
 	MenuFoldOutlined,
 	MenuUnfoldOutlined,
 } from '@ant-design/icons';
-import { Breadcrumb, Card, Col, Layout, Menu, Row, Statistic, Table, theme } from 'antd';
-import type { TableColumnsType } from 'antd';
+import { Breadcrumb, Layout, Menu, theme } from 'antd';
 import { Button } from 'antd';
 const { Header, Content, Footer, Sider } = Layout;
 
@@ -25,7 +24,7 @@ interface InitialMenuItem {
 }
 
 const initialData = (window as Window & {
-	__INITIAL_DATA__?: { apiSuffix?: string; managementMenu: InitialMenuItem[] };
+	__INITIAL_DATA__?: { apiSuffix?: string };
 }).__INITIAL_DATA__;
 const apiSuffix = initialData?.apiSuffix ?? '';
 const pageSuffix = (window as Window & { __INITIAL_DATA__?: { pageSuffix?: string } }).__INITIAL_DATA__?.pageSuffix ?? '';
@@ -40,9 +39,6 @@ const toMenuItems = (menu: InitialMenuItem[]): MenuItem[] => menu.map((item) => 
 	children: item.children ? toMenuItems(item.children) : undefined,
 }));
 const pageUrl = (path: string) => path === '/' ? path : `${path}${pageSuffix}`;
-const managementMenu = initialData?.managementMenu ?? [];
-const items: MenuItem[] = toMenuItems(managementMenu);
-const dashboardApiPath = `/api${managementMenu[0]?.key ?? '/panel/admin'}/dashboard${apiSuffix}`;
 
 const findMenuItem = (menu: InitialMenuItem[], pathname: string): InitialMenuItem | undefined => {
 	for (const item of menu) {
@@ -67,60 +63,21 @@ const findParentKeys = (menu: InitialMenuItem[], pathname: string, parents: stri
 type AppType = {
 	commonApi: CommonApi;
 	children?: React.ReactNode;
+	navigation?: InitialMenuItem[];
+	dashboardPath?: string;
+	title?: string;
 };
 
-interface DashboardData {
-	statistics: Array<{ key: string; label: string; value: number }>;
-	recentColumns: Array<{ dataIndex: string; title: string; key?: string }>;
-	recentRows: Array<Record<string, unknown> & { key: string }>;
-}
-
-function Dashboard({ commonApi }: { commonApi: CommonApi }) {
-	const [data, setData] = useState<DashboardData>();
-	const [loading, setLoading] = useState(true);
-
-	useEffect(() => {
-		let active = true;
-		commonApi.apiFetch(dashboardApiPath)
-			.then(async (response) => {
-				const result = await response.json() as { dashboard?: DashboardData };
-				if (active) {
-					setData(result.dashboard);
-				}
-			})
-			.catch((error) => console.error('加载 dashboard 数据失败', error))
-			.finally(() => {
-				if (active) setLoading(false);
-			});
-		return () => { active = false; };
-	}, [commonApi]);
-
-	const columns: TableColumnsType<DashboardData['recentRows'][number]> = data?.recentColumns ?? [];
-
-	return (
-		<div>
-			<h1>Dashboard</h1>
-			<Row gutter={[16, 16]}>
-				{data?.statistics.map((item) => (
-					<Col xs={24} sm={8} key={item.key}>
-						<Card loading={loading}><Statistic title={item.label} value={item.value} /></Card>
-					</Col>
-				))}
-			</Row>
-			<Card title="最近数据" style={{ marginTop: 16 }} loading={loading}>
-				<Table rowKey="key" columns={columns} dataSource={data?.recentRows ?? []} pagination={false} />
-			</Card>
-		</div>
-	);
-}
-
-function AppRouter({ commonApi, children }: AppType) {
+function AppRouter({ commonApi, children, navigation = [], dashboardPath, title }: AppType) {
+	const items: MenuItem[] = toMenuItems(navigation);
+	const dashboardApiPath = dashboardPath ? `/api${dashboardPath}${apiSuffix}` : '';
 	const location = useLocation(); // 获取当前 URL 路径
-	const logicalPath = pageSuffix && location.pathname.endsWith(pageSuffix)
-		? location.pathname.slice(0, -pageSuffix.length)
-		: location.pathname;
-	const [current, setCurrent] = useState(logicalPath); // 同步选中状态
-	const [openKeys, setOpenKeys] = useState<string[]>(() => findParentKeys(managementMenu, logicalPath));
+	const getMenuPath = (pathname: string) => {
+		const path = pageSuffix && pathname.endsWith(pageSuffix) ? pathname.slice(0, -pageSuffix.length) : pathname;
+		return findMenuItem(navigation, path) ? path : dashboardPath ?? path;
+	};
+	const [current, setCurrent] = useState(() => getMenuPath(location.pathname)); // 同步选中状态
+	const [openKeys, setOpenKeys] = useState<string[]>(() => findParentKeys(navigation, getMenuPath(location.pathname)));
 	const navigate = useNavigate();
 
 	const [collapsed, setCollapsed] = useState(false);
@@ -132,14 +89,15 @@ function AppRouter({ commonApi, children }: AppType) {
 		const nextLogicalPath = pageSuffix && location.pathname.endsWith(pageSuffix)
 			? location.pathname.slice(0, -pageSuffix.length)
 			: location.pathname;
-		setCurrent(nextLogicalPath); // URL 变化时同步菜单高亮
-		setOpenKeys(findParentKeys(managementMenu, nextLogicalPath));
+		const menuPath = getMenuPath(nextLogicalPath);
+		setCurrent(menuPath); // URL 变化时同步菜单高亮
+		setOpenKeys(findParentKeys(navigation, menuPath));
 	}, [location.pathname]);
 
-	const currentMenuItem = findMenuItem(managementMenu, logicalPath);
+	const currentMenuItem = findMenuItem(navigation, current);
 	const breadcrumbItems = [
-		{ title: '管理后台' },
-		...(currentMenuItem?.key === managementMenu[0]?.key || !currentMenuItem ? [] : [{ title: currentMenuItem.label }]),
+		...(title ? [{ title }] : []),
+		...(currentMenuItem ? [{ title: currentMenuItem.label }] : []),
 	];
 
 	const onClick: MenuProps['onClick'] = (e) => {
@@ -190,7 +148,7 @@ function AppRouter({ commonApi, children }: AppType) {
 					overflowY: 'scroll',
 				}}>
 					<Breadcrumb items={breadcrumbItems} style={{ marginBottom: '8px' }} />
-					{children ?? <Dashboard commonApi={commonApi} />}
+					{children}
 				</Content>
 				<Footer style={{
 					height: '30px',
