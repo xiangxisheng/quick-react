@@ -4,18 +4,18 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createSecureServer } from 'node:http2';
 import { serve } from '@hono/node-server';
-import type { Http2Bindings, HttpBindings } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { compress } from 'hono/compress';
 import { etag } from 'hono/etag';
 import { Hono, type Context } from 'hono';
 import { renderIndexHtml } from './templates/index.mjs';
+import { createApiGateway } from './api-router.mjs';
 import { getClientIp } from './client-ip.mjs';
 import { getManagementMenu, getPageDefinitions, getPageMetadata, menuItems } from './navigation.mjs';
-import { registerPanelRoutes } from './panel-routes.mjs';
 import type { AppEnv } from './types.mjs';
+import { applyTechStackHeaders, getTechStackConfig, loadTechStackConfig } from './tech-stack.mjs';
 
-const app = new Hono<AppEnv>();
+export const app = new Hono<AppEnv>();
 const port = Number(process.env.HTTP_PORT) || 8088;
 const domain = process.env.DOMAIN || 'anan.cc';
 const publicDir = fileURLToPath(new URL('../public/', import.meta.url));
@@ -31,7 +31,8 @@ const trustedProxyRules = (process.env.TRUSTED_PROXY_IPS || defaultTrustedProxyR
 	.split(',').map((ip) => ip.trim()).filter(Boolean);
 
 const renderDocument = (c: Context<AppEnv>) => {
-	const metadata = getPageMetadata(c.req.path);
+	const siteConfig = getTechStackConfig();
+	const metadata = getPageMetadata(c.req.path, siteConfig.pageSuffix);
 	const publicOrigin = process.env.PUBLIC_ORIGIN;
 	const canonical = publicOrigin ? new URL(c.req.path, publicOrigin).toString() : undefined;
 	c.header('Cache-Control', 'no-cache');
@@ -39,6 +40,8 @@ const renderDocument = (c: Context<AppEnv>) => {
 		...metadata,
 		canonical,
 		initialData: {
+			apiSuffix: siteConfig.apiSuffix,
+			pageSuffix: siteConfig.pageSuffix,
 			siteNavigation: menuItems,
 			managementMenu: getManagementMenu(),
 			pages: getPageDefinitions(),
@@ -46,8 +49,18 @@ const renderDocument = (c: Context<AppEnv>) => {
 	}));
 };
 
-registerPanelRoutes(app);
-app.get('/api/health', (c) => c.json({ ok: true }));
+await loadTechStackConfig();
+
+app.use('*', async (c, next) => {
+	// API 路由是独立构建产物，不能依赖与主服务共享内存；每次请求从持久化配置同步一次。
+	await loadTechStackConfig();
+	await next();
+	applyTechStackHeaders(c.res.headers, c.req.path);
+});
+
+const apiGateway = createApiGateway(() => getTechStackConfig().apiSuffix);
+app.all('/api', apiGateway);
+app.all('/api/*', apiGateway);
 app.get('/', (c) => renderDocument(c));
 
 app.use('*', compress());
@@ -95,4 +108,6 @@ const listen = async () => {
 	}
 };
 
-await listen();
+if (process.env.SKIP_SERVER_LISTEN !== '1') {
+	await listen();
+}

@@ -7,9 +7,11 @@ interface MenuItem {
 }
 
 interface InitialData {
+	apiSuffix: string;
+	pageSuffix: string;
 	siteNavigation: MenuItem[];
 	managementMenu: MenuItem[];
-	pages: Array<{ path: string; component: string; title: string }>;
+	pages: Array<{ path: string; component: string; title: string; description?: string }>;
 }
 
 interface IndexData {
