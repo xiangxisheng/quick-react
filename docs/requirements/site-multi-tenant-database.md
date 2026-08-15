@@ -329,7 +329,7 @@ site1_orders
 
 如果未来支持 MySQL 或 PostgreSQL，`dsn` 保存不含密码的连接地址，`dsn_password` 单独保存密码。`dsn` 为空时自动使用 `sqlite://database/default.sqlite`。后台接口不返回真实密码，日志中的 DSN 也必须脱敏。任意 DSN 只允许 Node 运行时连接；Worker 不读取或使用它。
 
-`dsn` 为空时使用默认的 `sqlite://database/default.sqlite`；自定义 DSN 只影响当前站点的数据库连接。自定义数据库中仍需应用该站点继承链对应的 `base_*` 和站点专属 migration。独立数据库中的 `base_system_users`、会话和成员关系只在该库内有效，不与默认共享数据库或其他独立数据库共享。
+`dsn` 为空时使用默认的 `sqlite://database/default.sqlite`；自定义 DSN 只影响当前站点的数据库连接。自定义数据库中仍需应用该站点继承链对应的 `base_*` 和站点专属 migration。独立数据库中的 `base_system_users`、会话和角色只在该库内有效，不与默认共享数据库或其他独立数据库共享。
 
 ## 7. Host 内存缓存
 
@@ -407,7 +407,6 @@ global_hosts
 ```text
 base_system_users
 base_system_sessions
-base_system_site_memberships
 base_system_configs
 ```
 
@@ -471,7 +470,7 @@ Prisma 仅作为开发期工具使用，生成或检查 migration；运行时使
 }
 ```
 
-用户身份保存在 `base_system_users` 中；如果角色需要按站点区分，则保存在 `base_system_site_memberships` 中。角色名称由后端代码约定，导航生成时根据当前用户在当前站点的角色过滤菜单。
+用户身份和额外角色均保存在 `base_system_users` 中，例如 `roles` JSON 字段保存 `['admin']`。角色不按站点区分：在同一数据库内，用户的额外角色对所有继承站点生效。角色名称由后端代码约定，导航生成时根据当前用户的角色过滤菜单。
 
 角色分为三类：
 
@@ -489,7 +488,7 @@ admin   只能由后台分配
 管理员：public + user + admin
 ```
 
-用户或站点成员关系只保存额外角色，例如：
+用户记录只保存额外角色，例如：
 
 ```json
 ["admin"]
@@ -586,7 +585,7 @@ Prisma 生成的 SQL 需要检查 D1 兼容性，必要时手动调整后再部�
 - 通配符 Host 只能匹配一层子域名。
 - 未匹配 Host 时，存在启用默认站点则回退；否则返回 404。
 - Host 路由快照最大刷新间隔为 30 秒，普通请求不查询数据库。
-- 只实现角色级访问控制，不增加权限表和细粒度权限管理；受保护 API 必须独立进行角色校验。
+- 只实现角色级访问控制，不增加权限表、站点成员关系或细粒度权限管理；`base_system_users` 中的额外角色在同一数据库内对所有继承站点生效，受保护 API 必须独立进行角色校验。
 - `database/` 是纯运行时目录，必须完全忽略 Git。
 - Prisma schema 只用于模型定义、校验和 migration，不进入 Worker runtime。
 - 不支持不同站点长期运行不同 schema 版本。同一发布版本下，所有可路由的共享库和独立库必须满足该版本要求的 migration 基线；独立库迁移完成前保持不可路由。
