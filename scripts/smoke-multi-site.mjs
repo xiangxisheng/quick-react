@@ -23,7 +23,10 @@ try {
 	assert.equal((await request('localhost', '/api/health.php')).status, 200);
 	assert.equal((await request('localhost', '/api/panel/admin/global/sites.php')).status, 401);
 	const registration = await request('localhost', '/api/sign.php');
-	assert.deepEqual(await registration.json(), { user: null, registrationAvailable: true });
+	const registrationFormResult = await registration.json();
+	assert.equal(registrationFormResult.user, null);
+	assert.equal(registrationFormResult.registrationAvailable, true);
+	assert.ok(registrationFormResult.form);
 	const registrationResponse = await request('localhost', '/api/sign.php', {
 		method: 'PUT', body: { username: 'bootstrap_admin', password: 'test-password-123' },
 	});
@@ -83,7 +86,10 @@ try {
 		method: 'POST', cookie, body: { hostname: 'site2.test', site_key: 'site2' },
 	})).status, 201);
 	const isolatedRegistration = await request('site2.test', '/api/sign.php');
-	assert.deepEqual(await isolatedRegistration.json(), { user: null, registrationAvailable: true });
+	const isolatedRegistrationResult = await isolatedRegistration.json();
+	assert.equal(isolatedRegistrationResult.user, null);
+	assert.equal(isolatedRegistrationResult.registrationAvailable, true);
+	assert.ok(isolatedRegistrationResult.form);
 
 	const publicDocument = await (await request('localhost', '/')).text();
 	assert.equal(publicDocument.includes('站点管理'), false);

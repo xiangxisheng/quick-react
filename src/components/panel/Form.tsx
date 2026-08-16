@@ -7,10 +7,11 @@ import { runAfterFeedback } from '@/utils/common/feedback.js';
 export type FormField = {
 	name: string;
 	label: React.ReactNode;
-	type: 'text' | 'switch';
+	type: 'text' | 'password' | 'switch';
 	extra?: React.ReactNode;
 	placeholder?: string;
 	maxLength?: number;
+	rules?: { required?: boolean; message?: string }[];
 	checkedChildren?: React.ReactNode;
 	unCheckedChildren?: React.ReactNode;
 };
@@ -39,6 +40,8 @@ type FormProps = {
 	commonApi: CommonApi;
 	apiPath: string;
 	title: React.ReactNode;
+	submitMethod?: 'POST' | 'PUT';
+	redirectOnFeedback?: boolean;
 	onSaved?: (values: Record<string, unknown>) => string | undefined | Promise<string | undefined>;
 };
 
@@ -50,7 +53,7 @@ const areValuesEqual = (left: Record<string, unknown>, right: Record<string, unk
 	JSON.stringify(left) === JSON.stringify(right)
 );
 
-export default function FormPage({ commonApi, apiPath, title, onSaved }: FormProps) {
+export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PUT', redirectOnFeedback = false, onSaved }: FormProps) {
 	const [form] = Form.useForm<Record<string, unknown>>();
 	const [messageApi, messageContextHolder] = message.useMessage();
 	const [loading, setLoading] = useState(true);
@@ -113,7 +116,7 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 		setSaving(true);
 		try {
 			const response = await commonApi.apiFetch(apiPath, {
-				method: 'PUT',
+				method: submitMethod,
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(values),
 			});
@@ -124,7 +127,7 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 			setInitialValues(values);
 			setDirty(false);
 			setSaved(true);
-			if (target && result.feedback?.redirectAfter !== undefined) {
+			if (target && result.feedback && (redirectOnFeedback || result.feedback.redirectAfter !== undefined)) {
 				const schedule = runAfterFeedback(result.feedback, () => window.location.assign(target));
 				refreshSchedule.current = schedule;
 				setRefreshCancelled(false);
@@ -180,10 +183,11 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 					name={field.name}
 					extra={field.extra}
 					valuePropName={field.type === 'switch' ? 'checked' : 'value'}
+					rules={field.rules}
 				>
 					{field.type === 'switch'
 						? <Switch checkedChildren={field.checkedChildren} unCheckedChildren={field.unCheckedChildren} />
-						: <Input placeholder={field.placeholder} maxLength={field.maxLength} />}
+						: <Input type={field.type === 'password' ? 'password' : 'text'} placeholder={field.placeholder} maxLength={field.maxLength} />}
 				</Form.Item>
 			))}
 			<Space>
