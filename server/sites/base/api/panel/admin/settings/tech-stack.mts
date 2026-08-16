@@ -6,7 +6,6 @@ const form = {
 	refreshAfterSave: 3,
 	submitLabel: '保存配置',
 	confirmOnUnchangedSubmit: '当前未修改，仍要提交吗？',
-	saveFeedback: { component: 'modal', type: 'info', title: '保存结果', message: '保存成功，页面将在 {refreshAfterSave} 秒后刷新', refreshNowLabel: '立即刷新', cancelRefreshLabel: '取消' },
 	submitHint: '修改后立即生效',
 	initialValues: { nginx: false, phpVersion: '', apiSuffix: '.php', pageSuffix: '.html' },
 	fields: [
@@ -25,7 +24,11 @@ const handler: ApiHandler = async (c, next) => {
 		const config = normalizeTechStackConfig(body);
 		await store.put('tech-stack', config);
 		c.set('techStackConfig', config);
-		return c.json({ currentValues: config });
+		return c.json({
+			message: '保存成功，页面将在稍后刷新',
+			currentValues: config,
+			saveFeedback: { component: 'modal', type: 'info', title: '保存结果', message: '保存成功，页面将在稍后刷新', refreshNowLabel: '立即刷新', cancelRefreshLabel: '取消' },
+		});
 	}
 	return next();
 };

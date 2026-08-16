@@ -6,7 +6,6 @@ const form = {
 	refreshAfterSave: null,
 	submitLabel: '保存配置',
 	confirmOnUnchangedSubmit: '当前未修改，仍要提交吗？',
-	saveFeedback: { component: 'inline', type: 'success', showIcon: true, title: '保存结果', message: '系统配置已保存，重启服务后生效' },
 	submitHint: '部分配置需要重启服务后生效',
 	initialValues: { httpPort: '8088', domain: 'anan.cc', publicOrigin: '', trustedProxyIps: '', mapAllowedIps: '' },
 	fields: [
@@ -26,7 +25,11 @@ const handler: ApiHandler = async (c, next) => {
 		const config = normalizeSystemConfig(body);
 		await store.put('system-config', config);
 		c.set('systemConfig', config);
-		return c.json({ currentValues: config });
+		return c.json({
+			message: '系统配置已保存，重启服务后生效',
+			currentValues: config,
+			saveFeedback: { component: 'inline', type: 'success', showIcon: true, title: '保存结果', message: '系统配置已保存，重启服务后生效' },
+		});
 	}
 	return next();
 };

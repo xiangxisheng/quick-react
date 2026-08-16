@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Form, Input, Checkbox, Space, Button } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
+import type { CommonApi } from '@/utils/common/api.js';
 
 type FormState = {
 	username: string;
@@ -10,14 +11,14 @@ type FormState = {
 };
 
 type SignFormProps = {
-	//GTR: (path: string, params?: Record<string, any>) => string;
+	commonApi: CommonApi;
 };
 
 const GTR = (a: string, params?: Record<string, string>): string => {
 	return a;
 }
 
-const SignForm: React.FC<SignFormProps> = () => {
+const SignForm: React.FC<SignFormProps> = ({ commonApi }) => {
 	const [formState, setFormState] = useState<FormState>({
 		username: '',
 		password: '',
@@ -36,15 +37,17 @@ const SignForm: React.FC<SignFormProps> = () => {
 	const isSignUp = routeName === '/sign-up';
 
 	const onFinish = async (values: FormState) => {
-		const response = await fetch(`/api/sign${apiSuffix}`, {
-			method: isSignUp ? 'PUT' : 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(values),
-		});
-		const result = await response.json() as { message?: string };
-		if (!response.ok) throw new Error(result.message || '请求失败');
-		window.alert(result.message || (isSignUp ? '注册成功' : '登录成功'));
-		window.location.href = isSignUp ? `/sign${pageSuffix}` : `/panel/admin${pageSuffix}`;
+		try {
+			const response = await commonApi.apiFetch(`/api/sign${apiSuffix}`, {
+				method: isSignUp ? 'PUT' : 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(values),
+			});
+			await response.json();
+			window.location.href = isSignUp ? `/sign${pageSuffix}` : `/panel/admin${pageSuffix}`;
+		} catch {
+			// apiFetch 已统一展示接口错误，这里只阻止表单提交产生未处理异常。
+		}
 	};
 
 	const onFinishFailed = (errorInfo: any) => {

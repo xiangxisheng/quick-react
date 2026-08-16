@@ -82,7 +82,7 @@ const App = ({ commonApi }: AppType) => {
 	const pageRenderers: Record<string, (page: PageDefinition) => React.ReactNode> = {
 		home: () => <Home />,
 		about: () => <About />,
-		sign: () => <Sign />,
+		sign: () => <Sign commonApi={commonApi} />,
 		panel: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><Dashboard commonApi={commonApi} apiPath={`/api${page.dashboardPath ?? ''}${initialData.apiSuffix}`} /></Panel>,
 		dashboard: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><Dashboard commonApi={commonApi} apiPath={`/api${page.dashboardPath ?? ''}${initialData.apiSuffix}`} /></Panel>,
 		table: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><TableCRUD commonApi={commonApi} resourcePath={page.path} /></Panel>,
