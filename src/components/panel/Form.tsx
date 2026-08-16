@@ -29,7 +29,6 @@ type FormResponse = {
 		submitLabel?: React.ReactNode;
 		confirmOnUnchangedSubmit?: string;
 		submitHint?: React.ReactNode;
-		feedback?: ApiFeedback;
 		initialValues: Record<string, unknown>;
 		fields: FormField[];
 	};
@@ -75,7 +74,7 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 	}, [apiPath, messageApi]);
 
 	useEffect(() => {
-		const feedback = responseFeedback ?? formConfig?.feedback;
+		const feedback = responseFeedback;
 		if (!saved || feedback?.component !== 'message') return;
 		const feedbackMessage = feedback.message ?? '';
 		const countdown = refreshDeadline && refreshTarget
@@ -140,7 +139,7 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 		}
 	};
 
-	const feedback = responseFeedback ?? formConfig?.feedback;
+	const feedback = responseFeedback;
 	const feedbackMessage = feedback?.message ?? '';
 	const alertCountdown = refreshDeadline && refreshTarget
 		? <CountdownDisplay deadline={refreshDeadline} onFinish={() => window.location.assign(refreshTarget)} />
