@@ -24,15 +24,28 @@ try {
 	assert.equal((await request('localhost', '/api/panel/admin/global/sites.php')).status, 401);
 	const registration = await request('localhost', '/api/sign.php');
 	assert.deepEqual(await registration.json(), { user: null, registrationAvailable: true });
-	assert.equal((await request('localhost', '/api/sign.php', {
+	const registrationResponse = await request('localhost', '/api/sign.php', {
 		method: 'PUT', body: { username: 'bootstrap_admin', password: 'test-password-123' },
-	})).status, 201);
+	});
+	assert.equal(registrationResponse.status, 201);
+	const registrationResult = await registrationResponse.json();
+	assert.ok(registrationResult.feedback);
+	assert.equal(Object.hasOwn(registrationResult, 'message'), false);
 	const login = await request('localhost', '/api/sign.php', {
 		method: 'POST', body: { username: 'bootstrap_admin', password: 'test-password-123' },
 	});
 	assert.equal(login.status, 200);
+	const loginResult = await login.json();
+	assert.equal(loginResult.feedback.message, '登录成功');
+	assert.equal(Object.hasOwn(loginResult, 'message'), false);
 	const cookie = login.headers.get('set-cookie')?.split(';')[0];
 	assert.ok(cookie);
+	const invalidLogin = await request('localhost', '/api/sign.php', {
+		method: 'POST', body: { username: 'bootstrap_admin', password: 'wrong-password' },
+	});
+	assert.equal(invalidLogin.status, 401);
+	const invalidLoginResult = await invalidLogin.json();
+	assert.equal(invalidLoginResult.message, '用户名或密码错误');
 
 	const createSite = async (siteKey, extra = {}) => {
 		assert.equal((await request('localhost', '/api/panel/admin/global/sites.php', {

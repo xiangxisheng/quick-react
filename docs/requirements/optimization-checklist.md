@@ -6,7 +6,7 @@
 
 - [x] 统一成功响应使用 `feedback`，错误响应使用顶层 `message`。
 - [x] 2xx 成功响应移除顶层 `message`。
-- [x] 增加服务端 `feedbackResponse()` 助手和严格反馈类型。
+- [x] 增加服务端统一响应助手和严格反馈类型。
 - [x] 前端统一使用 `commonApi.apiFetch()` 拦截响应。
 - [x] Form 只读取写操作响应中的顶层 `feedback`，不再兼容 GET 的 `form.feedback`。
 - [x] 登录、配置表单共用倒计时组件和 `feedback.redirectAfter`。
@@ -15,14 +15,15 @@
 ## API 响应协议
 
 - [ ] 将业务数据响应结构整理为统一的服务端和前端类型。
-- [ ] 增加 `createdResponse()`、`errorResponse()`、`validationErrorResponse()` 等响应助手。
-- [ ] 确保新增成功、编辑成功、删除成功、登录成功等接口都使用 `feedbackResponse()`。
-- [ ] 增加协议测试，验证 2xx 不返回顶层 `message`，4xx/5xx 返回顶层 `message`。
-- [ ] 增加非法 `feedback` 类型导致 TypeScript 编译失败的验证。
+- [x] 增加 `apiResponse()`、`apiMessage()`、`apiMessageData()` 等响应助手。
+- [x] 确保新增成功、编辑成功、删除成功、登录成功等接口都使用统一响应助手。
+- [x] 增加协议测试，验证 2xx 不返回顶层 `message`，并验证登录 401 返回顶层 `message`。
+- [x] 增加非法 `feedback` 类型导致 TypeScript 编译失败的验证。
 
 ## 前端反馈与跳转
 
 - [ ] 将成功消息、Modal、倒计时、自动跳转、立即刷新和取消刷新进一步收敛为统一反馈模块。
+- [x] 抽取统一的 `redirectAfter` 解析和截止时间计算助手。
 - [ ] 让登录页、配置页和 CRUD 页面只传入响应和跳转目标，减少重复状态管理。
 - [ ] 增加登录失败、反馈展示和 `redirectAfter` 倒计时测试。
 

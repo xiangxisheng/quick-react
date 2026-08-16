@@ -3,6 +3,7 @@ import { Alert, Form, Input, Checkbox, Space, Button } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { CommonApi } from '@/utils/common/api.js';
 import { CountdownDisplay } from '@/components/common/Countdown.js';
+import { getRedirectAfter, getRedirectDeadline } from '@/utils/common/feedback.js';
 
 type FormState = {
 	username: string;
@@ -46,12 +47,12 @@ const SignForm: React.FC<SignFormProps> = ({ commonApi }) => {
 				body: JSON.stringify(values),
 			});
 			const result = await response.json() as { feedback?: { redirectAfter?: number } };
-			const redirectAfter = result.feedback?.redirectAfter ?? 0;
-			if (redirectAfter <= 0) {
+			const redirectAfter = getRedirectAfter(result.feedback) ?? 0;
+			if (redirectAfter === 0) {
 				window.location.href = isSignUp ? `/sign${pageSuffix}` : `/panel/admin${pageSuffix}`;
 				return;
 			}
-			setRedirectDeadline(Date.now() + redirectAfter * 1000);
+			setRedirectDeadline(getRedirectDeadline(result.feedback));
 		} catch {
 			// apiFetch 已统一展示接口错误，这里只阻止表单提交产生未处理异常。
 		}

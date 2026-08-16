@@ -1,6 +1,6 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { normalizeTechStackConfig } from '@server/tech-stack.mjs';
-import { feedbackResponse } from '@server/api-response.mjs';
+import { apiMessageData, apiResponse } from '@server/api-response.mjs';
 
 const form = {
 	description: '配置会作用于后续 HTTP 响应，并保存到服务器配置文件。仅用于兼容性测试、演示或隐藏真实服务实现。',
@@ -18,16 +18,13 @@ const form = {
 
 const handler: ApiHandler = async (c, next) => {
 	const store = c.get('configStore');
-	if (c.req.method === 'GET') return c.json({ currentValues: c.get('techStackConfig'), form });
+	if (c.req.method === 'GET') return apiResponse(c, 200, { currentValues: c.get('techStackConfig'), form });
 	if (c.req.method === 'PUT') {
 		const body = await c.req.json<unknown>().catch(() => ({}));
 		const config = normalizeTechStackConfig(body);
 		await store.put('tech-stack', config);
 		c.set('techStackConfig', config);
-		return c.json({
-			...feedbackResponse('保存成功，页面将在 {redirectAfter} 秒后刷新', { component: 'modal', type: 'info', title: '保存结果', refreshNowLabel: '立即刷新', cancelRefreshLabel: '取消', redirectAfter: 3 }),
-			currentValues: config,
-		});
+		return apiMessageData(c, 200, '保存成功，页面将在 {redirectAfter} 秒后刷新', { currentValues: config }, { component: 'modal', type: 'info', title: '保存结果', refreshNowLabel: '立即刷新', cancelRefreshLabel: '取消', redirectAfter: 3 });
 	}
 	return next();
 };

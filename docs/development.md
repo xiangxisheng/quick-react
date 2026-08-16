@@ -57,15 +57,24 @@ npm run typecheck
 
 需要在反馈后跳转或刷新时，在 `feedback.redirectAfter` 中返回秒数。跳转目标由页面根据业务上下文决定，响应只提供延迟参数；例如登录和技术栈配置分别由登录页、表单页执行跳转。
 
-后端不要手写重复的 `feedback` 对象，统一使用 `server/api-response.mts` 中的 `feedbackResponse()`：
+后端接口统一使用 `server/api-response.mts` 中的响应助手：
 
 ```ts
-return c.json({
-  ...feedbackResponse('保存成功', { component: 'modal', type: 'info' }),
-  currentValues,
+return apiMessageData(c, 200, '保存成功', { currentValues }, {
+  component: 'modal',
+  type: 'info',
 });
 ```
 
-`feedbackResponse()` 及其 `ApiFeedbackOptions` 类型限制了反馈组件和类型的可选值；传入未声明的值会在 TypeScript 类型检查阶段失败。
+消息和数据分开时使用 `apiMessage()`；纯数据列表使用 `apiResponse()`：
+
+```ts
+return apiMessage(c, 200, '删除成功');
+return apiResponse(c, 200, { table });
+```
+
+`ApiFeedbackOptions` 类型限制了反馈组件和类型的可选值；传入未声明的值会在 TypeScript 类型检查阶段失败。
+
+`apiMessage()` 和 `apiMessageData()` 会根据状态码将消息放入 `feedback.message` 或错误响应的顶层 `message`；成功响应类型禁止顶层 `message`。
 
 新增或修改接口时，必须保持上述响应协议；新增前端请求入口时，必须接入 `commonApi.apiFetch`。完成修改后至少运行 `npm run typecheck` 和 `SKIP_SERVER_LISTEN=1 npm test`。

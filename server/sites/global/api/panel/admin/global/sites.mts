@@ -1,5 +1,5 @@
 import type { ApiHandler } from '@server/api-router.mjs';
-import { feedbackResponse } from '@server/api-response.mjs';
+import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 
 const siteKeyPattern = /^[a-z][a-z0-9_]*$/;
@@ -33,7 +33,7 @@ const list = async (c: Parameters<ApiHandler>[0]) => {
 			.map((site) => ({ value: String(site.site_key), text: `${String(site.name)} (${String(site.site_key)})` })),
 	];
 	const tableColumns = columns.map((column) => column.dataIndex === 'base_site_key' ? { ...column, options: parentOptions } : column);
-	return c.json({ table: { option: { rowKey: 'site_key' }, columns: tableColumns, dataSource: rows.results, totalRecords: rows.results.length } });
+	return apiResponse(c, 200, { table: { option: { rowKey: 'site_key' }, columns: tableColumns, dataSource: rows.results, totalRecords: rows.results.length } });
 };
 
 const validateParent = async (database: DatabaseAdapter, siteKey: string, parentSiteKey: string) => {
@@ -57,12 +57,12 @@ const handler: ApiHandler = async (c, next, params) => {
 	if (!params.id && c.req.method === 'POST') {
 		const body = await parseBody(c);
 		const siteKey = String(body.site_key ?? '').trim();
-		if (!siteKeyPattern.test(siteKey) || siteKey === 'base') return c.json({ message: '站点标识不合法' }, 400);
+		if (!siteKeyPattern.test(siteKey) || siteKey === 'base') return apiMessage(c, 400, '站点标识不合法');
 		const baseSiteKey = String(body.base_site_key ?? 'base').trim() || 'base';
 		const dsn = String(body.dsn ?? '').trim();
 		const databaseBinding = String(body.database_binding ?? '').trim();
-		if ((dsn && databaseBinding) || !bindingPattern.test(databaseBinding)) return c.json({ message: 'DSN 与 D1 Binding 只能配置一个，且 Binding 名称必须合法' }, 400);
-		if (!await validateParent(database, siteKey, baseSiteKey)) return c.json({ message: '父站点不存在、不可继承或会形成循环' }, 400);
+		if ((dsn && databaseBinding) || !bindingPattern.test(databaseBinding)) return apiMessage(c, 400, 'DSN 与 D1 Binding 只能配置一个，且 Binding 名称必须合法');
+		if (!await validateParent(database, siteKey, baseSiteKey)) return apiMessage(c, 400, '父站点不存在、不可继承或会形成循环');
 		await database.prepare(`INSERT INTO global_sites
 			(site_key, name, base_site_key, dsn, database_binding, status, migration_status, is_default, is_system)
 			VALUES (?1, ?2, ?3, ?4, ?5, 'disabled', 'creating', 0, 0)`)
@@ -77,7 +77,7 @@ const handler: ApiHandler = async (c, next, params) => {
 			}
 		}
 		await c.get('siteRouter').refresh();
-		return c.json({ ...feedbackResponse(message), site_key: siteKey }, 201);
+		return apiMessageData(c, 201, message, { site_key: siteKey });
 	}
 	if (!params.id && c.req.method === 'DELETE') {
 		const ids = await c.req.json<unknown[]>().catch(() => []);
@@ -89,42 +89,42 @@ const handler: ApiHandler = async (c, next, params) => {
 			await database.prepare('DELETE FROM global_sites WHERE site_key = ?1').bind(siteKey).run();
 		}
 		await c.get('siteRouter').refresh();
-		return c.json(feedbackResponse('删除成功'));
+		return apiMessage(c, 200, '删除成功');
 	}
 	if (params.id && c.req.method === 'GET') {
 		const row = await database.prepare(`SELECT id, site_key, name, base_site_key, dsn, database_binding,
 			status, migration_status, is_default, is_system FROM global_sites WHERE site_key = ?1`).bind(params.id).first();
-		return row ? c.json(row) : c.json({ message: '站点不存在' }, 404);
+		return row ? apiResponse(c, 200, row) : apiMessage(c, 404, '站点不存在');
 	}
 	if (params.id && c.req.method === 'POST') {
-		if (!c.env.MIGRATE_SITE) return c.json({ message: '当前运行时不支持在线 migration，请通过部署流程执行' }, 501);
+		if (!c.env.MIGRATE_SITE) return apiMessage(c, 501, '当前运行时不支持在线 migration，请通过部署流程执行');
 		try {
 			await c.env.MIGRATE_SITE(params.id);
 			await c.get('siteRouter').refresh();
-			return c.json(feedbackResponse('Migration 执行成功'));
+			return apiMessage(c, 200, 'Migration 执行成功');
 		} catch (error) {
-			return c.json({ message: error instanceof Error ? error.message : 'Migration 执行失败' }, 400);
+			return apiMessage(c, 400, error instanceof Error ? error.message : 'Migration 执行失败');
 		}
 	}
 	if (params.id && c.req.method === 'PUT') {
 		const current = await database.prepare('SELECT site_key, is_system, dsn, database_binding, base_site_key, migration_status FROM global_sites WHERE site_key = ?1').bind(params.id)
 			.first<{ site_key: string; is_system: number; dsn: string; database_binding: string; base_site_key: string | null; migration_status: string }>();
-		if (!current) return c.json({ message: '站点不存在' }, 404);
+		if (!current) return apiMessage(c, 404, '站点不存在');
 		const body = await parseBody(c);
 		const status = allowedStatuses.has(String(body.status)) ? String(body.status) : undefined;
-		if (status === 'enabled' && current.migration_status !== 'ready') return c.json({ message: 'Migration 未完成，站点不可启用' }, 400);
-		if (current.is_system && status === 'disabled') return c.json({ message: '系统站点不可禁用' }, 400);
+		if (status === 'enabled' && current.migration_status !== 'ready') return apiMessage(c, 400, 'Migration 未完成，站点不可启用');
+		if (current.is_system && status === 'disabled') return apiMessage(c, 400, '系统站点不可禁用');
 		const dsn = typeof body.dsn === 'string' ? body.dsn.trim() : undefined;
 		const databaseBinding = typeof body.database_binding === 'string' ? body.database_binding.trim() : undefined;
 		const nextDsn = dsn ?? current.dsn;
 		const nextBinding = databaseBinding ?? current.database_binding;
-		if ((nextDsn && nextBinding) || !bindingPattern.test(nextBinding)) return c.json({ message: 'DSN 与 D1 Binding 只能配置一个，且 Binding 名称必须合法' }, 400);
+		if ((nextDsn && nextBinding) || !bindingPattern.test(nextBinding)) return apiMessage(c, 400, 'DSN 与 D1 Binding 只能配置一个，且 Binding 名称必须合法');
 		const nextParent = typeof body.base_site_key === 'string' ? body.base_site_key.trim() : current.base_site_key || 'base';
-		if (!await validateParent(database, params.id, nextParent)) return c.json({ message: '父站点不存在、不可继承或会形成循环' }, 400);
+		if (!await validateParent(database, params.id, nextParent)) return apiMessage(c, 400, '父站点不存在、不可继承或会形成循环');
 		const targetChanged = (dsn !== undefined && dsn !== current.dsn)
 			|| (databaseBinding !== undefined && databaseBinding !== current.database_binding);
 		const inheritanceChanged = nextParent !== (current.base_site_key || 'base');
-		if (current.is_system && targetChanged) return c.json({ message: '系统站点不可修改数据库目标' }, 400);
+		if (current.is_system && targetChanged) return apiMessage(c, 400, '系统站点不可修改数据库目标');
 		await database.prepare(`UPDATE global_sites SET
 			name = COALESCE(?2, name), base_site_key = ?3, dsn = COALESCE(?4, dsn), database_binding = COALESCE(?5, database_binding),
 			status = CASE WHEN ?7 = 1 THEN 'disabled' ELSE COALESCE(?6, status) END,
@@ -134,16 +134,16 @@ const handler: ApiHandler = async (c, next, params) => {
 			nextParent, dsn ?? null, databaseBinding ?? null,
 			status ?? null, (targetChanged || inheritanceChanged) ? 1 : 0).run();
 		await c.get('siteRouter').refresh();
-		return c.json(feedbackResponse('保存成功'));
+		return apiMessage(c, 200, '保存成功');
 	}
 	if (params.id && c.req.method === 'DELETE') {
 		const current = await database.prepare('SELECT is_system FROM global_sites WHERE site_key = ?1').bind(params.id).first<{ is_system: number }>();
-		if (!current) return c.json({ message: '站点不存在' }, 404);
-		if (current.is_system) return c.json({ message: '系统站点不可删除' }, 400);
+		if (!current) return apiMessage(c, 404, '站点不存在');
+		if (current.is_system) return apiMessage(c, 400, '系统站点不可删除');
 		await database.prepare('DELETE FROM global_hosts WHERE site_key = ?1').bind(params.id).run();
 		await database.prepare('DELETE FROM global_sites WHERE site_key = ?1').bind(params.id).run();
 		await c.get('siteRouter').refresh();
-		return c.json(feedbackResponse('删除成功'));
+		return apiMessage(c, 200, '删除成功');
 	}
 	return next();
 };

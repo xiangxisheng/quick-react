@@ -1,6 +1,6 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { normalizeSystemConfig } from '@server/system-config.mjs';
-import { feedbackResponse } from '@server/api-response.mjs';
+import { apiMessageData, apiResponse } from '@server/api-response.mjs';
 
 const form = {
 	description: '系统运行参数。修改后需要重启服务才能生效。',
@@ -19,16 +19,13 @@ const form = {
 
 const handler: ApiHandler = async (c, next) => {
 	const store = c.get('configStore');
-	if (c.req.method === 'GET') return c.json({ currentValues: c.get('systemConfig'), form });
+	if (c.req.method === 'GET') return apiResponse(c, 200, { currentValues: c.get('systemConfig'), form });
 	if (c.req.method === 'PUT') {
 		const body = await c.req.json<unknown>().catch(() => ({}));
 		const config = normalizeSystemConfig(body);
 		await store.put('system-config', config);
 		c.set('systemConfig', config);
-		return c.json({
-			...feedbackResponse('系统配置已保存，重启服务后生效', { component: 'inline', showIcon: true, title: '保存结果' }),
-			currentValues: config,
-		});
+		return apiMessageData(c, 200, '系统配置已保存，重启服务后生效', { currentValues: config }, { component: 'inline', showIcon: true, title: '保存结果' });
 	}
 	return next();
 };

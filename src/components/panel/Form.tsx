@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Button, Card, Form, Input, message, Modal, Space, Switch, Typography } from 'antd';
 import type { ApiFeedback, CommonApi } from '@/utils/common/api.js';
 import { CountdownDisplay, formatCountdown } from '@/components/common/Countdown.js';
+import { getRedirectAfter, getRedirectDeadline } from '@/utils/common/feedback.js';
 
 export type FormField = {
 	name: string;
@@ -122,14 +123,13 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 			setInitialValues(values);
 			setDirty(false);
 			setSaved(true);
-			const redirectAfter = result.feedback?.redirectAfter ?? null;
+			const redirectAfter = getRedirectAfter(result.feedback);
 			if (target && redirectAfter !== null) {
 				setRefreshCancelled(false);
-				const seconds = Number.isFinite(redirectAfter) ? Math.max(0, Math.floor(redirectAfter)) : 0;
-				if (seconds === 0) window.location.assign(target);
+				if (redirectAfter === 0) window.location.assign(target);
 				else {
 					setRefreshTarget(target);
-					setRefreshDeadline(Date.now() + seconds * 1000);
+					setRefreshDeadline(getRedirectDeadline(result.feedback));
 				}
 			}
 		} catch (error) {

@@ -1,10 +1,11 @@
 import type { ApiHandler } from '@server/api-router.mjs';
+import { apiResponse } from '@server/api-response.mjs';
 import { mockTables } from '@server/panel-data.mjs';
 
 const handler: ApiHandler = (c) => {
 	const rows = mockTables.rows.rows;
 	const enabledRows = rows.filter((row) => row.status === 'enabled').length;
-	return c.json({
+	return apiResponse(c, 200, {
 		dashboard: {
 			recentTitle: '最近数据',
 			statistics: [
