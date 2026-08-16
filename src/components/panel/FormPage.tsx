@@ -26,7 +26,7 @@ const renderTemplate = (template: string, values: Record<string, React.ReactNode
 type FormResponse = {
 	currentValues?: Record<string, unknown>;
 	feedback?: ApiFeedback;
-	form?: {
+	formPage?: {
 		description?: React.ReactNode;
 		submitLabel?: React.ReactNode;
 		confirmOnUnchangedSubmit?: string;
@@ -58,7 +58,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 	const [messageApi, messageContextHolder] = message.useMessage();
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
-	const [formConfig, setFormConfig] = useState<FormResponse['form']>();
+	const [formConfig, setFormConfig] = useState<FormResponse['formPage']>();
 	const [initialValues, setInitialValues] = useState<Record<string, unknown>>({});
 	const [dirty, setDirty] = useState(false);
 	const [refreshTarget, setRefreshTarget] = useState<string>();
@@ -95,9 +95,9 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 		let active = true;
 		commonApi.apiFetch(apiPath).then(async (response) => {
 			const result = await response.json() as FormResponse;
-			if (active && result.form) {
-				const values = isRecord(result.currentValues) ? result.currentValues : result.form.initialValues;
-				setFormConfig(result.form);
+			if (active && result.formPage) {
+				const values = isRecord(result.currentValues) ? result.currentValues : result.formPage.initialValues;
+				setFormConfig(result.formPage);
 				setInitialValues(values);
 				setDirty(false);
 				form.setFieldsValue(values);

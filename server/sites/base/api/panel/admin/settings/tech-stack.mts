@@ -18,7 +18,7 @@ const form = {
 
 const handler: ApiHandler = async (c, next) => {
 	const store = c.get('configStore');
-	if (c.req.method === 'GET') return apiResponse(c, 200, { currentValues: c.get('techStackConfig'), form });
+	if (c.req.method === 'GET') return apiResponse(c, 200, { currentValues: c.get('techStackConfig'), formPage: form });
 	if (c.req.method === 'PUT') {
 		const body = await c.req.json<unknown>().catch(() => ({}));
 		const config = normalizeTechStackConfig(body);

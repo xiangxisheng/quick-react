@@ -26,7 +26,7 @@ try {
 	const registrationFormResult = await registration.json();
 	assert.equal(registrationFormResult.user, null);
 	assert.equal(registrationFormResult.registrationAvailable, true);
-	assert.ok(registrationFormResult.form);
+	assert.ok(registrationFormResult.formPage);
 	const registrationResponse = await request('localhost', '/api/sign.php', {
 		method: 'PUT', body: { username: 'bootstrap_admin', password: 'test-password-123' },
 	});
@@ -89,7 +89,7 @@ try {
 	const isolatedRegistrationResult = await isolatedRegistration.json();
 	assert.equal(isolatedRegistrationResult.user, null);
 	assert.equal(isolatedRegistrationResult.registrationAvailable, true);
-	assert.ok(isolatedRegistrationResult.form);
+	assert.ok(isolatedRegistrationResult.formPage);
 
 	const publicDocument = await (await request('localhost', '/')).text();
 	assert.equal(publicDocument.includes('站点管理'), false);

@@ -26,7 +26,7 @@ const handler: ApiHandler = async (c, next) => {
 		return apiResponse(c, 200, {
 			user: c.get('currentUser') ?? null,
 			registrationAvailable: await registrationAvailable(database),
-			form: {
+			formPage: {
 				initialValues: { username: '', password: '', ...(isSignUp ? { password_confirm: '' } : {}), remember: false },
 				submitLabel: isSignUp ? '注册' : '登录',
 				fields: [

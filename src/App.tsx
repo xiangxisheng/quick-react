@@ -7,11 +7,10 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Avatar, Button, Dropdown, Layout, Menu, Space } from 'antd';
 import { AppstoreOutlined, LoginOutlined, LogoutOutlined, MailOutlined, UserAddOutlined, UserOutlined } from '@ant-design/icons';
 import DescribeInstances from './components/aliyun/DescribeInstances.js';
-import Sign from './components/Sign.js';
 import Panel from './components/panel/PanelLayout.js';
 import Dashboard from './components/panel/Dashboard.js';
 import TableCRUD from '@/utils/antd/table_crud/index.js';
-import FormPage from './components/panel/Form.js';
+import FormPage from './components/panel/FormPage.js';
 import { runAfterFeedback } from '@/utils/common/feedback.js';
 const { Content } = Layout;
 
@@ -84,7 +83,17 @@ const App = ({ commonApi }: AppType) => {
 	const pageRenderers: Record<string, (page: PageDefinition) => React.ReactNode> = {
 		home: () => <Home />,
 		about: () => <About />,
-		sign: () => <Sign commonApi={commonApi} />,
+		sign: (page) => {
+			const isSignUp = page.path === '/sign-up';
+			return <FormPage
+				commonApi={commonApi}
+				apiPath={`/api/sign${initialData.apiSuffix}?mode=${isSignUp ? 'sign-up' : 'sign'}`}
+				title={page.title}
+				submitMethod={isSignUp ? 'PUT' : 'POST'}
+				redirectOnFeedback
+				onSaved={() => isSignUp ? `/sign${initialData.pageSuffix}` : `/panel/admin${initialData.pageSuffix}`}
+			/>;
+		},
 		panel: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><Dashboard commonApi={commonApi} apiPath={`/api${page.dashboardPath ?? ''}${initialData.apiSuffix}`} /></Panel>,
 		dashboard: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><Dashboard commonApi={commonApi} apiPath={`/api${page.dashboardPath ?? ''}${initialData.apiSuffix}`} /></Panel>,
 		table: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><TableCRUD commonApi={commonApi} resourcePath={page.path} /></Panel>,

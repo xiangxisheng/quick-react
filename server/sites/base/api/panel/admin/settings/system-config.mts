@@ -19,7 +19,7 @@ const form = {
 
 const handler: ApiHandler = async (c, next) => {
 	const store = c.get('configStore');
-	if (c.req.method === 'GET') return apiResponse(c, 200, { currentValues: c.get('systemConfig'), form });
+	if (c.req.method === 'GET') return apiResponse(c, 200, { currentValues: c.get('systemConfig'), formPage: form });
 	if (c.req.method === 'PUT') {
 		const body = await c.req.json<unknown>().catch(() => ({}));
 		const config = normalizeSystemConfig(body);
