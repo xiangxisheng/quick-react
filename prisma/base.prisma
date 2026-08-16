@@ -1,0 +1,32 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model base_system_users {
+  id            Int    @id @default(autoincrement())
+  username      String @unique
+  password_hash String
+  roles         String @default("[]")
+  status        String @default("enabled")
+  created_at    Int
+  updated_at    Int
+}
+
+model base_system_sessions {
+  id         String @id
+  user_id    Int
+  expires_at Int
+  created_at Int
+}
+
+model base_system_configs {
+  key        String @id
+  value      String
+  updated_at Int
+}
+
+model base_system_bootstrap {
+  key   String @id
+  value String
+}

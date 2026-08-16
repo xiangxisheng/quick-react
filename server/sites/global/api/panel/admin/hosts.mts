@@ -1,0 +1,77 @@
+import type { ApiHandler } from '@server/api-router.mjs';
+import { normalizeHostname } from '@server/site-router.mjs';
+
+const columns = [
+	{ dataIndex: 'id', title: 'ID' },
+	{ dataIndex: 'hostname', title: 'Host', component: 'textbox' },
+	{ dataIndex: 'site_key', title: '站点', component: 'textbox' },
+	{ dataIndex: 'status', title: '状态', component: 'textbox' },
+];
+
+const normalizeHostPattern = (value: unknown) => {
+	const raw = String(value ?? '').trim();
+	if (raw.startsWith('*.')) {
+		const suffix = normalizeHostname(raw.slice(2));
+		return suffix && !suffix.includes(':') ? `*.${suffix}` : '';
+	}
+	return normalizeHostname(raw);
+};
+
+const parseBody = async (c: Parameters<ApiHandler>[0]): Promise<Record<string, unknown>> => {
+	try { return await c.req.json<Record<string, unknown>>(); }
+	catch { return {}; }
+};
+
+const handler: ApiHandler = async (c, next, params) => {
+	const database = c.get('database');
+	if (!params.id && c.req.method === 'GET') {
+		const rows = await database.prepare('SELECT id, hostname, site_key, status, created_at FROM global_hosts ORDER BY id').all<Record<string, unknown>>();
+		return c.json({ table: { option: { rowKey: 'id' }, columns, dataSource: rows.results, totalRecords: rows.results.length } });
+	}
+	if (!params.id && c.req.method === 'POST') {
+		const body = await parseBody(c);
+		const hostname = normalizeHostPattern(body.hostname);
+		const siteKey = String(body.site_key ?? '').trim();
+		if (!hostname) return c.json({ message: 'Host 不合法' }, 400);
+		const site = await database.prepare(`SELECT site_key FROM global_sites WHERE site_key = ?1
+			AND status = 'enabled' AND migration_status = 'ready'`).bind(siteKey).first();
+		if (!site) return c.json({ message: '站点不存在或尚未就绪' }, 400);
+		await database.prepare(`INSERT INTO global_hosts (hostname, site_key, status, created_at)
+			VALUES (?1, ?2, 'enabled', ?3)`).bind(hostname, siteKey, Date.now()).run();
+		await c.get('siteRouter').refresh();
+		return c.json({ message: '新增成功' }, 201);
+	}
+	if (!params.id && c.req.method === 'DELETE') {
+		const ids = await c.req.json<unknown[]>().catch(() => []);
+		for (const id of Array.isArray(ids) ? ids : []) {
+			await database.prepare('DELETE FROM global_hosts WHERE id = ?1').bind(Number(id)).run();
+		}
+		await c.get('siteRouter').refresh();
+		return c.json({ message: '删除成功' });
+	}
+	if (params.id && c.req.method === 'GET') {
+		const row = await database.prepare('SELECT id, hostname, site_key, status, created_at FROM global_hosts WHERE id = ?1')
+			.bind(Number(params.id)).first();
+		return row ? c.json(row) : c.json({ message: 'Host 不存在' }, 404);
+	}
+	if (params.id && c.req.method === 'PUT') {
+		const body = await parseBody(c);
+		const hostname = body.hostname === undefined ? null : normalizeHostPattern(body.hostname);
+		if (body.hostname !== undefined && !hostname) return c.json({ message: 'Host 不合法' }, 400);
+		const status = body.status === 'disabled' ? 'disabled' : body.status === 'enabled' ? 'enabled' : null;
+		await database.prepare(`UPDATE global_hosts SET hostname = COALESCE(?2, hostname),
+			site_key = COALESCE(?3, site_key), status = COALESCE(?4, status) WHERE id = ?1`)
+			.bind(Number(params.id), hostname, typeof body.site_key === 'string' ? body.site_key : null, status).run();
+		await c.get('siteRouter').refresh();
+		return c.json({ message: '保存成功' });
+	}
+	if (params.id && c.req.method === 'DELETE') {
+		await database.prepare('DELETE FROM global_hosts WHERE id = ?1').bind(Number(params.id)).run();
+		await c.get('siteRouter').refresh();
+		return c.json({ message: '删除成功' });
+	}
+	return next();
+};
+
+export const acceptsTrailingParams = true;
+export default handler;

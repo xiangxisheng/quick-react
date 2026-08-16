@@ -1,0 +1,73 @@
+import type { DatabaseAdapter } from './database/index.mjs';
+
+const encoder = new TextEncoder();
+const iterations = 210_000;
+
+const toBase64 = (value: Uint8Array) => {
+	let binary = '';
+	for (const byte of value) binary += String.fromCharCode(byte);
+	return btoa(binary);
+};
+
+const fromBase64 = (value: string) => {
+	const binary = atob(value);
+	return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+};
+
+const derivePassword = async (password: string, salt: Uint8Array, count: number) => {
+	const passwordBytes = encoder.encode(password);
+	const material = await crypto.subtle.importKey('raw', passwordBytes.buffer as ArrayBuffer, 'PBKDF2', false, ['deriveBits']);
+	const saltBuffer = Uint8Array.from(salt).buffer;
+	return new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: saltBuffer, iterations: count }, material, 256));
+};
+
+export const hashPassword = async (password: string) => {
+	const salt = crypto.getRandomValues(new Uint8Array(16));
+	const hash = await derivePassword(password, salt, iterations);
+	return `pbkdf2-sha256$${iterations}$${toBase64(salt)}$${toBase64(hash)}`;
+};
+
+export const verifyPassword = async (password: string, encoded: string) => {
+	const [algorithm, countText, saltText, hashText] = encoded.split('$');
+	const count = Number(countText);
+	if (algorithm !== 'pbkdf2-sha256' || !Number.isInteger(count) || count < 100_000 || !saltText || !hashText) return false;
+	const expected = fromBase64(hashText);
+	const actual = await derivePassword(password, fromBase64(saltText), count);
+	if (actual.length !== expected.length) return false;
+	let difference = 0;
+	for (let index = 0; index < actual.length; index += 1) difference |= actual[index] ^ expected[index];
+	return difference === 0;
+};
+
+export const sessionCookieName = 'quick_react_session';
+
+export const readSessionId = (request: Request) => {
+	const cookies = request.headers.get('cookie') ?? '';
+	for (const part of cookies.split(';')) {
+		const [name, ...value] = part.trim().split('=');
+		if (name === sessionCookieName) return decodeURIComponent(value.join('='));
+	}
+	return undefined;
+};
+
+export const createSessionCookie = (sessionId: string, secure: boolean, maxAge: number) =>
+	`${sessionCookieName}=${encodeURIComponent(sessionId)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure ? '; Secure' : ''}`;
+
+export const clearSessionCookie = (secure: boolean) =>
+	`${sessionCookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`;
+
+export const loadCurrentUser = async (database: DatabaseAdapter, request: Request) => {
+	const sessionId = readSessionId(request);
+	if (!sessionId) return undefined;
+	const row = await database.prepare(`SELECT u.id, u.username, u.roles
+		FROM base_system_sessions s JOIN base_system_users u ON u.id = s.user_id
+		WHERE s.id = ?1 AND s.expires_at > ?2 AND u.status = 'enabled'`)
+		.bind(sessionId, Date.now()).first<{ id: number; username: string; roles: string }>();
+	if (!row) return undefined;
+	let roles: string[] = [];
+	try {
+		const parsed = JSON.parse(row.roles);
+		if (Array.isArray(parsed)) roles = parsed.filter((role): role is string => typeof role === 'string');
+	} catch { /* Invalid persisted roles are treated as empty. */ }
+	return { id: row.id, username: row.username, roles };
+};

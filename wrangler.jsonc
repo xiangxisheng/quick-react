@@ -10,9 +10,10 @@
 	},
 	"d1_databases": [
 		{
-			"binding": "DB",
+			"binding": "DEFAULT_DB",
 			"database_name": "quick-react",
-			"database_id": "replace-with-production-d1-id"
+			"database_id": "replace-with-production-d1-id",
+			"migrations_dir": "migrations/d1"
 		}
 	]
 }

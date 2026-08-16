@@ -35,20 +35,22 @@ export const configureSystemConfig = (options: { store?: ConfigStore; defaults?:
 	loadedAt = 0;
 };
 
-const normalize = (value: unknown): SystemConfig => {
+export const normalizeSystemConfig = (value: unknown, defaults: SystemConfig = defaultConfig): SystemConfig => {
 	const source = value && typeof value === 'object' ? value as Record<string, unknown> : {};
 	return {
-		httpPort: typeof source.httpPort === 'string' && /^\d{1,5}$/.test(source.httpPort) ? source.httpPort : defaultConfig.httpPort,
-		domain: typeof source.domain === 'string' ? source.domain.trim().slice(0, 253) : defaultConfig.domain,
-		publicOrigin: typeof source.publicOrigin === 'string' ? source.publicOrigin.trim().slice(0, 512) : defaultConfig.publicOrigin,
-		trustedProxyIps: typeof source.trustedProxyIps === 'string' ? source.trustedProxyIps.trim().slice(0, 2048) : defaultConfig.trustedProxyIps,
-		mapAllowedIps: typeof source.mapAllowedIps === 'string' ? source.mapAllowedIps.trim().slice(0, 2048) : defaultConfig.mapAllowedIps,
+		httpPort: typeof source.httpPort === 'string' && /^\d{1,5}$/.test(source.httpPort) ? source.httpPort : defaults.httpPort,
+		domain: typeof source.domain === 'string' ? source.domain.trim().slice(0, 253) : defaults.domain,
+		publicOrigin: typeof source.publicOrigin === 'string' ? source.publicOrigin.trim().slice(0, 512) : defaults.publicOrigin,
+		trustedProxyIps: typeof source.trustedProxyIps === 'string' ? source.trustedProxyIps.trim().slice(0, 2048) : defaults.trustedProxyIps,
+		mapAllowedIps: typeof source.mapAllowedIps === 'string' ? source.mapAllowedIps.trim().slice(0, 2048) : defaults.mapAllowedIps,
 	};
 };
 
+export const loadSystemConfigFromStore = async (targetStore: ConfigStore) => normalizeSystemConfig(await targetStore.get('system-config'));
+
 export const loadSystemConfig = async () => {
 	if (loadedAt && Date.now() - loadedAt < cacheTtl) return { ...config };
-	config = normalize(await store.get('system-config'));
+	config = normalizeSystemConfig(await store.get('system-config'));
 	loadedAt = Date.now();
 	return { ...config };
 };
@@ -56,7 +58,7 @@ export const loadSystemConfig = async () => {
 export const getSystemConfig = () => ({ ...config });
 
 export const saveSystemConfig = async (value: unknown) => {
-	config = normalize(value);
+	config = normalizeSystemConfig(value);
 	await store.put('system-config', config);
 	loadedAt = Date.now();
 	return { ...config };

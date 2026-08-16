@@ -9,23 +9,12 @@ export type ApiHandler = (
 	params: Record<string, string>,
 ) => Response | Promise<Response | undefined> | undefined;
 
-export type ApiModule = {
-	default?: ApiHandler;
-};
+export type ApiModule = { default?: ApiHandler };
+export type SiteApiRoute = { site: string; path: string };
 
-export type ApiRoute = {
-	path: string;
-	files: string[];
-};
-
-type ApiManifest = {
-	routes: ApiRoute[];
-};
-
-let manifest: ApiManifest | undefined;
-const loadManifest = async () => {
-	manifest ??= (await import(new URL('./api-manifest.mjs', import.meta.url).href) as { default: ApiManifest }).default;
-	return manifest;
+type RouteMatcher = {
+	exact: Map<string, Set<string>>;
+	byLength: Map<number, SiteApiRoute[]>;
 };
 
 const normalizeApiPath = (path: string, apiSuffix: string) => {
@@ -37,16 +26,15 @@ const normalizeApiPath = (path: string, apiSuffix: string) => {
 	return segments.join('/');
 };
 
-type RouteMatcher = {
-	exact: Map<string, ApiRoute>;
-	byLength: Map<number, ApiRoute[]>;
-};
-
-const createRouteMatcher = (routes: ApiRoute[]): RouteMatcher => {
-	const exact = new Map<string, ApiRoute>();
-	const byLength = new Map<number, ApiRoute[]>();
+const createRouteMatcher = (routes: SiteApiRoute[]): RouteMatcher => {
+	const exact = new Map<string, Set<string>>();
+	const byLength = new Map<number, SiteApiRoute[]>();
 	for (const route of routes) {
-		if (!route.path.includes('/:')) exact.set(route.path, route);
+		if (!route.path.includes('/:')) {
+			const sites = exact.get(route.path) ?? new Set<string>();
+			sites.add(route.site);
+			exact.set(route.path, sites);
+		}
 		const length = route.path.split('/').filter(Boolean).length;
 		const candidates = byLength.get(length) ?? [];
 		candidates.push(route);
@@ -55,60 +43,71 @@ const createRouteMatcher = (routes: ApiRoute[]): RouteMatcher => {
 	return { exact, byLength };
 };
 
-const findRoute = (path: string, apiSuffix: string, matcher: RouteMatcher) => {
-	const normalizedPath = normalizeApiPath(path, apiSuffix);
-	const exactRoute = matcher.exact.get(normalizedPath);
-	if (exactRoute) return { route: exactRoute, params: {} };
-
-	const requestSegments = normalizedPath.split('/').filter(Boolean);
-	for (const route of matcher.byLength.get(requestSegments.length) ?? []) {
-		const routeSegments = route.path.split('/').filter(Boolean);
-		if (routeSegments.length !== requestSegments.length) continue;
-		const params: Record<string, string> = {};
-		let matches = true;
-		for (let index = 0; index < routeSegments.length; index += 1) {
-			const routeSegment = routeSegments[index];
-			const requestSegment = requestSegments[index];
-			if (routeSegment.startsWith(':')) {
-				params[routeSegment.slice(1)] = decodeURIComponent(requestSegment);
-			} else if (routeSegment !== requestSegment) {
-				matches = false;
-				break;
+const matchRoute = (path: string, siteChain: string[], matcher: RouteMatcher) => {
+	const exactSites = matcher.exact.get(path);
+	if (exactSites) {
+		const owner = siteChain.find((site) => exactSites.has(site));
+		if (owner) return { owner, routePath: path, params: {} as Record<string, string> };
+	}
+	const requestSegments = path.split('/').filter(Boolean);
+	for (const site of siteChain) {
+		for (const route of matcher.byLength.get(requestSegments.length) ?? []) {
+			if (route.site !== site || !route.path.includes('/:')) continue;
+			const routeSegments = route.path.split('/').filter(Boolean);
+			const params: Record<string, string> = {};
+			let matches = true;
+			for (let index = 0; index < routeSegments.length; index += 1) {
+				if (routeSegments[index].startsWith(':')) {
+					try { params[routeSegments[index].slice(1)] = decodeURIComponent(requestSegments[index]); }
+					catch { matches = false; break; }
+				} else if (routeSegments[index] !== requestSegments[index]) {
+					matches = false;
+					break;
+				}
 			}
+			if (matches) return { owner: site, routePath: route.path, params };
 		}
-		if (matches) return { route, params };
 	}
 	return undefined;
 };
 
+const modulePath = (site: string, routeSegments: string[], depth: number) => depth === 0
+	? `sites/${site}/api.mjs`
+	: `sites/${site}/api/${routeSegments.slice(0, depth).join('/')}.mjs`;
+
 export const createApiGateway = (
-	getApiSuffix: () => string,
-	options: { routes?: ApiRoute[]; loadModule?: (file: string) => Promise<ApiModule> } = {},
+	getApiSuffix: (context: Context<AppEnv>) => string,
+	options: { routes: SiteApiRoute[]; loadModule: (file: string) => Promise<ApiModule> },
 ) => {
-	let matcherPromise: Promise<RouteMatcher> | undefined;
-	const getMatcher = () => matcherPromise ??= (async () => createRouteMatcher(options.routes ?? (await loadManifest()).routes))();
+	const matcher = createRouteMatcher(options.routes);
 	return async (c: Context<AppEnv>, _next: Next) => {
-	const route = findRoute(c.req.path, getApiSuffix(), await getMatcher());
-	if (!route) return c.json({ message: 'API route not found' }, 404);
+		const normalizedPath = normalizeApiPath(c.req.path, getApiSuffix(c));
+		const siteChain = c.get('site').codeSiteChain;
+		const matched = matchRoute(normalizedPath, siteChain, matcher);
+		if (!matched) return c.json({ message: 'API route not found' }, 404);
 
-	const execute = async (index: number): Promise<Response> => {
-		const file = route.route.files[index];
-		const module = options.loadModule
-			? await options.loadModule(file)
-			: await import(new URL(`./${file}`, import.meta.url).href) as ApiModule;
-		if (typeof module.default !== 'function') {
-			throw new Error(`API route module must export a default handler: ${file}`);
-		}
-		const next = async () => {
-			if (index + 1 >= route.route.files.length) {
-				return c.json({ message: 'API route did not return a response' }, 500);
+		const routeSegments = matched.routePath.split('/').filter(Boolean).slice(1).filter((segment) => !segment.startsWith(':'));
+		const files: string[] = [];
+		for (let depth = 0; depth <= routeSegments.length; depth += 1) {
+			for (const site of siteChain) {
+				const file = modulePath(site, routeSegments, depth);
+				const module = await options.loadModule(file);
+				if (typeof module.default === 'function') {
+					files.push(file);
+					break;
+				}
 			}
-			return execute(index + 1);
-		};
-		const response = await module.default(c, next, route.params);
-		return response ?? c.json({ message: 'API route did not return a response' }, 500);
-	};
+		}
 
-	return execute(0);
+		const execute = async (index: number): Promise<Response> => {
+			const file = files[index];
+			const module = await options.loadModule(file);
+			if (typeof module.default !== 'function') throw new Error(`API module must export a handler: ${file}`);
+			const next = async () => index + 1 < files.length
+				? execute(index + 1)
+				: c.json({ message: 'API route did not return a response' }, 500);
+			return (await module.default(c, next, matched.params)) ?? c.json({ message: 'API route did not return a response' }, 500);
+		};
+		return execute(0);
 	};
 };

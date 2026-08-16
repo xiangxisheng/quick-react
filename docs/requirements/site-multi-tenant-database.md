@@ -1,6 +1,6 @@
 # 多站点与数据库双模式需求开发文档
 
-状态：待审核，尚未实施
+状态：已实施
 
 ## 1. 背景
 
@@ -113,6 +113,8 @@ global 覆盖实现
   -> base 基础层实现
 ```
 
+`global` 是系统控制面，不能作为业务站点的父站点；业务站点的继承链只能包含其他业务站点并最终回到 `base`。
+
 例如 `global` 没有登录接口时，自动使用 `base` 的登录接口；`global` 只需要额外提供站点和 Host 管理接口即可。`site1` 也可以直接以 `base` 作为基础，不需要继承 `global`。
 
 `global` 和普通业务站点默认都使用 `default.sqlite`。其中 `global_*` 保存站点注册信息，`base_*` 保存共享数据库中跨站点共用的用户、会话和通行证数据，`site1_*` 等前缀保存对应站点的业务数据。代码继承和表前缀选择是两个独立维度；只有 Node 运行时显式配置了自定义 DSN 的站点才使用外部独立数据库。
@@ -220,6 +222,7 @@ CREATE TABLE global_sites (
   base_site_key TEXT,
   dsn TEXT NOT NULL DEFAULT '',
   dsn_password TEXT,
+  database_binding TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'enabled',
   migration_status TEXT NOT NULL DEFAULT 'ready',
   is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
@@ -307,6 +310,7 @@ Host 标准化规则：
 | `global_sites.is_system` | 系统引导站点标记；系统站点不可删除、禁用或改标识 | 不允许修改 |
 | `dsn` | 不含密码的数据库连接地址；为空时使用默认 SQLite | 可以修改 |
 | `dsn_password` | 单独保存的数据库密码；接口不返回真实值 | 可以修改 |
+| `database_binding` | Worker 预声明的站点 D1 Binding 名称；为空时使用 `DEFAULT_DB` | 可以修改 |
 
 例如，独立数据库首次为 `site2` 建库时：
 
@@ -330,6 +334,8 @@ site1_orders
 如果未来支持 MySQL 或 PostgreSQL，`dsn` 保存不含密码的连接地址，`dsn_password` 单独保存密码。`dsn` 为空时自动使用 `sqlite://database/default.sqlite`。后台接口不返回真实密码，日志中的 DSN 也必须脱敏。任意 DSN 只允许 Node 运行时连接；Worker 不读取或使用它。
 
 `dsn` 为空时使用默认的 `sqlite://database/default.sqlite`；自定义 DSN 只影响当前站点的数据库连接。自定义数据库中仍需应用该站点继承链对应的 `base_*` 和站点专属 migration。独立数据库中的 `base_system_users`、会话和角色只在该库内有效，不与默认共享数据库或其他独立数据库共享。
+
+`dsn` 与 `database_binding` 互斥。修改任一数据库目标时，站点必须自动切换为 `disabled + creating`，重新完成目标数据库 migration 后才能启用。
 
 ## 7. Host 内存缓存
 

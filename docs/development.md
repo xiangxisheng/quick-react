@@ -24,4 +24,4 @@ npm run dev
 npm run typecheck
 ```
 
-前端代码位于 `src/`，后端代码位于 `server/`。新增后端模板或静态资源时，注意不要把服务端文件放入 `public/`。
+前端代码位于 `src/`，后端代码位于 `server/`。站点 API 和导航位于 `server/sites/<site_key>/`；`base` 是继承基础层，`global` 是控制面站点。新增后端模板或静态资源时，注意不要把服务端文件放入 `public/`。

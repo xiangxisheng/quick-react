@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createSecureServer } from 'node:http2';
 import { serve } from '@hono/node-server';
@@ -10,16 +11,64 @@ import { compress } from 'hono/compress';
 import { etag } from 'hono/etag';
 import { getClientIp } from './client-ip.mjs';
 import worker from './worker.mjs';
-import { createJsonFileStore } from './node-config-store.mjs';
+import { createSqliteAdapter } from './database/sqlite.mjs';
+import { migrateDatabase, migrateDefaultDatabase } from './database/migrate.mjs';
+import { createDatabaseConfigStore } from './config-store.mjs';
 import { configureSystemConfig, loadSystemConfig } from './system-config.mjs';
 import { configureTechStack, loadTechStackConfig } from './tech-stack.mjs';
 import type { WorkerBindings } from './worker.mjs';
 import type { AppEnv } from './types.mjs';
 
 const env = process.env;
-const configDirectory = join(homedir(), '.quick-react');
+const projectDirectory = fileURLToPath(new URL('../', import.meta.url));
+const defaultDatabase = createSqliteAdapter(env.DEFAULT_DATABASE_FILE || resolve(projectDirectory, 'database/default.sqlite'));
+const siteDatabases = new Map<string, ReturnType<typeof createSqliteAdapter>>();
+await migrateDefaultDatabase(defaultDatabase, resolve(projectDirectory, 'migrations'));
+const resolveSqliteDsn = (dsn: string) => {
+	if (!dsn.startsWith('sqlite://')) throw new Error('Only sqlite:// custom DSNs are supported by the Node runtime');
+	const dsnPath = dsn.slice('sqlite://'.length);
+	const filename = dsnPath.startsWith('/') ? dsnPath : resolve(projectDirectory, dsnPath);
+	let database = siteDatabases.get(filename);
+	if (!database) {
+		database = createSqliteAdapter(filename);
+		siteDatabases.set(filename, database);
+	}
+	return database;
+};
+
+const migrateSite = async (siteKey: string) => {
+	const rows = await defaultDatabase.prepare(`SELECT site_key, base_site_key, dsn, database_binding
+		FROM global_sites`).all<{ site_key: string; base_site_key: string | null; dsn: string; database_binding: string }>();
+	const sites = new Map(rows.results.map((site) => [site.site_key, site]));
+	const site = sites.get(siteKey);
+	if (!site || siteKey === 'global') throw new Error('Site is not eligible for business migration');
+	if (site.database_binding) throw new Error('D1 Binding migrations must run during deployment');
+	const chain: string[] = [];
+	const visited = new Set<string>();
+	let current = site;
+	while (current) {
+		if (visited.has(current.site_key) || visited.size >= 8) throw new Error('Invalid site inheritance chain');
+		visited.add(current.site_key);
+		chain.unshift(current.site_key);
+		if (!current.base_site_key || current.base_site_key === 'base') break;
+		const parent = sites.get(current.base_site_key);
+		if (!parent) throw new Error(`Parent site not found: ${current.base_site_key}`);
+		current = parent;
+	}
+	chain.unshift('base');
+	await defaultDatabase.prepare(`UPDATE global_sites SET migration_status = 'migrating' WHERE site_key = ?1`).bind(siteKey).run();
+	try {
+		const target = site.dsn ? resolveSqliteDsn(site.dsn) : defaultDatabase;
+		await migrateDatabase(target, resolve(projectDirectory, 'migrations'), chain);
+		await defaultDatabase.prepare(`UPDATE global_sites SET migration_status = 'ready' WHERE site_key = ?1`).bind(siteKey).run();
+	} catch (error) {
+		await defaultDatabase.prepare(`UPDATE global_sites SET migration_status = 'failed' WHERE site_key = ?1`).bind(siteKey).run();
+		throw error;
+	}
+};
+const defaultConfigStore = createDatabaseConfigStore(defaultDatabase);
 configureSystemConfig({
-	store: createJsonFileStore(env.SYSTEM_CONFIG_FILE || join(configDirectory, 'system-config.json')),
+	store: defaultConfigStore,
 	defaults: {
 		httpPort: env.HTTP_PORT || '8088',
 		domain: env.DOMAIN || 'anan.cc',
@@ -29,7 +78,7 @@ configureSystemConfig({
 	},
 });
 configureTechStack({
-	store: createJsonFileStore(env.TECH_STACK_CONFIG_FILE || join(configDirectory, 'tech-stack.json')),
+	store: defaultConfigStore,
 	defaults: {
 		nginx: env.MASK_NGINX === '1',
 		phpVersion: env.MASK_PHP_VERSION || '',
@@ -60,7 +109,17 @@ nodeApp.use('/bundle.js.map', async (c, next) => {
 nodeApp.use('*', compress());
 nodeApp.use('*', etag());
 nodeApp.use('*', serveStatic({ root: publicDir }));
-nodeApp.all('*', (c) => worker.fetch(c.req.raw, {} as WorkerBindings));
+nodeApp.all('*', (c) => worker.fetch(c.req.raw, {
+	DEFAULT_DB: defaultDatabase,
+	DATABASE_RESOLVER: async (site) => {
+		if (site.databaseTarget.kind === 'default') return defaultDatabase;
+		if (site.databaseTarget.kind !== 'dsn' || !site.databaseTarget.value.startsWith('sqlite://')) {
+			throw new Error(`Node database target is not supported: ${site.databaseTarget.kind}`);
+		}
+		return resolveSqliteDsn(site.databaseTarget.value);
+	},
+	MIGRATE_SITE: migrateSite,
+} as WorkerBindings));
 
 export const app = nodeApp;
 

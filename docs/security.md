@@ -23,3 +23,7 @@ Cloudflare 和负载均衡应负责：
 ## 静态文件
 
 浏览器静态目录是 `public/`。后端构建产物位于 `dist/server.mjs`，不会由静态文件中间件提供。
+
+## 登录与控制面
+
+密码使用 PBKDF2-SHA256 加盐保存；登录态保存在 `base_system_sessions`，浏览器 Cookie 使用 `HttpOnly` 和 `SameSite=Lax`，HTTPS 请求还会添加 `Secure`。只有空用户表允许创建首个管理员。管理后台 API 在目录中间件中校验登录态和 `admin` 角色，菜单隐藏不作为授权依据。

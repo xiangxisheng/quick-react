@@ -27,10 +27,24 @@ const SignForm: React.FC<SignFormProps> = () => {
 
 	const navigate = useNavigate();
 	const location = useLocation();
-	const routeName = location.pathname;
+	const initialData = (window as Window & { __INITIAL_DATA__?: { apiSuffix?: string; pageSuffix?: string } }).__INITIAL_DATA__;
+	const apiSuffix = initialData?.apiSuffix ?? '';
+	const pageSuffix = initialData?.pageSuffix ?? '';
+	const routeName = pageSuffix && location.pathname.endsWith(pageSuffix)
+		? location.pathname.slice(0, -pageSuffix.length)
+		: location.pathname;
+	const isSignUp = routeName === '/sign-up';
 
-	const onFinish = (values: FormState) => {
-		console.log('Success:', values);
+	const onFinish = async (values: FormState) => {
+		const response = await fetch(`/api/sign${apiSuffix}`, {
+			method: isSignUp ? 'PUT' : 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(values),
+		});
+		const result = await response.json() as { message?: string };
+		if (!response.ok) throw new Error(result.message || '请求失败');
+		window.alert(result.message || (isSignUp ? '注册成功' : '登录成功'));
+		window.location.href = isSignUp ? `/sign${pageSuffix}` : `/panel/admin${pageSuffix}`;
 	};
 
 	const onFinishFailed = (errorInfo: any) => {
@@ -40,7 +54,7 @@ const SignForm: React.FC<SignFormProps> = () => {
 	return (
 		<div>
 			<h1 style={{ textAlign: 'center', margin: '40px' }}>
-				{routeName === '/sign-up' ? GTR('sign.register') : GTR('sign.login')}
+				{isSignUp ? GTR('sign.register') : GTR('sign.login')}
 			</h1>
 
 			<Form
@@ -74,7 +88,7 @@ const SignForm: React.FC<SignFormProps> = () => {
 					/>
 				</Form.Item>
 
-				{routeName === '/sign-up' && (
+				{isSignUp && (
 					<Form.Item
 						label={GTR('sign.confirmPassword')}
 						name="password_confirm"
@@ -98,14 +112,14 @@ const SignForm: React.FC<SignFormProps> = () => {
 
 				<Form.Item wrapperCol={{ span: 24 }}>
 					<Space wrap>
-						{routeName === '/sign-in' && (
-							<Button type="link" onClick={() => navigate('/sign-up')}>
+						{!isSignUp && (
+							<Button type="link" onClick={() => navigate(`/sign-up${pageSuffix}`)}>
 								{GTR('sign.register')}
 							</Button>
 						)}
 
-						{routeName === '/sign-up' && (
-							<Button type="link" onClick={() => navigate('/sign-in')}>
+						{isSignUp && (
+							<Button type="link" onClick={() => navigate(`/sign${pageSuffix}`)}>
 								{GTR('sign.login')}
 							</Button>
 						)}

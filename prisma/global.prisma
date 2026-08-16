@@ -1,0 +1,26 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model global_sites {
+  id               Int     @id @default(autoincrement())
+  site_key         String  @unique
+  name             String
+  base_site_key    String?
+  dsn              String  @default("")
+  dsn_password     String?
+  database_binding String  @default("")
+  status           String  @default("enabled")
+  migration_status String  @default("ready")
+  is_default       Int     @default(0)
+  is_system        Int     @default(0)
+}
+
+model global_hosts {
+  id         Int    @id @default(autoincrement())
+  hostname   String @unique
+  site_key   String
+  status     String @default("enabled")
+  created_at Int
+}

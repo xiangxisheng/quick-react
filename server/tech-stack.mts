@@ -25,31 +25,33 @@ export const configureTechStack = (options: { store?: ConfigStore; defaults?: Pa
 	loadedAt = 0;
 };
 
-const normalize = (value: unknown): TechStackConfig => ({
-	nginx: value && typeof value === 'object' && 'nginx' in value ? Boolean((value as { nginx?: unknown }).nginx) : defaultConfig.nginx,
+export const normalizeTechStackConfig = (value: unknown, defaults: TechStackConfig = defaultConfig): TechStackConfig => ({
+	nginx: value && typeof value === 'object' && 'nginx' in value ? Boolean((value as { nginx?: unknown }).nginx) : defaults.nginx,
 	phpVersion: (() => {
 		const candidate = value && typeof value === 'object' && typeof (value as { phpVersion?: unknown }).phpVersion === 'string'
 			? String((value as { phpVersion: string }).phpVersion).trim().slice(0, 32)
-			: defaultConfig.phpVersion;
+			: defaults.phpVersion;
 		return /^\d+(?:\.\d+){1,3}$/.test(candidate) ? candidate : '';
 	})(),
 	apiSuffix: (() => {
 		const candidate = value && typeof value === 'object' && typeof (value as { apiSuffix?: unknown }).apiSuffix === 'string'
 			? String((value as { apiSuffix: string }).apiSuffix).trim().slice(0, 16)
-			: defaultConfig.apiSuffix;
-		return /^(?:\.[a-zA-Z0-9_-]+)?$/.test(candidate) ? candidate : defaultConfig.apiSuffix;
+			: defaults.apiSuffix;
+		return /^(?:\.[a-zA-Z0-9_-]+)?$/.test(candidate) ? candidate : defaults.apiSuffix;
 	})(),
 	pageSuffix: (() => {
 		const candidate = value && typeof value === 'object' && typeof (value as { pageSuffix?: unknown }).pageSuffix === 'string'
 			? String((value as { pageSuffix: string }).pageSuffix).trim().slice(0, 16)
-			: defaultConfig.pageSuffix;
-		return /^(?:\.[a-zA-Z0-9_-]+)?$/.test(candidate) ? candidate : defaultConfig.pageSuffix;
+			: defaults.pageSuffix;
+		return /^(?:\.[a-zA-Z0-9_-]+)?$/.test(candidate) ? candidate : defaults.pageSuffix;
 	})(),
 });
 
+export const loadTechStackConfigFromStore = async (targetStore: ConfigStore) => normalizeTechStackConfig(await targetStore.get('tech-stack'));
+
 export const loadTechStackConfig = async () => {
 	if (loadedAt && Date.now() - loadedAt < cacheTtl) return { ...config };
-	config = normalize(await store.get('tech-stack'));
+	config = normalizeTechStackConfig(await store.get('tech-stack'));
 	loadedAt = Date.now();
 	return { ...config };
 };
@@ -57,15 +59,15 @@ export const loadTechStackConfig = async () => {
 export const getTechStackConfig = () => ({ ...config });
 
 export const saveTechStackConfig = async (value: unknown) => {
-	config = normalize(value);
+	config = normalizeTechStackConfig(value);
 	await store.put('tech-stack', config);
 	loadedAt = Date.now();
 	return { ...config };
 };
 
-export const applyTechStackHeaders = (headers: Headers, requestPath: string) => {
-	if (config.nginx) headers.set('Server', 'nginx');
-	if (config.phpVersion && (requestPath === '/api' || requestPath.startsWith('/api/'))) {
-		headers.set('X-Powered-By', `PHP/${config.phpVersion}`);
+export const applyTechStackHeaders = (headers: Headers, requestPath: string, currentConfig: TechStackConfig = config) => {
+	if (currentConfig.nginx) headers.set('Server', 'nginx');
+	if (currentConfig.phpVersion && (requestPath === '/api' || requestPath.startsWith('/api/'))) {
+		headers.set('X-Powered-By', `PHP/${currentConfig.phpVersion}`);
 	}
 };

@@ -19,7 +19,8 @@ const isIpInRule = (ip: string, rule: string) => {
 };
 
 export const getClientIp = (c: Context<AppEnv>, trustedProxyRules: string[]) => {
-	const remoteAddress = c.env.incoming.socket.remoteAddress;
+	const incoming = c.env.incoming as { socket?: { remoteAddress?: string } } | undefined;
+	const remoteAddress = incoming?.socket?.remoteAddress;
 	if (!remoteAddress) return undefined;
 	if (!trustedProxyRules.some((rule) => isIpInRule(remoteAddress, rule))) return remoteAddress;
 	return c.req.header('cf-connecting-ip')?.trim()
