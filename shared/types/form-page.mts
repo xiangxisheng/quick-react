@@ -24,4 +24,6 @@ export type FormPageConfig = {
 export type FormPageResponse<T = Record<string, unknown>> = {
 	currentValues?: T;
 	formPage?: FormPageConfig;
+	feedback?: ApiFeedback;
 };
+import type { ApiFeedback } from './api-response.mjs';

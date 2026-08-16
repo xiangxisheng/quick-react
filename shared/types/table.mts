@@ -17,4 +17,3 @@ export type TableColumn = {
 export type TableOption = { rowKey: string };
 export type TableResponse = { option?: TableOption; columns?: TableColumn[]; dataSource?: TableData[]; totalRecords?: number };
 export type TableRow = TableData & { key: string };
-export type MockTable = { columns: TableColumn[]; rows: TableRow[] };

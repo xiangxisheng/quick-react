@@ -5,7 +5,6 @@ import type { SystemConfig } from './system-config.mjs';
 import type { TechStackConfig } from './tech-stack.mjs';
 import type { UserIdentity } from '@shared/types/user.mjs';
 import type { TableColumn, TableRow } from '@shared/types/table.mjs';
-export type { MockTable } from '@shared/types/table.mjs';
 
 export type RuntimeBindings = Record<string, unknown> & {
 	DEFAULT_DB?: unknown;
@@ -29,3 +28,4 @@ export type AppEnv = {
 
 export type MockRow = TableRow;
 export type MockColumn = TableColumn;
+export type MockTable = { columns: MockColumn[]; rows: MockRow[] };

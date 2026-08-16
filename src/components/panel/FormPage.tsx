@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Form, Input, message, Modal, Space, Switch, Typography } from 'antd';
-import type { ApiFeedback, CommonApi } from '@/utils/common/api.js';
+import type { CommonApi } from '@/utils/common/api.js';
 import type { FormPageResponse } from '@shared/types/form-page.mjs';
 import { CountdownDisplay, formatCountdown } from '@/components/common/Countdown.js';
 import { runAfterFeedback } from '@/utils/common/feedback.js';
@@ -12,7 +12,7 @@ const renderTemplate = (template: string, values: Record<string, React.ReactNode
 		return match && match[1] in values ? <React.Fragment key={`${part}-${index}`}>{values[match[1]]}</React.Fragment> : part;
 	});
 
-type FormResponse = FormPageResponse & { feedback?: ApiFeedback };
+type FormResponse = FormPageResponse;
 
 type FormProps = {
 	commonApi: CommonApi;
