@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Button, Card, Form, Input, message, Modal, Space, Switch, Typography } from 'antd';
-import type { AlertProps } from 'antd';
-import type { CommonApi } from '@/utils/common/api.js';
+import type { ApiFeedback, CommonApi } from '@/utils/common/api.js';
+import { CountdownDisplay, formatCountdown } from '@/components/common/Countdown.js';
 
 export type FormField = {
 	name: string;
@@ -14,8 +14,6 @@ export type FormField = {
 	unCheckedChildren?: React.ReactNode;
 };
 
-const formatCountdown = (value: string | number) => Math.max(0, Number(value) / 1000).toFixed(1);
-
 const renderTemplate = (template: string, values: Record<string, React.ReactNode>) => template
 	.split(/(\{[^{}]+\})/g)
 	.map((part, index) => {
@@ -23,43 +21,15 @@ const renderTemplate = (template: string, values: Record<string, React.ReactNode
 		return match && match[1] in values ? <React.Fragment key={`${part}-${index}`}>{values[match[1]]}</React.Fragment> : part;
 	});
 
-const CountdownDisplay = ({ deadline, onFinish }: { deadline: number; onFinish: () => void }) => {
-	const [remaining, setRemaining] = useState(() => Math.max(0, deadline - Date.now()));
-
-	useEffect(() => {
-		let finished = false;
-		const timer = window.setInterval(() => {
-			const next = Math.max(0, deadline - Date.now());
-			setRemaining(next);
-			if (next === 0 && !finished) {
-				finished = true;
-				window.clearInterval(timer);
-				onFinish();
-			}
-		}, 100);
-		return () => window.clearInterval(timer);
-	}, [deadline, onFinish]);
-
-	return <span>{formatCountdown(remaining)}</span>;
-};
-
 type FormResponse = {
 	currentValues?: Record<string, unknown>;
+	feedback?: ApiFeedback;
 	form?: {
 		description?: React.ReactNode;
 		submitLabel?: React.ReactNode;
 		confirmOnUnchangedSubmit?: string;
-		refreshAfterSave?: number | null;
 		submitHint?: React.ReactNode;
-	feedback?: {
-			component?: 'inline' | 'message' | 'modal' | 'none';
-			type?: AlertProps['type'];
-			showIcon?: boolean;
-			title?: string;
-			message?: string;
-			refreshNowLabel?: React.ReactNode;
-			cancelRefreshLabel?: React.ReactNode;
-		};
+		feedback?: ApiFeedback;
 		initialValues: Record<string, unknown>;
 		fields: FormField[];
 	};
@@ -83,7 +53,6 @@ const areValuesEqual = (left: Record<string, unknown>, right: Record<string, unk
 export default function FormPage({ commonApi, apiPath, title, onSaved }: FormProps) {
 	const [form] = Form.useForm<Record<string, unknown>>();
 	const [messageApi, messageContextHolder] = message.useMessage();
-	const [modalApi, modalContextHolder] = Modal.useModal();
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [formConfig, setFormConfig] = useState<FormResponse['form']>();
@@ -93,6 +62,7 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 	const [refreshDeadline, setRefreshDeadline] = useState<number>();
 	const [refreshCancelled, setRefreshCancelled] = useState(false);
 	const [saved, setSaved] = useState(false);
+	const [responseFeedback, setResponseFeedback] = useState<FormResponse['feedback']>();
 
 	useEffect(() => {
 		setLoading(true);
@@ -100,42 +70,22 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 		setRefreshTarget(undefined);
 		setRefreshDeadline(undefined);
 		setRefreshCancelled(false);
-		Modal.destroyAll();
+		setResponseFeedback(undefined);
 		messageApi.destroy('form-feedback');
 	}, [apiPath, messageApi]);
 
 	useEffect(() => {
-		if (!saved || formConfig?.feedback?.component !== 'message') return;
-		const feedbackMessage = formConfig.feedback.message ?? '';
+		const feedback = responseFeedback ?? formConfig?.feedback;
+		if (!saved || feedback?.component !== 'message') return;
+		const feedbackMessage = feedback.message ?? '';
 		const countdown = refreshDeadline && refreshTarget
 			? <CountdownDisplay deadline={refreshDeadline} onFinish={() => window.location.assign(refreshTarget)} />
 			: null;
-		const refreshValue = countdown ?? (formConfig.refreshAfterSave == null ? '' : formatCountdown(formConfig.refreshAfterSave * 1000));
-		const content = renderTemplate(feedbackMessage, { refreshAfterSave: refreshValue });
-		messageApi.open({ key: 'form-feedback', type: formConfig.feedback.type ?? 'success', content, duration: 0 });
+		const refreshValue = countdown ?? (feedback.redirectAfter == null ? '' : formatCountdown(feedback.redirectAfter * 1000));
+		const content = renderTemplate(feedbackMessage, { redirectAfter: refreshValue });
+		messageApi.open({ key: 'form-feedback', type: feedback.type ?? 'success', content, duration: 0 });
 		return () => messageApi.destroy('form-feedback');
-	}, [formConfig, messageApi, refreshDeadline, refreshTarget, saved]);
-
-	useEffect(() => {
-		if (!saved || formConfig?.feedback?.component !== 'modal') return;
-		if (refreshCancelled) return;
-		const feedbackMessage = formConfig.feedback.message ?? '';
-		const countdown = refreshDeadline && refreshTarget && !refreshCancelled
-			? <CountdownDisplay deadline={refreshDeadline} onFinish={() => window.location.assign(refreshTarget)} />
-			: null;
-		const refreshValue = refreshCancelled ? '' : countdown ?? (formConfig.refreshAfterSave == null ? '' : formatCountdown(formConfig.refreshAfterSave * 1000));
-		const content = renderTemplate(feedbackMessage, { refreshAfterSave: refreshValue });
-		Modal.destroyAll();
-		modalApi.confirm({
-			title: formConfig.feedback.title ?? '',
-			content,
-			okText: formConfig.feedback.refreshNowLabel,
-			cancelText: formConfig.feedback.cancelRefreshLabel,
-			onOk: () => window.location.assign(refreshTarget ?? window.location.href),
-			onCancel: () => setRefreshCancelled(true),
-		});
-		return () => Modal.destroyAll();
-	}, [formConfig, modalApi, refreshCancelled, refreshDeadline, refreshTarget, saved]);
+	}, [formConfig, messageApi, refreshDeadline, refreshTarget, responseFeedback, saved]);
 
 	useEffect(() => {
 		let active = true;
@@ -161,19 +111,22 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 		}
 		setSaving(true);
 		try {
-			await commonApi.apiFetch(apiPath, {
+			const response = await commonApi.apiFetch(apiPath, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(values),
 			});
+			const result = await response.json() as FormResponse;
+			Modal.destroyAll();
+			setResponseFeedback(result.feedback);
 			const target = await onSaved?.(values);
 			setInitialValues(values);
 			setDirty(false);
 			setSaved(true);
-			const refreshAfterSave = formConfig?.refreshAfterSave ?? null;
-			if (target && refreshAfterSave !== null) {
+			const redirectAfter = result.feedback?.redirectAfter ?? null;
+			if (target && redirectAfter !== null) {
 				setRefreshCancelled(false);
-				const seconds = Number.isFinite(refreshAfterSave) ? Math.max(0, Math.floor(refreshAfterSave)) : 0;
+				const seconds = Number.isFinite(redirectAfter) ? Math.max(0, Math.floor(redirectAfter)) : 0;
 				if (seconds === 0) window.location.assign(target);
 				else {
 					setRefreshTarget(target);
@@ -187,20 +140,32 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 		}
 	};
 
-	const feedback = formConfig?.feedback;
+	const feedback = responseFeedback ?? formConfig?.feedback;
 	const feedbackMessage = feedback?.message ?? '';
 	const alertCountdown = refreshDeadline && refreshTarget
 		? <CountdownDisplay deadline={refreshDeadline} onFinish={() => window.location.assign(refreshTarget)} />
 		: null;
-	const refreshValue = alertCountdown ?? (formConfig?.refreshAfterSave == null ? '' : formatCountdown(formConfig.refreshAfterSave * 1000));
-	const feedbackContent = renderTemplate(feedbackMessage, { refreshAfterSave: refreshValue });
+	const refreshValue = alertCountdown ?? (feedback?.redirectAfter == null ? '' : formatCountdown(feedback.redirectAfter * 1000));
+	const feedbackContent = renderTemplate(feedbackMessage, { redirectAfter: refreshValue });
 	const inlineFeedback = saved && feedback?.component === 'inline'
 			? <Alert type={feedback.type ?? 'success'} showIcon={feedback.showIcon} message={feedbackContent} style={{ marginBottom: 24 }} />
 		: null;
+	const modalFeedback = saved && !refreshCancelled && feedback?.component === 'modal' ? (
+		<Modal
+			open
+			title={feedback.title ?? ''}
+			okText={feedback.refreshNowLabel}
+			cancelText={feedback.cancelRefreshLabel}
+			onOk={() => window.location.assign(refreshTarget ?? window.location.href)}
+			onCancel={() => setRefreshCancelled(true)}
+		>
+			{feedbackContent}
+		</Modal>
+	) : null;
 
 	return <Card title={title} loading={loading}>
 		{messageContextHolder}
-		{modalContextHolder}
+		{modalFeedback}
 		{inlineFeedback}
 		{formConfig?.description ? <Alert type="info" showIcon message={formConfig.description} style={{ marginBottom: 24 }} /> : null}
 		<Form

@@ -53,6 +53,7 @@ export interface ApiFeedback {
 	message?: string;
 	refreshNowLabel?: React.ReactNode;
 	cancelRefreshLabel?: React.ReactNode;
+	redirectAfter?: number;
 }
 
 export interface ResJSON {
@@ -149,9 +150,6 @@ export function useCommonApi(): [CommonApi, React.JSX.Element] {
 					title: resJSON.title,
 					content: resJSON.message,
 				});
-			}
-			if (!resJSON.feedback && resJSON.message) {
-				messageApi.success(resJSON.message);
 			}
 			return res;
 		} catch (ex) {

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Form, Input, Checkbox, Space, Button } from 'antd';
+import { Alert, Form, Input, Checkbox, Space, Button } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { CommonApi } from '@/utils/common/api.js';
+import { CountdownDisplay } from '@/components/common/Countdown.js';
 
 type FormState = {
 	username: string;
@@ -25,6 +26,7 @@ const SignForm: React.FC<SignFormProps> = ({ commonApi }) => {
 		password_confirm: '',
 		remember: false,
 	});
+	const [redirectDeadline, setRedirectDeadline] = useState<number>();
 
 	const navigate = useNavigate();
 	const location = useLocation();
@@ -43,8 +45,13 @@ const SignForm: React.FC<SignFormProps> = ({ commonApi }) => {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(values),
 			});
-			await response.json();
-			window.location.href = isSignUp ? `/sign${pageSuffix}` : `/panel/admin${pageSuffix}`;
+			const result = await response.json() as { feedback?: { redirectAfter?: number } };
+			const redirectAfter = result.feedback?.redirectAfter ?? 0;
+			if (redirectAfter <= 0) {
+				window.location.href = isSignUp ? `/sign${pageSuffix}` : `/panel/admin${pageSuffix}`;
+				return;
+			}
+			setRedirectDeadline(Date.now() + redirectAfter * 1000);
 		} catch {
 			// apiFetch 已统一展示接口错误，这里只阻止表单提交产生未处理异常。
 		}
@@ -59,6 +66,14 @@ const SignForm: React.FC<SignFormProps> = ({ commonApi }) => {
 			<h1 style={{ textAlign: 'center', margin: '40px' }}>
 				{isSignUp ? GTR('sign.register') : GTR('sign.login')}
 			</h1>
+			{redirectDeadline ? (
+				<Alert
+					type="success"
+					showIcon
+					message={<span>操作成功，<CountdownDisplay deadline={redirectDeadline} onFinish={() => { window.location.href = isSignUp ? `/sign${pageSuffix}` : `/panel/admin${pageSuffix}`; }} /> 秒后跳转</span>}
+					style={{ margin: '0 40px 24px' }}
+				/>
+			) : null}
 
 			<Form
 				name="basic"

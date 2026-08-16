@@ -1,9 +1,9 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { normalizeSystemConfig } from '@server/system-config.mjs';
+import { feedbackResponse } from '@server/api-response.mjs';
 
 const form = {
 	description: '系统运行参数。修改后需要重启服务才能生效。',
-	refreshAfterSave: null,
 	submitLabel: '保存配置',
 	confirmOnUnchangedSubmit: '当前未修改，仍要提交吗？',
 	submitHint: '部分配置需要重启服务后生效',
@@ -26,9 +26,8 @@ const handler: ApiHandler = async (c, next) => {
 		await store.put('system-config', config);
 		c.set('systemConfig', config);
 		return c.json({
-			message: '系统配置已保存，重启服务后生效',
+			...feedbackResponse('系统配置已保存，重启服务后生效', { component: 'inline', showIcon: true, title: '保存结果' }),
 			currentValues: config,
-			feedback: { component: 'inline', type: 'success', showIcon: true, title: '保存结果', message: '系统配置已保存，重启服务后生效' },
 		});
 	}
 	return next();

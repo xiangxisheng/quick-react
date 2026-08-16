@@ -1,4 +1,5 @@
 import type { ApiHandler } from '@server/api-router.mjs';
+import { feedbackResponse } from '@server/api-response.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 
 const siteKeyPattern = /^[a-z][a-z0-9_]*$/;
@@ -76,7 +77,7 @@ const handler: ApiHandler = async (c, next, params) => {
 			}
 		}
 		await c.get('siteRouter').refresh();
-		return c.json({ message, site_key: siteKey }, 201);
+		return c.json({ ...feedbackResponse(message), site_key: siteKey }, 201);
 	}
 	if (!params.id && c.req.method === 'DELETE') {
 		const ids = await c.req.json<unknown[]>().catch(() => []);
@@ -88,7 +89,7 @@ const handler: ApiHandler = async (c, next, params) => {
 			await database.prepare('DELETE FROM global_sites WHERE site_key = ?1').bind(siteKey).run();
 		}
 		await c.get('siteRouter').refresh();
-		return c.json({ message: '删除成功' });
+		return c.json(feedbackResponse('删除成功'));
 	}
 	if (params.id && c.req.method === 'GET') {
 		const row = await database.prepare(`SELECT id, site_key, name, base_site_key, dsn, database_binding,
@@ -100,7 +101,7 @@ const handler: ApiHandler = async (c, next, params) => {
 		try {
 			await c.env.MIGRATE_SITE(params.id);
 			await c.get('siteRouter').refresh();
-			return c.json({ message: 'Migration 执行成功' });
+			return c.json(feedbackResponse('Migration 执行成功'));
 		} catch (error) {
 			return c.json({ message: error instanceof Error ? error.message : 'Migration 执行失败' }, 400);
 		}
@@ -133,7 +134,7 @@ const handler: ApiHandler = async (c, next, params) => {
 			nextParent, dsn ?? null, databaseBinding ?? null,
 			status ?? null, (targetChanged || inheritanceChanged) ? 1 : 0).run();
 		await c.get('siteRouter').refresh();
-		return c.json({ message: '保存成功' });
+		return c.json(feedbackResponse('保存成功'));
 	}
 	if (params.id && c.req.method === 'DELETE') {
 		const current = await database.prepare('SELECT is_system FROM global_sites WHERE site_key = ?1').bind(params.id).first<{ is_system: number }>();
@@ -142,7 +143,7 @@ const handler: ApiHandler = async (c, next, params) => {
 		await database.prepare('DELETE FROM global_hosts WHERE site_key = ?1').bind(params.id).run();
 		await database.prepare('DELETE FROM global_sites WHERE site_key = ?1').bind(params.id).run();
 		await c.get('siteRouter').refresh();
-		return c.json({ message: '删除成功' });
+		return c.json(feedbackResponse('删除成功'));
 	}
 	return next();
 };

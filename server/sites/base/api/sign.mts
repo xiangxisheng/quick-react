@@ -1,6 +1,7 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { clearSessionCookie, createSessionCookie, hashPassword, readSessionId, verifyPassword } from '@server/auth.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
+import { feedbackResponse } from '@server/api-response.mjs';
 
 const parseCredentials = async (c: Parameters<ApiHandler>[0]) => {
 	let body: Record<string, unknown> = {};
@@ -40,7 +41,7 @@ const handler: ApiHandler = async (c, next) => {
 			await database.prepare(`UPDATE base_system_bootstrap SET value = 'open' WHERE key = 'initial_admin' AND value = 'claimed'`).run();
 			throw error;
 		}
-		return c.json({ message: '初始管理员创建成功，请登录' }, 201);
+		return c.json(feedbackResponse('初始管理员创建成功，请登录', { redirectAfter: 1 }), 201);
 	}
 	if (c.req.method === 'POST') {
 		const credentials = await parseCredentials(c);
@@ -54,13 +55,13 @@ const handler: ApiHandler = async (c, next) => {
 		await database.prepare(`INSERT INTO base_system_sessions (id, user_id, expires_at, created_at)
 			VALUES (?1, ?2, ?3, ?4)`).bind(sessionId, user.id, now + maxAge * 1000, now).run();
 		c.header('Set-Cookie', createSessionCookie(sessionId, new URL(c.req.url).protocol === 'https:', maxAge));
-		return c.json({ message: '登录成功', user: { id: user.id, username: user.username } });
+		return c.json({ ...feedbackResponse('登录成功', { redirectAfter: 1 }), user: { id: user.id, username: user.username } });
 	}
 	if (c.req.method === 'DELETE') {
 		const sessionId = readSessionId(c.req.raw);
 		if (sessionId) await database.prepare('DELETE FROM base_system_sessions WHERE id = ?1').bind(sessionId).run();
 		c.header('Set-Cookie', clearSessionCookie(new URL(c.req.url).protocol === 'https:'));
-		return c.json({ message: '已退出登录' });
+		return c.json(feedbackResponse('已退出登录'));
 	}
 	return next();
 };

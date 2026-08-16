@@ -32,9 +32,9 @@ npm run typecheck
 
 `apiFetch` 会先解析 JSON 响应，再按 HTTP 状态码处理：
 
-- `2xx` 响应进入成功反馈处理；普通 `message` 会显示为全局成功提示。
+- `2xx` 响应进入成功反馈处理；需要向用户展示提示时必须返回 `feedback`。
 - 非 `2xx` 响应进入统一错误处理，并抛出响应对象；接口返回的 `message` 会显示在错误提示中，调用方只负责捕获异常并停止后续业务流程。
-- 调用方不应重复弹出响应中的 `message`，也不应使用 `window.alert` 替代统一反馈。
+- 顶层 `message` 仅用于错误响应；调用方不应重复弹出响应中的 `feedback`，也不应使用 `window.alert` 替代统一反馈。
 
 需要控制反馈样式时，在响应 JSON 中返回通用的 `feedback`。它可用于保存、新增、编辑、删除、登录等任何需要统一提示的操作；不放在 GET 返回的表单配置中：
 
@@ -52,5 +52,18 @@ npm run typecheck
 ```
 
 `feedback.component` 支持 `inline`、`message`、`modal` 和 `none`。`modal` 可额外返回 `refreshNowLabel` 与 `cancelRefreshLabel`；`none` 表示不显示反馈。响应同时包含 `feedback` 时，拦截器优先使用它，不会再次显示普通 `message`。
+
+需要在反馈后跳转或刷新时，在 `feedback.redirectAfter` 中返回秒数。跳转目标由页面根据业务上下文决定，响应只提供延迟参数；例如登录和技术栈配置分别由登录页、表单页执行跳转。
+
+后端不要手写重复的 `feedback` 对象，统一使用 `server/api-response.mts` 中的 `feedbackResponse()`：
+
+```ts
+return c.json({
+  ...feedbackResponse('保存成功', { component: 'modal', type: 'info' }),
+  currentValues,
+});
+```
+
+`feedbackResponse()` 及其 `ApiFeedbackOptions` 类型限制了反馈组件和类型的可选值；传入未声明的值会在 TypeScript 类型检查阶段失败。
 
 新增或修改接口时，必须保持上述响应协议；新增前端请求入口时，必须接入 `commonApi.apiFetch`。完成修改后至少运行 `npm run typecheck` 和 `SKIP_SERVER_LISTEN=1 npm test`。

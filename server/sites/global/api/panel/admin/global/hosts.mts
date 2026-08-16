@@ -1,4 +1,5 @@
 import type { ApiHandler } from '@server/api-router.mjs';
+import { feedbackResponse } from '@server/api-response.mjs';
 import { normalizeHostname } from '@server/site-router.mjs';
 
 const columns = [
@@ -43,7 +44,7 @@ const handler: ApiHandler = async (c, next, params) => {
 		await database.prepare(`INSERT INTO global_hosts (hostname, site_key, status, created_at)
 			VALUES (?1, ?2, 'enabled', ?3)`).bind(hostname, siteKey, Date.now()).run();
 		await c.get('siteRouter').refresh();
-		return c.json({ message: '新增成功' }, 201);
+		return c.json(feedbackResponse('新增成功'), 201);
 	}
 	if (!params.id && c.req.method === 'DELETE') {
 		const ids = await c.req.json<unknown[]>().catch(() => []);
@@ -51,7 +52,7 @@ const handler: ApiHandler = async (c, next, params) => {
 			await database.prepare('DELETE FROM global_hosts WHERE id = ?1').bind(Number(id)).run();
 		}
 		await c.get('siteRouter').refresh();
-		return c.json({ message: '删除成功' });
+		return c.json(feedbackResponse('删除成功'));
 	}
 	if (params.id && c.req.method === 'GET') {
 		const row = await database.prepare('SELECT id, hostname, site_key, status, created_at FROM global_hosts WHERE id = ?1')
@@ -67,12 +68,12 @@ const handler: ApiHandler = async (c, next, params) => {
 			site_key = COALESCE(?3, site_key), status = COALESCE(?4, status) WHERE id = ?1`)
 			.bind(Number(params.id), hostname, typeof body.site_key === 'string' ? body.site_key : null, status).run();
 		await c.get('siteRouter').refresh();
-		return c.json({ message: '保存成功' });
+		return c.json(feedbackResponse('保存成功'));
 	}
 	if (params.id && c.req.method === 'DELETE') {
 		await database.prepare('DELETE FROM global_hosts WHERE id = ?1').bind(Number(params.id)).run();
 		await c.get('siteRouter').refresh();
-		return c.json({ message: '删除成功' });
+		return c.json(feedbackResponse('删除成功'));
 	}
 	return next();
 };
