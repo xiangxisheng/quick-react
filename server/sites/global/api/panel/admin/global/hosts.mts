@@ -3,7 +3,7 @@ import { normalizeHostname } from '@server/site-router.mjs';
 
 const columns = [
 	{ dataIndex: 'id', title: 'ID' },
-	{ dataIndex: 'hostname', title: 'Host', component: 'textbox' },
+	{ dataIndex: 'hostname', title: '域名', component: 'textbox' },
 	{ dataIndex: 'site_key', title: '站点', component: 'select', placeholder: '搜索并选择站点', rules: [{ required: true, message: '请选择站点' }] },
 	{ dataIndex: 'status', title: '状态', component: 'textbox' },
 ];

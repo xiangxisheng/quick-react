@@ -10,7 +10,7 @@ export type MenuNode = {
 const rawSiteNavigation = (): MenuNode[] => [
 	{ label: '首页', key: '/', icon: 'mail', component: 'home', title: '首页', description: 'Quick React 项目首页' },
 	{
-		label: '阿里云', key: '/aliyun', icon: 'appstore', navigationGroup: 'aliyun', dropdown: false, component: 'panel', title: '阿里云管理', description: '阿里云资源管理控制台',
+		label: '阿里云', key: 'aliyun', icon: 'appstore', navigationGroup: 'aliyun', dropdown: false, component: 'panel', title: '阿里云管理', description: '阿里云资源管理控制台',
 		children: [
 			{ label: '首页', key: 'dashboard', icon: 'mail', component: 'dashboard', title: '首页', description: '阿里云管理概览' },
 			{ label: '实例详情', key: 'DescribeInstances', icon: 'appstore', component: 'aliyunDescribeInstances', title: '实例详情', description: '阿里云 ECS 实例详情' },
@@ -18,7 +18,7 @@ const rawSiteNavigation = (): MenuNode[] => [
 	},
 	{
 		label: '管理后台',
-		key: '/panel/admin',
+		key: 'panel/admin',
 		icon: 'appstore',
 		component: 'panel',
 		managementRoot: true,
@@ -49,9 +49,9 @@ const rawSiteNavigation = (): MenuNode[] => [
 			},
 		],
 	},
-	{ label: '关于', key: '/about', icon: 'appstore', component: 'about', title: '关于', description: '关于 Quick React 项目' },
-	{ label: '登录', key: '/sign', icon: 'appstore', component: 'sign', title: '登录', description: '登录 Quick React' },
-	{ label: '注册', key: '/sign-up', icon: 'appstore', component: 'sign', title: '注册', description: '创建初始管理员', hidden: true },
+	{ label: '关于', key: 'about', icon: 'appstore', component: 'about', title: '关于', description: '关于 Quick React 项目' },
+	{ label: '登录', key: 'sign', icon: 'appstore', component: 'sign', title: '登录', description: '登录 Quick React' },
+	{ label: '注册', key: 'sign-up', icon: 'appstore', component: 'sign', title: '注册', description: '创建初始管理员', hidden: true },
 ];
 
 const resolveMenuPaths = (items: MenuNode[], parentPath = ''): MenuNode[] => items.map((item) => {

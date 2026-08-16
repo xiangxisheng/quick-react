@@ -1,21 +1,32 @@
 import type { MenuNode, PageDefinition } from './sites/base/navigation.mjs';
 import { workerSiteNavigations } from './.generated/worker-api-registry.mjs';
 
-const mergeNodes = (base: MenuNode[], overrides: MenuNode[]): MenuNode[] => {
-	const remaining = new Map(overrides.map((item) => [item.key, item]));
+const resolveNodeKey = (key: string, parentPath: string) => {
+	if (key === '/') return '/';
+	if (key.startsWith('/')) return key;
+	return `/${[parentPath.replace(/^\//, '').replace(/\/$/, ''), key].filter(Boolean).join('/')}`;
+};
+
+const mergeNodes = (base: MenuNode[], overrides: MenuNode[], parentPath = ''): MenuNode[] => {
+	const remaining = new Map(overrides.map((item) => {
+		const key = resolveNodeKey(String(item.key), parentPath);
+		return [key, { ...item, key }];
+	}));
 	const merged = base.map((item) => {
-		const override = remaining.get(item.key);
-		if (!override) return { ...item, children: item.children ? mergeNodes(item.children, []) : undefined };
-		remaining.delete(item.key);
+		const key = resolveNodeKey(String(item.key), parentPath);
+		const override = remaining.get(key);
+		if (!override) return { ...item, key, children: item.children ? mergeNodes(item.children, [], key) : undefined };
+		remaining.delete(key);
 		return {
 			...item,
 			...override,
-			children: mergeNodes(item.children ?? [], override.children ?? []),
+			key,
+			children: mergeNodes(item.children ?? [], override.children ?? [], key),
 		};
 	});
 	return [...merged, ...remaining.values()].map((item) => ({
 		...item,
-		children: item.children ? mergeNodes(item.children, []) : undefined,
+		children: item.children ? mergeNodes(item.children, [], String(item.key)) : undefined,
 	}));
 };
 

@@ -36,10 +36,10 @@ GET /api/panel/admin/dashboard
 `global` 控制面额外提供：
 
 ```text
-/api/panel/admin/sites
-/api/panel/admin/hosts
+/api/panel/admin/global/sites
+/api/panel/admin/global/hosts
 ```
 
-Node 控制面创建站点后会立即尝试 migration，也可向 `POST /api/panel/admin/sites/<site_key>` 重试；成功后再通过站点更新接口启用。Worker 的 D1 migration 必须由部署流程执行，该操作会返回 `501`。
+Node 控制面创建站点后会立即尝试 migration，也可向 `POST /api/panel/admin/global/sites/<site_key>` 重试；成功后再通过站点更新接口启用。Worker 的 D1 migration 必须由部署流程执行，该操作会返回 `501`。
 
 `/api/panel/*` 需要登录，`/api/panel/admin/*` 还需要 `admin` 角色。空数据库首次初始化后，可通过 `PUT /api/sign` 创建唯一的初始管理员，之后使用 `POST /api/sign` 登录。

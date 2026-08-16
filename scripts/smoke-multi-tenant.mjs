@@ -21,7 +21,7 @@ try {
 	};
 
 	assert.equal((await request('localhost', '/api/health.php')).status, 200);
-	assert.equal((await request('localhost', '/api/panel/admin/sites.php')).status, 401);
+	assert.equal((await request('localhost', '/api/panel/admin/global/sites.php')).status, 401);
 	const registration = await request('localhost', '/api/sign.php');
 	assert.deepEqual(await registration.json(), { user: null, registrationAvailable: true });
 	assert.equal((await request('localhost', '/api/sign.php', {
@@ -35,30 +35,30 @@ try {
 	assert.ok(cookie);
 
 	const createSite = async (siteKey, extra = {}) => {
-		assert.equal((await request('localhost', '/api/panel/admin/sites.php', {
+		assert.equal((await request('localhost', '/api/panel/admin/global/sites.php', {
 			method: 'POST', cookie, body: { site_key: siteKey, name: siteKey, ...extra },
 		})).status, 201);
-		assert.equal((await request('localhost', `/api/panel/admin/sites.php/${siteKey}`, {
+		assert.equal((await request('localhost', `/api/panel/admin/global/sites.php/${siteKey}`, {
 			method: 'POST', cookie,
 		})).status, 200);
-		assert.equal((await request('localhost', `/api/panel/admin/sites.php/${siteKey}`, {
+		assert.equal((await request('localhost', `/api/panel/admin/global/sites.php/${siteKey}`, {
 			method: 'PUT', cookie, body: { status: 'enabled' },
 		})).status, 200);
 	};
 
 	await createSite('site1');
 	for (const hostname of ['site1.test', '*.wild.test']) {
-		assert.equal((await request('localhost', '/api/panel/admin/hosts.php', {
+		assert.equal((await request('localhost', '/api/panel/admin/global/hosts.php', {
 			method: 'POST', cookie, body: { hostname, site_key: 'site1' },
 		})).status, 201);
 	}
 	assert.equal((await request('site1.test', '/api/health.php')).status, 200);
-	assert.equal((await request('site1.test', '/api/panel/admin/sites.php', { cookie })).status, 404);
-	assert.equal((await request('a.wild.test', '/api/panel/admin/sites.php', { cookie })).status, 404);
-	assert.equal((await request('a.b.wild.test', '/api/panel/admin/sites.php', { cookie })).status, 200);
+	assert.equal((await request('site1.test', '/api/panel/admin/global/sites.php', { cookie })).status, 404);
+	assert.equal((await request('a.wild.test', '/api/panel/admin/global/sites.php', { cookie })).status, 404);
+	assert.equal((await request('a.b.wild.test', '/api/panel/admin/global/sites.php', { cookie })).status, 200);
 
 	await createSite('site2', { dsn: `sqlite://${join(temporaryDirectory, 'site2.sqlite')}` });
-	assert.equal((await request('localhost', '/api/panel/admin/hosts.php', {
+	assert.equal((await request('localhost', '/api/panel/admin/global/hosts.php', {
 		method: 'POST', cookie, body: { hostname: 'site2.test', site_key: 'site2' },
 	})).status, 201);
 	const isolatedRegistration = await request('site2.test', '/api/sign.php');
