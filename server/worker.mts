@@ -103,6 +103,7 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 			apiSuffix: siteConfig.apiSuffix,
 			pageSuffix: siteConfig.pageSuffix,
 			siteNavigation: menuItems,
+			currentUser: c.get('currentUser'),
 			footer: `Ant Design ©${new Date().getFullYear()} Created by Ant UED`,
 		},
 	}));

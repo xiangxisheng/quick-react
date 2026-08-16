@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Form, Input, message, Modal, Space, Switch, Typography } from 'antd';
 import type { ApiFeedback, CommonApi } from '@/utils/common/api.js';
 import { CountdownDisplay, formatCountdown } from '@/components/common/Countdown.js';
-import { getRedirectAfter, getRedirectDeadline } from '@/utils/common/feedback.js';
+import { runAfterFeedback } from '@/utils/common/feedback.js';
 
 export type FormField = {
 	name: string;
@@ -59,6 +59,7 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 	const [initialValues, setInitialValues] = useState<Record<string, unknown>>({});
 	const [dirty, setDirty] = useState(false);
 	const [refreshTarget, setRefreshTarget] = useState<string>();
+	const refreshSchedule = useRef<{ cancel: () => void } | undefined>(undefined);
 	const [refreshDeadline, setRefreshDeadline] = useState<number>();
 	const [refreshCancelled, setRefreshCancelled] = useState(false);
 	const [saved, setSaved] = useState(false);
@@ -79,9 +80,9 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 		if (!saved || feedback?.component !== 'message') return;
 		const feedbackMessage = feedback.message ?? '';
 		const countdown = refreshDeadline && refreshTarget
-			? <CountdownDisplay deadline={refreshDeadline} onFinish={() => window.location.assign(refreshTarget)} />
+			? <CountdownDisplay deadline={refreshDeadline} onFinish={() => undefined} />
 			: null;
-		const refreshValue = countdown ?? (feedback.redirectAfter == null ? '' : formatCountdown(feedback.redirectAfter * 1000));
+		const refreshValue = countdown ?? (refreshDeadline ? formatCountdown(Math.max(0, refreshDeadline - Date.now())) : '');
 		const content = renderTemplate(feedbackMessage, { redirectAfter: refreshValue });
 		messageApi.open({ key: 'form-feedback', type: feedback.type ?? 'success', content, duration: 0 });
 		return () => messageApi.destroy('form-feedback');
@@ -123,14 +124,12 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 			setInitialValues(values);
 			setDirty(false);
 			setSaved(true);
-			const redirectAfter = getRedirectAfter(result.feedback);
-			if (target && redirectAfter !== null) {
+			if (target && result.feedback?.redirectAfter !== undefined) {
+				const schedule = runAfterFeedback(result.feedback, () => window.location.assign(target));
+				refreshSchedule.current = schedule;
 				setRefreshCancelled(false);
-				if (redirectAfter === 0) window.location.assign(target);
-				else {
-					setRefreshTarget(target);
-					setRefreshDeadline(getRedirectDeadline(result.feedback));
-				}
+				setRefreshTarget(target);
+				setRefreshDeadline(schedule.deadline);
 			}
 		} catch (error) {
 			console.error(`保存配置失败: ${apiPath}`, error);
@@ -142,9 +141,9 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 	const feedback = responseFeedback;
 	const feedbackMessage = feedback?.message ?? '';
 	const alertCountdown = refreshDeadline && refreshTarget
-		? <CountdownDisplay deadline={refreshDeadline} onFinish={() => window.location.assign(refreshTarget)} />
+		? <CountdownDisplay deadline={refreshDeadline} onFinish={() => undefined} />
 		: null;
-	const refreshValue = alertCountdown ?? (feedback?.redirectAfter == null ? '' : formatCountdown(feedback.redirectAfter * 1000));
+	const refreshValue = alertCountdown ?? (refreshDeadline ? formatCountdown(Math.max(0, refreshDeadline - Date.now())) : '');
 	const feedbackContent = renderTemplate(feedbackMessage, { redirectAfter: refreshValue });
 	const inlineFeedback = saved && feedback?.component === 'inline'
 			? <Alert type={feedback.type ?? 'success'} showIcon={feedback.showIcon} message={feedbackContent} style={{ marginBottom: 24 }} />
@@ -156,7 +155,7 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 			okText={feedback.refreshNowLabel}
 			cancelText={feedback.cancelRefreshLabel}
 			onOk={() => window.location.assign(refreshTarget ?? window.location.href)}
-			onCancel={() => setRefreshCancelled(true)}
+			onCancel={() => { refreshSchedule.current?.cancel(); setRefreshCancelled(true); }}
 		>
 			{feedbackContent}
 		</Modal>

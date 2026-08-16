@@ -11,6 +11,7 @@ interface InitialData {
 	pageSuffix: string;
 	siteNavigation: MenuItem[];
 	footer?: string;
+	currentUser?: { id: number; username: string; roles: string[] };
 }
 
 interface IndexData {

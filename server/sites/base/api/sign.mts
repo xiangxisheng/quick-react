@@ -41,7 +41,7 @@ const handler: ApiHandler = async (c, next) => {
 			await database.prepare(`UPDATE base_system_bootstrap SET value = 'open' WHERE key = 'initial_admin' AND value = 'claimed'`).run();
 			throw error;
 		}
-		return apiMessage(c, 201, '初始管理员创建成功，请登录', { redirectAfter: 1 });
+		return apiMessage(c, 201, '初始管理员创建成功，请登录');
 	}
 	if (c.req.method === 'POST') {
 		const credentials = await parseCredentials(c);
@@ -55,7 +55,7 @@ const handler: ApiHandler = async (c, next) => {
 		await database.prepare(`INSERT INTO base_system_sessions (id, user_id, expires_at, created_at)
 			VALUES (?1, ?2, ?3, ?4)`).bind(sessionId, user.id, now + maxAge * 1000, now).run();
 		c.header('Set-Cookie', createSessionCookie(sessionId, new URL(c.req.url).protocol === 'https:', maxAge));
-		return apiMessageData(c, 200, '登录成功', { user: { id: user.id, username: user.username } }, { redirectAfter: 1 });
+		return apiMessageData(c, 200, '登录成功', { user: { id: user.id, username: user.username } });
 	}
 	if (c.req.method === 'DELETE') {
 		const sessionId = readSessionId(c.req.raw);

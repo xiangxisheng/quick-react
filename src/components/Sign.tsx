@@ -3,7 +3,7 @@ import { Alert, Form, Input, Checkbox, Space, Button } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { CommonApi } from '@/utils/common/api.js';
 import { CountdownDisplay } from '@/components/common/Countdown.js';
-import { getRedirectAfter, getRedirectDeadline } from '@/utils/common/feedback.js';
+import { runAfterFeedback } from '@/utils/common/feedback.js';
 
 type FormState = {
 	username: string;
@@ -47,12 +47,10 @@ const SignForm: React.FC<SignFormProps> = ({ commonApi }) => {
 				body: JSON.stringify(values),
 			});
 			const result = await response.json() as { feedback?: { redirectAfter?: number } };
-			const redirectAfter = getRedirectAfter(result.feedback) ?? 0;
-			if (redirectAfter === 0) {
+			const schedule = runAfterFeedback(result.feedback, () => {
 				window.location.href = isSignUp ? `/sign${pageSuffix}` : `/panel/admin${pageSuffix}`;
-				return;
-			}
-			setRedirectDeadline(getRedirectDeadline(result.feedback));
+			});
+			setRedirectDeadline(schedule.deadline);
 		} catch {
 			// apiFetch 已统一展示接口错误，这里只阻止表单提交产生未处理异常。
 		}
@@ -71,7 +69,7 @@ const SignForm: React.FC<SignFormProps> = ({ commonApi }) => {
 				<Alert
 					type="success"
 					showIcon
-					message={<span>操作成功，<CountdownDisplay deadline={redirectDeadline} onFinish={() => { window.location.href = isSignUp ? `/sign${pageSuffix}` : `/panel/admin${pageSuffix}`; }} /> 秒后跳转</span>}
+					message={<span>操作成功，<CountdownDisplay deadline={redirectDeadline} onFinish={() => undefined} /> 秒后跳转</span>}
 					style={{ margin: '0 40px 24px' }}
 				/>
 			) : null}

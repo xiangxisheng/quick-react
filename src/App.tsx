@@ -4,14 +4,15 @@ import type { CommonApi } from '@/utils/common/api.js';
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Layout, Menu } from 'antd';
-import { AppstoreOutlined, MailOutlined } from '@ant-design/icons';
+import { Avatar, Button, Dropdown, Layout, Menu, Space } from 'antd';
+import { AppstoreOutlined, LoginOutlined, LogoutOutlined, MailOutlined, UserAddOutlined, UserOutlined } from '@ant-design/icons';
 import DescribeInstances from './components/aliyun/DescribeInstances.js';
 import Sign from './components/Sign.js';
 import Panel from './components/panel/PanelLayout.js';
 import Dashboard from './components/panel/Dashboard.js';
 import TableCRUD from '@/utils/antd/table_crud/index.js';
 import FormPage from './components/panel/Form.js';
+import { runAfterFeedback } from '@/utils/common/feedback.js';
 const { Content } = Layout;
 
 // 定义路由对应的页面组件
@@ -39,6 +40,7 @@ interface InitialData {
 	apiSuffix: string;
 	pageSuffix: string;
 	siteNavigation: InitialMenuItem[];
+	currentUser?: { id: number; username: string; roles: string[] };
 }
 
 const serverData = (window as Window & { __INITIAL_DATA__?: InitialData }).__INITIAL_DATA__;
@@ -146,15 +148,36 @@ const App = ({ commonApi }: AppType) => {
 		}
 	};
 	const memoizedRoutes = useMemo(() => routes, []);
+	const currentUser = initialData.currentUser;
+	const accountMenu = currentUser ? {
+		items: [{ key: 'logout', icon: <LogoutOutlined />, label: '退出登录' }],
+			onClick: async ({ key }: { key: string }) => {
+			if (key !== 'logout') return;
+			const response = await commonApi.apiFetch(`/api/sign${initialData.apiSuffix}`, { method: 'DELETE' });
+			const result = await response.json() as { feedback?: { redirectAfter?: number } };
+			runAfterFeedback(result.feedback, () => window.location.reload());
+		},
+	} : undefined;
 
 	return (
 		<Layout style={{ height: '100%' }}>
-			<Menu
-				onClick={onClick}
-				selectedKeys={[current]}
-				mode="horizontal"
-				items={items}
-			/>
+			<Layout.Header style={{ height: 48, padding: '0 24px', display: 'flex', alignItems: 'center', background: '#fff', borderBottom: '1px solid #f0f0f0' }}>
+				<Menu
+					onClick={onClick}
+					selectedKeys={[current]}
+					mode="horizontal"
+					items={items}
+					style={{ flex: 1, minWidth: 0, borderBottom: 0 }}
+				/>
+				{currentUser ? <Dropdown menu={accountMenu} placement="bottomRight">
+					<Button type="text" style={{ height: 40, padding: '0 8px' }}>
+						<Space size={6}><Avatar size="small" icon={<UserOutlined />} />{currentUser.username}</Space>
+					</Button>
+				</Dropdown> : <Space size={4}>
+					<Button type="text" icon={<LoginOutlined />} onClick={() => navigate(pageUrl('/sign'))}>登录</Button>
+					<Button type="text" icon={<UserAddOutlined />} onClick={() => navigate(pageUrl('/sign-up'))}>注册</Button>
+				</Space>}
+			</Layout.Header>
 			<Content>
 				<Routes>
 					{memoizedRoutes.map((route) => (

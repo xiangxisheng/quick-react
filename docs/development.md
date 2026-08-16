@@ -56,7 +56,7 @@ npm run typecheck
 
 `feedback.component` 支持 `inline`、`message`、`modal` 和 `none`。`modal` 可额外返回 `refreshNowLabel` 与 `cancelRefreshLabel`；`none` 表示不显示反馈。响应同时包含 `feedback` 时，拦截器优先使用它，不会再次显示普通 `message`。
 
-需要在反馈后跳转或刷新时，在 `feedback.redirectAfter` 中返回秒数。跳转目标由页面根据业务上下文决定，响应只提供延迟参数；例如登录和技术栈配置分别由登录页、表单页执行跳转。
+需要执行反馈后动作时，前端公共反馈助手在 `feedback.redirectAfter` 缺失时默认使用 2 秒；后端不需要生成这个字段。表单只有在响应明确提供 `redirectAfter` 时才自动刷新，普通保存反馈不会触发刷新。跳转目标由页面根据业务上下文决定。
 
 后端接口统一使用 `server/api-response.mts` 中的响应助手：
 
