@@ -1,11 +1,5 @@
-export type MenuNode = {
-	label: string;
-	key: string;
-	icon: string;
-	dropdown?: boolean;
-	children?: MenuNode[];
-	[key: string]: unknown;
-};
+import type { NavigationItem } from '@shared/types/navigation.mjs';
+export type MenuNode = NavigationItem;
 
 const rawSiteNavigation = (): MenuNode[] => [
 	{ label: '首页', key: '/', icon: 'mail', component: 'home', title: '首页', description: 'Quick React 项目首页' },

@@ -1,6 +1,8 @@
 import type React from 'react';
 import type { MenuProps } from 'antd';
 import type { CommonApi } from '@/utils/common/api.js';
+import type { InitialData } from '@shared/types/initial-data.mjs';
+import type { NavigationItem } from '@shared/types/navigation.mjs';
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
@@ -20,36 +22,14 @@ const About = () => <h1 style={{ padding: 10, margin: 0, height: '100%' }}>About
 
 type MenuItem = Required<MenuProps>['items'][number];
 
-interface InitialMenuItem {
-	label: string;
-	key: string;
-	icon: 'mail' | 'appstore';
-	dropdown?: boolean;
-	hidden?: boolean;
-	component?: string;
-	title?: string;
-	description?: string;
-	navigationGroup?: string;
-	navigation?: InitialMenuItem[];
-	dashboardPath?: string;
-	children?: InitialMenuItem[];
-}
-
-interface InitialData {
-	apiSuffix: string;
-	pageSuffix: string;
-	siteNavigation: InitialMenuItem[];
-	currentUser?: { id: number; username: string; roles: string[] };
-}
-
 const serverData = (window as Window & { __INITIAL_DATA__?: InitialData }).__INITIAL_DATA__;
 	const initialData = serverData ?? { apiSuffix: '', pageSuffix: '', siteNavigation: [] };
 const siteNavigation = initialData.siteNavigation;
 const pageUrl = (path: string) => path === '/' ? path : `${path}${initialData.pageSuffix}`;
 
-type PageDefinition = InitialMenuItem & { path: string; component: string; title: string; navigation: InitialMenuItem[]; dashboardPath?: string };
+type PageDefinition = NavigationItem & { path: string; component: string; navigation: NavigationItem[]; dashboardPath?: string };
 
-const collectPages = (items: InitialMenuItem[], navigation: InitialMenuItem[] = items, dashboardPath?: string): PageDefinition[] => items.flatMap((item) => {
+const collectPages = (items: NavigationItem[], navigation: NavigationItem[] = items, dashboardPath?: string): PageDefinition[] => items.flatMap((item) => {
 	const pageNavigation = item.component === 'panel' ? item.children ?? [] : navigation;
 	const pageDashboardPath = item.component === 'panel'
 		? item.children?.find((child) => child.component === 'dashboard')?.key
@@ -66,10 +46,10 @@ const iconComponents = {
 	mail: <MailOutlined />,
 	appstore: <AppstoreOutlined />,
 };
-const toMenuItems = (menu: InitialMenuItem[], onTitleClick?: (key: string) => void): MenuItem[] => menu.filter((item) => !item.hidden).map((item) => ({
+const toMenuItems = (menu: NavigationItem[], onTitleClick?: (key: string) => void): MenuItem[] => menu.filter((item) => !item.hidden).map((item) => ({
 	label: item.label,
 	key: item.key,
-	icon: iconComponents[item.icon],
+	icon: iconComponents[item.icon as keyof typeof iconComponents],
 	children: item.children && item.dropdown !== false ? toMenuItems(item.children, onTitleClick) : undefined,
 	...(item.children && onTitleClick ? { onTitleClick: () => onTitleClick(item.key) } : {}),
 }));

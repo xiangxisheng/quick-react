@@ -3,57 +3,20 @@ import { Modal, ModalFuncProps, Spin } from 'antd';
 import { message } from 'antd';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
 import { useState } from 'react';
-import type { ApiFeedback as SharedApiFeedback } from '@shared/types/api-response.mjs';
+import type { ApiFeedback as SharedApiFeedback, ApiResponseBody } from '@shared/types/api-response.mjs';
+import type { TableColumn, TableData, TableOption, TableResponse } from '@shared/types/table.mjs';
 
 /* 前端类型定义开始 */
-export interface DataType extends Record<string, unknown> { }
-
-interface ResJsonTableColumnRule {
-	required: boolean;
-	message: string;
-}
-
-interface ResJsonTableColumnSelectOption {
-	value: string;
-	text: string;
-	color?: string;
-	dataTypes?: string[];
-}
-
-export type ColumnComponentType = 'textbox' | 'url' | 'textarea' | 'select' | 'datepicker' | 'datepicker_rangepicker' | 'inputnumber' | 'upload';
-export type ColumnDataType = 'js_timestamp' | 'int' | 'float' | 'string' | 'datetime';
-
-export interface ResJsonTableColumn {
-	dataIndex: string;
-	title: string;
-	component?: ColumnComponentType;
-	rules?: ResJsonTableColumnRule[];
-	ellipsis?: boolean;
-	placeholder?: string;
-	options?: ResJsonTableColumnSelectOption[];
-	dataType?: ColumnDataType;
-	dayjsFormat?: string;
-}
-
-export interface ResJsonTableOption {
-	rowKey: string;
-}
-
-export interface ResJsonTable {
-	option?: ResJsonTableOption;
-	columns?: ResJsonTableColumn[];
-	dataSource?: DataType[];
-	totalRecords?: number,
-}
+export type DataType = TableData;
+export type ColumnComponentType = TableColumn['component'];
+export type ColumnDataType = TableColumn['dataType'];
+export type ResJsonTableColumn = TableColumn;
+export type ResJsonTableOption = TableOption;
+export type ResJsonTable = TableResponse;
 
 export type ApiFeedback = SharedApiFeedback;
 
-export interface ResJSON {
-	table?: ResJsonTable;
-	/** 仅用于兼容旧版错误接口；新接口必须使用 feedback.message。 */
-	message?: string;
-	feedback?: ApiFeedback;
-}
+export type ResJSON = ApiResponseBody;
 
 type ParsedResJSON = ResJSON & { parseError?: boolean };
 /* 前端类型定义结束 */

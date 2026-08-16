@@ -1,0 +1,20 @@
+export type TableData = Record<string, unknown>;
+export type TableColumnComponent = 'textbox' | 'url' | 'textarea' | 'select' | 'datepicker' | 'datepicker_rangepicker' | 'inputnumber' | 'upload';
+export type TableDataType = 'js_timestamp' | 'int' | 'float' | 'string' | 'datetime';
+export type TableColumnRule = { required: boolean; message: string };
+export type TableSelectOption = { value: string; text: string; color?: string; dataTypes?: string[] };
+export type TableColumn = {
+	dataIndex: string;
+	title: string;
+	component?: TableColumnComponent;
+	rules?: TableColumnRule[];
+	ellipsis?: boolean;
+	placeholder?: string;
+	options?: TableSelectOption[];
+	dataType?: TableDataType;
+	dayjsFormat?: string;
+};
+export type TableOption = { rowKey: string };
+export type TableResponse = { option?: TableOption; columns?: TableColumn[]; dataSource?: TableData[]; totalRecords?: number };
+export type TableRow = TableData & { key: string };
+export type MockTable = { columns: TableColumn[]; rows: TableRow[] };

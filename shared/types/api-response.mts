@@ -14,3 +14,9 @@ export type ApiFeedback = {
 
 export type ApiFeedbackOptions = Partial<Omit<ApiFeedback, 'message'>>;
 export type ApiSuccessData = Record<string, unknown> & { message?: never };
+
+export type ApiResponseBody = {
+	message?: string;
+	feedback?: ApiFeedback;
+	table?: import('./table.mjs').TableResponse;
+};

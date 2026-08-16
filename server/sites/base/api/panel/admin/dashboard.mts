@@ -1,12 +1,12 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiResponse } from '@server/api-response.mjs';
 import { mockTables } from '@server/panel-data.mjs';
+import type { DashboardData } from '@shared/types/dashboard.mjs';
 
 const handler: ApiHandler = (c) => {
 	const rows = mockTables.rows.rows;
 	const enabledRows = rows.filter((row) => row.status === 'enabled').length;
-	return apiResponse(c, 200, {
-		dashboard: {
+	const dashboard: DashboardData = {
 			recentTitle: '最近数据',
 			statistics: [
 				{ key: 'columns', label: '字段定义', value: mockTables.columns.rows.length },
@@ -15,8 +15,8 @@ const handler: ApiHandler = (c) => {
 			],
 			recentColumns: mockTables.rows.columns,
 			recentRows: rows.slice(-5).reverse(),
-		},
-	});
+	};
+	return apiResponse(c, 200, { dashboard });
 };
 
 export default handler;

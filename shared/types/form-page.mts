@@ -20,3 +20,8 @@ export type FormPageConfig = {
 	initialValues: Record<string, unknown>;
 	fields: FormPageField[];
 };
+
+export type FormPageResponse<T = Record<string, unknown>> = {
+	currentValues?: T;
+	formPage?: FormPageConfig;
+};

@@ -3,6 +3,9 @@ import type { SiteRequestContext, SiteRouter } from './site-router.mjs';
 import type { ConfigStore } from './config-store.mjs';
 import type { SystemConfig } from './system-config.mjs';
 import type { TechStackConfig } from './tech-stack.mjs';
+import type { UserIdentity } from '@shared/types/user.mjs';
+import type { TableColumn, TableRow } from '@shared/types/table.mjs';
+export type { MockTable } from '@shared/types/table.mjs';
 
 export type RuntimeBindings = Record<string, unknown> & {
 	DEFAULT_DB?: unknown;
@@ -19,22 +22,10 @@ export type AppEnv = {
 		configStore: ConfigStore;
 		systemConfig: SystemConfig;
 		techStackConfig: TechStackConfig;
-		currentUser?: { id: number; username: string; roles: string[] };
+		currentUser?: UserIdentity;
 		effectiveRoles: string[];
 	};
 };
 
-export type MockRow = Record<string, unknown> & { key: string };
-
-export type MockColumn = {
-	dataIndex: string;
-	title: string;
-	component?: string;
-	dataType?: string;
-	dayjsFormat?: string;
-};
-
-export type MockTable = {
-	columns: MockColumn[];
-	rows: MockRow[];
-};
+export type MockRow = TableRow;
+export type MockColumn = TableColumn;

@@ -2,13 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, Col, Row, Statistic, Table } from 'antd';
 import type { TableColumnsType } from 'antd';
 import type { CommonApi } from '@/utils/common/api.js';
-
-interface DashboardData {
-	recentTitle?: string;
-	statistics: Array<{ key: string; label: string; value: number }>;
-	recentColumns: Array<{ dataIndex: string; title: string; key?: string }>;
-	recentRows: Array<Record<string, unknown> & { key: string }>;
-}
+import type { DashboardData } from '@shared/types/dashboard.mjs';
 
 export default function Dashboard({ commonApi, apiPath }: { commonApi: CommonApi; apiPath: string }) {
 	const [data, setData] = useState<DashboardData>();

@@ -1,18 +1,5 @@
 import { html, raw } from 'hono/html';
-
-interface MenuItem {
-	label: string;
-	key: string;
-	icon: string;
-}
-
-interface InitialData {
-	apiSuffix: string;
-	pageSuffix: string;
-	siteNavigation: MenuItem[];
-	footer?: string;
-	currentUser?: { id: number; username: string; roles: string[] };
-}
+import type { InitialData } from '@shared/types/initial-data.mjs';
 
 interface IndexData {
 	title: string;

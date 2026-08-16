@@ -1,6 +1,7 @@
 import type React from 'react';
 import type { MenuProps } from 'antd';
 import type { CommonApi } from '@/utils/common/api.js';
+import type { NavigationItem } from '@shared/types/navigation.mjs';
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -15,12 +16,7 @@ const { Header, Content, Footer, Sider } = Layout;
 // 定义菜单项
 type MenuItem = Required<MenuProps>['items'][number];
 
-interface InitialMenuItem {
-	label: string;
-	key: string;
-	icon: 'mail' | 'appstore';
-	children?: InitialMenuItem[];
-}
+type InitialMenuItem = NavigationItem;
 
 const initialData = (window as Window & {
 	__INITIAL_DATA__?: { apiSuffix?: string; footer?: string };
@@ -34,7 +30,7 @@ const iconComponents = {
 const toMenuItems = (menu: InitialMenuItem[]): MenuItem[] => menu.map((item) => ({
 	label: item.label,
 	key: item.key,
-	icon: iconComponents[item.icon],
+	icon: iconComponents[item.icon as keyof typeof iconComponents],
 	children: item.children ? toMenuItems(item.children) : undefined,
 }));
 const pageUrl = (path: string) => path === '/' ? path : `${path}${pageSuffix}`;
