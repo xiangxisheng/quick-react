@@ -4,7 +4,7 @@ import { normalizeHostname } from '@server/site-router.mjs';
 const columns = [
 	{ dataIndex: 'id', title: 'ID' },
 	{ dataIndex: 'hostname', title: 'Host', component: 'textbox' },
-	{ dataIndex: 'site_key', title: '站点', component: 'textbox' },
+	{ dataIndex: 'site_key', title: '站点', component: 'select', placeholder: '搜索并选择站点', rules: [{ required: true, message: '请选择站点' }] },
 	{ dataIndex: 'status', title: '状态', component: 'textbox' },
 ];
 
@@ -26,7 +26,11 @@ const handler: ApiHandler = async (c, next, params) => {
 	const database = c.get('database');
 	if (!params.id && c.req.method === 'GET') {
 		const rows = await database.prepare('SELECT id, hostname, site_key, status, created_at FROM global_hosts ORDER BY id').all<Record<string, unknown>>();
-		return c.json({ table: { option: { rowKey: 'id' }, columns, dataSource: rows.results, totalRecords: rows.results.length } });
+		const sites = await database.prepare(`SELECT site_key, name FROM global_sites
+			WHERE status = 'enabled' AND migration_status = 'ready' ORDER BY site_key`).all<{ site_key: string; name: string }>();
+		const siteOptions = sites.results.map((site) => ({ value: site.site_key, text: `${site.name} (${site.site_key})` }));
+		const tableColumns = columns.map((column) => column.dataIndex === 'site_key' ? { ...column, options: siteOptions } : column);
+		return c.json({ table: { option: { rowKey: 'id' }, columns: tableColumns, dataSource: rows.results, totalRecords: rows.results.length } });
 	}
 	if (!params.id && c.req.method === 'POST') {
 		const body = await parseBody(c);

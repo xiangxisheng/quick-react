@@ -45,11 +45,14 @@ function getFormItemComponent(item: ResJsonTableColumn, row: DataType) {
 			);
 		case ('select'):
 			return (
-				<Select placeholder={item.placeholder}>
-					{item.options?.map((option) => (
-						<Select.Option value={option.value}>{option.text}</Select.Option>
-					))}
-				</Select>
+				<Select
+					showSearch
+					allowClear
+					placeholder={item.placeholder}
+					optionFilterProp="label"
+					filterOption={(input, option) => String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+					options={item.options?.map((option) => ({ value: option.value, label: option.text }))}
+				/>
 			);
 		case ('textarea'):
 			return (
