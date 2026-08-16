@@ -48,7 +48,7 @@ const handler: ApiHandler = async (c, next) => {
 		const user = await database.prepare(`SELECT id, username, password_hash, roles FROM base_system_users
 			WHERE username = ?1 AND status = 'enabled'`).bind(credentials.username)
 			.first<{ id: number; username: string; password_hash: string; roles: string }>();
-		if (!user || !await verifyPassword(credentials.password, user.password_hash)) return apiMessage(c, 401, '用户名或密码错误');
+		if (!user || !await verifyPassword(credentials.password, user.password_hash)) return apiMessage(c, 401, '用户名或密码错误', { component: 'modal', type: 'error' });
 		const sessionId = crypto.randomUUID();
 		const maxAge = credentials.remember ? 30 * 24 * 60 * 60 : 24 * 60 * 60;
 		const now = Date.now();

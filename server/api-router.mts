@@ -1,5 +1,6 @@
 import type { Context, Next } from 'hono';
 import type { AppEnv } from './types.mjs';
+import { apiMessage } from './api-response.mjs';
 
 export type ApiNext = () => Promise<Response>;
 
@@ -84,7 +85,7 @@ export const createApiGateway = (
 		const normalizedPath = normalizeApiPath(c.req.path, getApiSuffix(c));
 		const siteChain = c.get('site').codeSiteChain;
 		const matched = matchRoute(normalizedPath, siteChain, matcher);
-		if (!matched) return c.json({ message: 'API route not found' }, 404);
+		if (!matched) return apiMessage(c, 404);
 
 		const routeSegments = matched.routePath.split('/').filter(Boolean).slice(1).filter((segment) => !segment.startsWith(':'));
 		const files: string[] = [];
@@ -105,8 +106,8 @@ export const createApiGateway = (
 			if (typeof module.default !== 'function') throw new Error(`API module must export a handler: ${file}`);
 			const next = async () => index + 1 < files.length
 				? execute(index + 1)
-				: c.json({ message: 'API route did not return a response' }, 500);
-			return (await module.default(c, next, matched.params)) ?? c.json({ message: 'API route did not return a response' }, 500);
+				: apiMessage(c, 500, 'API route did not return a response');
+			return (await module.default(c, next, matched.params)) ?? apiMessage(c, 500, 'API route did not return a response');
 		};
 		return execute(0);
 	};

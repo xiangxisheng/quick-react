@@ -58,10 +58,12 @@ export interface ApiFeedback {
 
 export interface ResJSON {
 	table?: ResJsonTable;
-	title?: string;
+	/** 仅用于兼容旧版错误接口；新接口必须使用 feedback.message。 */
 	message?: string;
 	feedback?: ApiFeedback;
 }
+
+type ParsedResJSON = ResJSON & { parseError?: boolean };
 /* 前端类型定义结束 */
 
 export interface CommonApi {
@@ -103,15 +105,36 @@ export function useCommonApi(): [CommonApi, React.JSX.Element] {
 		});
 	};
 
-	const getJsonByRes = async (res: Response): Promise<ResJSON> => {
+	const getJsonByRes = async (res: Response): Promise<ParsedResJSON> => {
 		const text = await res.text();
 		try {
 			return JSON.parse(text);
-		} catch (e) {
+		} catch {
 			return {
-				title: 'JSON解析失败',
-				message: text,
+				parseError: true,
+				feedback: {
+					component: 'modal',
+					type: 'error',
+					message: text || '响应不是有效 JSON',
+				},
 			}
+		}
+	};
+
+	const showFeedback = (feedback: ApiFeedback, fallbackMessage: string, isError = false) => {
+		if (feedback.component === 'none') return;
+		const content = feedback.message ?? fallbackMessage;
+		if (feedback.component === 'modal') {
+			const modalOptions = {
+				title: feedback.title ?? (isError ? '请求失败' : '提示'),
+				content,
+				okText: feedback.refreshNowLabel ?? '确定',
+				cancelText: feedback.cancelRefreshLabel,
+			};
+			if (isError) modalApi.error(modalOptions);
+			else modalApi.info(modalOptions);
+		} else {
+			messageApi.open({ key: 'api-feedback', type: feedback.type ?? (isError ? 'error' : 'success'), content });
 		}
 	};
 
@@ -119,37 +142,32 @@ export function useCommonApi(): [CommonApi, React.JSX.Element] {
 		setPendingRequests((count) => count + 1);
 		try {
 			const res: Response = await fetch(input, init);
-			const resJSON: ResJSON = await getJsonByRes(res);
-			if (!res.ok) {
-				const aContentLine = [];
-				aContentLine.push(`${init?.method} ${input}`);
-				aContentLine.push(`提交失败, 错误状态码: ${res.status}`);
-				if (resJSON.message) {
-					aContentLine.push(`消息: ${resJSON.message}`);
-				}
-				modalError(aContentLine);
+			const resJSON: ParsedResJSON = await getJsonByRes(res);
+			if (!res.ok || resJSON.parseError) {
+				showFeedback(resJSON.feedback ?? (resJSON.message ? {
+					component: 'modal',
+					type: 'error',
+					message: resJSON.message,
+				} : {
+					component: 'modal',
+					type: 'error',
+					message: res.ok
+						? `${init?.method ?? '请求'} ${input} 返回了无效 JSON`
+						: `${init?.method ?? '请求'} ${input} 失败，错误状态码: ${res.status}`,
+				}), '', true);
 				throw res;
 			}
 			res.json = async () => {
-				return resJSON;
+				const { parseError: _parseError, ...responseJSON } = resJSON;
+				return responseJSON;
 			}
-			if (resJSON.feedback && resJSON.feedback.component !== 'none') {
-				const feedback = resJSON.feedback;
-				if (feedback.component === 'modal') {
-					modalApi.info({
-						title: feedback.title ?? '提示',
-						content: feedback.message ?? resJSON.message ?? '',
-						okText: feedback.refreshNowLabel ?? '确定',
-						cancelText: feedback.cancelRefreshLabel,
-					});
-				} else {
-					messageApi.open({ key: 'api-feedback', type: feedback.type ?? 'success', content: feedback.message ?? resJSON.message ?? '' });
-				}
-			} else if (resJSON.title && resJSON.message) {
-				modalApi.success({
-					title: resJSON.title,
-					content: resJSON.message,
-				});
+			if (resJSON.feedback || resJSON.message) {
+				const feedback = resJSON.feedback ?? {
+					component: 'message' as const,
+					type: 'success' as const,
+					message: resJSON.message ?? '',
+				};
+				showFeedback(feedback, '', feedback.type === 'error');
 			}
 			return res;
 		} catch (ex) {

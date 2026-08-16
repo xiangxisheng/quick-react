@@ -36,14 +36,15 @@ npm run typecheck
 
 - `2xx` 响应进入成功反馈处理；需要向用户展示提示时必须返回 `feedback`。
 - 非 `2xx` 响应进入统一错误处理，并抛出响应对象；接口返回的 `message` 会显示在错误提示中，调用方只负责捕获异常并停止后续业务流程。
-- 顶层 `message` 仅用于错误响应；调用方不应重复弹出响应中的 `feedback`，也不应使用 `window.alert` 替代统一反馈。
+- 所有用户可见文本都放在 `feedback.message`；调用方不应重复弹出响应中的 `feedback`，也不应使用 `window.alert` 替代统一反馈。
+- 错误响应默认使用 `modal + error` 展示；如果响应明确返回 `feedback`，则使用其中的展示配置。
+- 顶层 `message` 只作为旧接口兼容输入：没有 `feedback` 时会转换为默认反馈，新接口不得继续使用它。
 
 需要控制反馈样式时，在响应 JSON 中返回通用的 `feedback`。它可用于保存、新增、编辑、删除、登录等任何需要统一提示的操作；不放在 GET 返回的表单配置中：
 
 ```json
 {
-  "message": "保存成功",
-  "feedback": {
+	"feedback": {
     "component": "inline",
     "type": "success",
     "showIcon": true,
@@ -58,6 +59,14 @@ npm run typecheck
 需要在反馈后跳转或刷新时，在 `feedback.redirectAfter` 中返回秒数。跳转目标由页面根据业务上下文决定，响应只提供延迟参数；例如登录和技术栈配置分别由登录页、表单页执行跳转。
 
 后端接口统一使用 `server/api-response.mts` 中的响应助手：
+
+```ts
+apiResponse(c, status, data)
+apiMessage(c, status, message?, feedback?, data?)
+apiMessageData(c, status, message, data, feedback?)
+```
+
+`apiMessage()` 的 `message` 可省略，服务端会按状态码生成默认消息：`200/204` 为“操作成功”、`201` 为“创建成功”、`202` 为“请求已接受”，常见错误状态会生成对应的错误提示。`apiMessageData()` 因参数顺序固定为“消息、数据”，仍必须显式传入 `message`。
 
 ```ts
 return apiMessageData(c, 200, '保存成功', { currentValues }, {
@@ -75,6 +84,15 @@ return apiResponse(c, 200, { table });
 
 `ApiFeedbackOptions` 类型限制了反馈组件和类型的可选值；传入未声明的值会在 TypeScript 类型检查阶段失败。
 
-`apiMessage()` 和 `apiMessageData()` 会根据状态码将消息放入 `feedback.message` 或错误响应的顶层 `message`；成功响应类型禁止顶层 `message`。
+`apiMessage()` 和 `apiMessageData()` 无论状态码为何，都会将用户可见消息放入 `feedback.message`；错误状态会默认使用 `error` 类型。响应中不再使用顶层 `message`。
+
+错误状态未指定反馈时默认使用 `modal + error`；需要自定义展示方式时只传反馈配置：
+
+```ts
+return apiMessage(c, 401, '用户名或密码错误', {
+  component: 'modal',
+  type: 'error',
+});
+```
 
 新增或修改接口时，必须保持上述响应协议；新增前端请求入口时，必须接入 `commonApi.apiFetch`。完成修改后至少运行 `npm run typecheck` 和 `SKIP_SERVER_LISTEN=1 npm test`。

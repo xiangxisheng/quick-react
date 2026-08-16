@@ -9,7 +9,7 @@ const handler: ApiHandler = async (c, next, params) => {
 	if (!currentTable) return apiMessage(c, 404, '模拟数据表不存在');
 	if (params.id) {
 		const row = currentTable.rows.find((item) => item.key === params.id);
-		if (c.req.method === 'GET') return row ? c.json(row) : c.json({ message: '模拟数据不存在' }, 404);
+		if (c.req.method === 'GET') return row ? apiResponse(c, 200, row) : apiMessage(c, 404, '模拟数据不存在');
 		if (c.req.method === 'PUT') {
 			if (!row) return apiMessage(c, 404, '模拟数据不存在');
 			const body = await parseJsonBody(c);

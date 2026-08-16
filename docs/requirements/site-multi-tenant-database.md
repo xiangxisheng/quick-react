@@ -569,6 +569,8 @@ Prisma 生成的 SQL 需要检查 D1 兼容性，必要时手动调整后再部�
 
 ## 11. 实施顺序
 
+本节保留架构实施顺序；已经完成的条目以实际代码和 Smoke 测试为准，后续维护应同步更新状态，不要将本节误解为当前全部待办事项。工程优化待办统一记录在 `docs/requirements/optimization-checklist.md`。
+
 1. 增加 `prisma/global.prisma`、`prisma/base.prisma` 和各业务站点的 `<site_key>.prisma`，分别定义全局、base 和站点业务表。
 2. 增加 SQL migration 和 migration 版本管理。
 3. 抽象 D1/SQLite 统一数据库接口。
@@ -580,6 +582,14 @@ Prisma 生成的 SQL 需要检查 D1 兼容性，必要时手动调整后再部�
 9. 将导航和站点配置迁移到 `server/sites/base/`，实现站点覆盖和多级继承。
 10. 增加 Host 管理接口和后台页面。
 11. 验证 Node、Worker、D1 migration、通配符 Host 和默认站点行为。
+
+当前主要实现入口：
+
+- 站点与 Host 解析：`server/site-router.mts`
+- Node 数据库初始化与 migration：`server/app.mts`
+- Worker 数据库选择与 Binding 限制：`server/worker.mts`
+- API 继承和路由注册：`server/api-router.mts`
+- 站点目录 API 覆盖：`server/sites/<site_key>/api/`
 
 ## 12. 验收重点
 

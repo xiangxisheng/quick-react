@@ -2,6 +2,69 @@
 
 当前已实现：
 
+## 响应协议
+
+后端接口统一使用 `server/api-response.mts`：
+
+```ts
+apiResponse(c, status, data)
+apiMessage(c, status, message?, feedback?, data?)
+apiMessageData(c, status, message, data, feedback?)
+```
+
+其中 `apiMessage()` 可以省略 `message`，按状态码使用默认消息；`apiMessageData()` 的 `message` 为必填参数，因为它固定采用“消息、数据、反馈配置”的参数顺序。
+
+成功响应（2xx）需要提示时使用 `feedback`，不返回顶层 `message`：
+
+```json
+{
+  "feedback": {
+    "component": "message",
+    "type": "success",
+    "message": "新增成功"
+  },
+  "site_key": "site1"
+}
+```
+
+列表和详情等纯数据响应不需要 `feedback`：
+
+```json
+{
+  "table": {
+    "columns": [],
+    "dataSource": [],
+    "totalRecords": 0
+  }
+}
+```
+
+错误响应（4xx/5xx）同样使用 `feedback.message`：
+
+```json
+{
+  "feedback": {
+    "component": "message",
+    "type": "error",
+    "message": "用户名或密码错误"
+  }
+}
+```
+
+如果需要控制错误展示方式，只需调整 `feedback`，不需要重复返回顶层 `message`：
+
+```json
+{
+  "feedback": {
+    "component": "modal",
+    "type": "error",
+    "message": "用户名或密码错误"
+  }
+}
+```
+
+如果错误响应没有 `feedback`，前端默认以 `modal + error` 展示；旧接口仅有顶层 `message` 时也会被转换为该默认反馈。
+
 ## 健康检查
 
 ```text
@@ -39,6 +102,8 @@ GET /api/panel/admin/dashboard
 /api/panel/admin/global/sites
 /api/panel/admin/global/hosts
 ```
+
+常用写操作的响应状态码为：创建资源使用 `201`，修改、删除和登录成功使用 `200`；参数校验失败通常使用 `400`，未登录使用 `401`，无权限使用 `403`，资源不存在使用 `404`。
 
 Node 控制面创建站点后会立即尝试 migration，也可向 `POST /api/panel/admin/global/sites/<site_key>` 重试；成功后再通过站点更新接口启用。Worker 的 D1 migration 必须由部署流程执行，该操作会返回 `501`。
 

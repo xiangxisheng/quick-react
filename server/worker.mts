@@ -6,6 +6,7 @@ import { createApiGateway } from './api-router.mjs';
 import { getPageMetadata, getSiteNavigation } from './navigation.mjs';
 import { createDatabaseConfigStore } from './config-store.mjs';
 import { createD1Adapter, type D1DatabaseLike } from './database/d1.mjs';
+import { apiMessage } from './api-response.mjs';
 import type { DatabaseAdapter } from './database/index.mjs';
 import { SiteRouter } from './site-router.mjs';
 import { loadCurrentUser } from './auth.mjs';
@@ -115,7 +116,7 @@ app.use('*', async (c, next) => {
 		return undefined;
 	} catch (error) {
 		console.error(error);
-		return c.json({ message: 'Service configuration unavailable' }, 503);
+		return apiMessage(c, 503, 'Service configuration unavailable');
 	}
 });
 app.use('*', compress());
@@ -138,7 +139,7 @@ app.get('*', async (c, next) => {
 });
 
 app.notFound(async (c) => {
-	if (c.req.path.startsWith('/api/')) return c.json({ message: 'Not Found' }, 404);
+	if (c.req.path.startsWith('/api/')) return apiMessage(c, 404);
 	if (c.env.ASSETS) return c.env.ASSETS.fetch(c.req.raw);
 	return c.text('Not Found', 404);
 });

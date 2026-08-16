@@ -23,3 +23,11 @@ Cloudflare Worker 使用 `DEFAULT_DB` D1 Binding，部署前执行 `migrations/d
 后端会尝试启动 HTTPS/HTTP2；证书读取失败时降级为 HTTP。
 
 生产环境应使用进程管理器或容器保证服务自动重启，并在防火墙放行实际使用的端口。
+
+部署前建议执行：
+
+```bash
+npm run typecheck
+SKIP_SERVER_LISTEN=1 npm test
+npm run smoke:multi-tenant
+```

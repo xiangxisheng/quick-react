@@ -45,7 +45,15 @@ try {
 	});
 	assert.equal(invalidLogin.status, 401);
 	const invalidLoginResult = await invalidLogin.json();
-	assert.equal(invalidLoginResult.message, '用户名或密码错误');
+	assert.equal(invalidLoginResult.feedback.message, '用户名或密码错误');
+	assert.equal(invalidLoginResult.feedback.component, 'modal');
+	assert.equal(invalidLoginResult.feedback.type, 'error');
+	const missingApi = await request('localhost', '/api/not-found');
+	assert.equal(missingApi.status, 404);
+	const missingApiResult = await missingApi.json();
+	assert.equal(missingApiResult.feedback.component, 'modal');
+	assert.equal(missingApiResult.feedback.type, 'error');
+	assert.equal(missingApiResult.feedback.message, '请求的资源不存在');
 
 	const createSite = async (siteKey, extra = {}) => {
 		assert.equal((await request('localhost', '/api/panel/admin/global/sites.php', {
