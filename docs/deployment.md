@@ -29,5 +29,5 @@ Cloudflare Worker 使用 `DEFAULT_DB` D1 Binding，部署前执行 `migrations/d
 ```bash
 npm run typecheck
 SKIP_SERVER_LISTEN=1 npm test
-npm run smoke:multi-tenant
+npm run smoke:multi-site
 ```

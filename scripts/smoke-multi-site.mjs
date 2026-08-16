@@ -89,7 +89,7 @@ try {
 	assert.equal(publicDocument.includes('站点管理'), false);
 	const adminDocument = await (await request('localhost', '/', { cookie })).text();
 	assert.equal(adminDocument.includes('站点管理'), true);
-	console.log('multi-tenant smoke test passed');
+	console.log('multi-site smoke test passed');
 } finally {
 	await rm(temporaryDirectory, { recursive: true, force: true });
 }

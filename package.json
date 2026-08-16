@@ -13,7 +13,7 @@
 		"dev": "node esbuild.cjs --watch",
 		"start": "node dist/server.mjs",
 		"typecheck": "node scripts/generate-worker-registry.cjs && tsc --noEmit",
-		"smoke:multi-tenant": "node scripts/smoke-multi-tenant.mjs",
+		"smoke:multi-site": "node scripts/smoke-multi-site.mjs",
 		"test": "node esbuild.cjs"
 	},
 	"repository": {
