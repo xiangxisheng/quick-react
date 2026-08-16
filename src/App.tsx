@@ -150,7 +150,7 @@ const App = ({ commonApi }: AppType) => {
 
 	return (
 		<Layout style={{ height: '100%' }}>
-			<Layout.Header style={{ height: 48, padding: '0 24px', display: 'flex', alignItems: 'center', background: '#fff', borderBottom: '1px solid #f0f0f0' }}>
+			<Layout.Header style={{ height: 48, minHeight: 48, lineHeight: '48px', padding: '0 24px', display: 'flex', alignItems: 'center', background: '#fff', borderBottom: '1px solid #f0f0f0' }}>
 				<Menu
 					onClick={onClick}
 					selectedKeys={[current]}
