@@ -36,12 +36,12 @@ npm run typecheck
 - 非 `2xx` 响应进入统一错误处理，并抛出响应对象；接口返回的 `message` 会显示在错误提示中，调用方只负责捕获异常并停止后续业务流程。
 - 调用方不应重复弹出响应中的 `message`，也不应使用 `window.alert` 替代统一反馈。
 
-需要控制反馈样式时，在写操作的响应 JSON 中返回 `saveFeedback`。该字段只属于写操作响应，不放在 GET 返回的表单配置中：
+需要控制反馈样式时，在响应 JSON 中返回通用的 `feedback`。它可用于保存、新增、编辑、删除、登录等任何需要统一提示的操作；不放在 GET 返回的表单配置中：
 
 ```json
 {
   "message": "保存成功",
-  "saveFeedback": {
+  "feedback": {
     "component": "inline",
     "type": "success",
     "showIcon": true,
@@ -51,6 +51,6 @@ npm run typecheck
 }
 ```
 
-`saveFeedback.component` 支持 `inline`、`message`、`modal` 和 `none`。`modal` 可额外返回 `refreshNowLabel` 与 `cancelRefreshLabel`；`none` 表示不显示反馈。响应同时包含 `saveFeedback` 时，拦截器优先使用它，不会再次显示普通 `message`。
+`feedback.component` 支持 `inline`、`message`、`modal` 和 `none`。`modal` 可额外返回 `refreshNowLabel` 与 `cancelRefreshLabel`；`none` 表示不显示反馈。响应同时包含 `feedback` 时，拦截器优先使用它，不会再次显示普通 `message`。
 
 新增或修改接口时，必须保持上述响应协议；新增前端请求入口时，必须接入 `commonApi.apiFetch`。完成修改后至少运行 `npm run typecheck` 和 `SKIP_SERVER_LISTEN=1 npm test`。

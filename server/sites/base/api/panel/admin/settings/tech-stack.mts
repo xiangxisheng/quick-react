@@ -27,7 +27,7 @@ const handler: ApiHandler = async (c, next) => {
 		return c.json({
 			message: '保存成功，页面将在稍后刷新',
 			currentValues: config,
-			saveFeedback: { component: 'modal', type: 'info', title: '保存结果', message: '保存成功，页面将在稍后刷新', refreshNowLabel: '立即刷新', cancelRefreshLabel: '取消' },
+			feedback: { component: 'modal', type: 'info', title: '保存结果', message: '保存成功，页面将在稍后刷新', refreshNowLabel: '立即刷新', cancelRefreshLabel: '取消' },
 		});
 	}
 	return next();

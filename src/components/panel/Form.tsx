@@ -51,7 +51,7 @@ type FormResponse = {
 		confirmOnUnchangedSubmit?: string;
 		refreshAfterSave?: number | null;
 		submitHint?: React.ReactNode;
-		saveFeedback?: {
+	feedback?: {
 			component?: 'inline' | 'message' | 'modal' | 'none';
 			type?: AlertProps['type'];
 			showIcon?: boolean;
@@ -101,25 +101,25 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 		setRefreshDeadline(undefined);
 		setRefreshCancelled(false);
 		Modal.destroyAll();
-		messageApi.destroy('form-save-feedback');
+		messageApi.destroy('form-feedback');
 	}, [apiPath, messageApi]);
 
 	useEffect(() => {
-		if (!saved || formConfig?.saveFeedback?.component !== 'message') return;
-		const feedbackMessage = formConfig.saveFeedback.message ?? '';
+		if (!saved || formConfig?.feedback?.component !== 'message') return;
+		const feedbackMessage = formConfig.feedback.message ?? '';
 		const countdown = refreshDeadline && refreshTarget
 			? <CountdownDisplay deadline={refreshDeadline} onFinish={() => window.location.assign(refreshTarget)} />
 			: null;
 		const refreshValue = countdown ?? (formConfig.refreshAfterSave == null ? '' : formatCountdown(formConfig.refreshAfterSave * 1000));
 		const content = renderTemplate(feedbackMessage, { refreshAfterSave: refreshValue });
-		messageApi.open({ key: 'form-save-feedback', type: formConfig.saveFeedback.type ?? 'success', content, duration: 0 });
-		return () => messageApi.destroy('form-save-feedback');
+		messageApi.open({ key: 'form-feedback', type: formConfig.feedback.type ?? 'success', content, duration: 0 });
+		return () => messageApi.destroy('form-feedback');
 	}, [formConfig, messageApi, refreshDeadline, refreshTarget, saved]);
 
 	useEffect(() => {
-		if (!saved || formConfig?.saveFeedback?.component !== 'modal') return;
+		if (!saved || formConfig?.feedback?.component !== 'modal') return;
 		if (refreshCancelled) return;
-		const feedbackMessage = formConfig.saveFeedback.message ?? '';
+		const feedbackMessage = formConfig.feedback.message ?? '';
 		const countdown = refreshDeadline && refreshTarget && !refreshCancelled
 			? <CountdownDisplay deadline={refreshDeadline} onFinish={() => window.location.assign(refreshTarget)} />
 			: null;
@@ -127,10 +127,10 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 		const content = renderTemplate(feedbackMessage, { refreshAfterSave: refreshValue });
 		Modal.destroyAll();
 		modalApi.confirm({
-			title: formConfig.saveFeedback.title ?? '',
+			title: formConfig.feedback.title ?? '',
 			content,
-			okText: formConfig.saveFeedback.refreshNowLabel,
-			cancelText: formConfig.saveFeedback.cancelRefreshLabel,
+			okText: formConfig.feedback.refreshNowLabel,
+			cancelText: formConfig.feedback.cancelRefreshLabel,
 			onOk: () => window.location.assign(refreshTarget ?? window.location.href),
 			onCancel: () => setRefreshCancelled(true),
 		});
@@ -187,21 +187,21 @@ export default function FormPage({ commonApi, apiPath, title, onSaved }: FormPro
 		}
 	};
 
-	const feedback = formConfig?.saveFeedback;
+	const feedback = formConfig?.feedback;
 	const feedbackMessage = feedback?.message ?? '';
 	const alertCountdown = refreshDeadline && refreshTarget
 		? <CountdownDisplay deadline={refreshDeadline} onFinish={() => window.location.assign(refreshTarget)} />
 		: null;
 	const refreshValue = alertCountdown ?? (formConfig?.refreshAfterSave == null ? '' : formatCountdown(formConfig.refreshAfterSave * 1000));
 	const feedbackContent = renderTemplate(feedbackMessage, { refreshAfterSave: refreshValue });
-	const saveFeedback = saved && feedback?.component === 'inline'
+	const inlineFeedback = saved && feedback?.component === 'inline'
 			? <Alert type={feedback.type ?? 'success'} showIcon={feedback.showIcon} message={feedbackContent} style={{ marginBottom: 24 }} />
 		: null;
 
 	return <Card title={title} loading={loading}>
 		{messageContextHolder}
 		{modalContextHolder}
-		{saveFeedback}
+		{inlineFeedback}
 		{formConfig?.description ? <Alert type="info" showIcon message={formConfig.description} style={{ marginBottom: 24 }} /> : null}
 		<Form
 			form={form}

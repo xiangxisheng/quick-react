@@ -28,7 +28,7 @@ const handler: ApiHandler = async (c, next) => {
 		return c.json({
 			message: '系统配置已保存，重启服务后生效',
 			currentValues: config,
-			saveFeedback: { component: 'inline', type: 'success', showIcon: true, title: '保存结果', message: '系统配置已保存，重启服务后生效' },
+			feedback: { component: 'inline', type: 'success', showIcon: true, title: '保存结果', message: '系统配置已保存，重启服务后生效' },
 		});
 	}
 	return next();

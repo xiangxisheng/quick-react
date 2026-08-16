@@ -45,7 +45,7 @@ export interface ResJsonTable {
 	totalRecords?: number,
 }
 
-export interface ApiSaveFeedback {
+export interface ApiFeedback {
 	component?: 'inline' | 'message' | 'modal' | 'none';
 	type?: 'success' | 'info' | 'warning' | 'error';
 	showIcon?: boolean;
@@ -59,7 +59,7 @@ export interface ResJSON {
 	table?: ResJsonTable;
 	title?: string;
 	message?: string;
-	saveFeedback?: ApiSaveFeedback;
+	feedback?: ApiFeedback;
 }
 /* 前端类型定义结束 */
 
@@ -132,8 +132,8 @@ export function useCommonApi(): [CommonApi, React.JSX.Element] {
 			res.json = async () => {
 				return resJSON;
 			}
-			if (resJSON.saveFeedback && resJSON.saveFeedback.component !== 'none') {
-				const feedback = resJSON.saveFeedback;
+			if (resJSON.feedback && resJSON.feedback.component !== 'none') {
+				const feedback = resJSON.feedback;
 				if (feedback.component === 'modal') {
 					modalApi.info({
 						title: feedback.title ?? '提示',
@@ -142,7 +142,7 @@ export function useCommonApi(): [CommonApi, React.JSX.Element] {
 						cancelText: feedback.cancelRefreshLabel,
 					});
 				} else {
-					messageApi.open({ key: 'api-save-feedback', type: feedback.type ?? 'success', content: feedback.message ?? resJSON.message ?? '' });
+					messageApi.open({ key: 'api-feedback', type: feedback.type ?? 'success', content: feedback.message ?? resJSON.message ?? '' });
 				}
 			} else if (resJSON.title && resJSON.message) {
 				modalApi.success({
@@ -150,7 +150,7 @@ export function useCommonApi(): [CommonApi, React.JSX.Element] {
 					content: resJSON.message,
 				});
 			}
-			if (!resJSON.saveFeedback && resJSON.message) {
+			if (!resJSON.feedback && resJSON.message) {
 				messageApi.success(resJSON.message);
 			}
 			return res;
