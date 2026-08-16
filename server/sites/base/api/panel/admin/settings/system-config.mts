@@ -1,8 +1,9 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { normalizeSystemConfig } from '@server/system-config.mjs';
 import { apiMessageData, apiResponse } from '@server/api-response.mjs';
+import type { FormPageConfig } from '@shared/types/form-page.mjs';
 
-const form = {
+const formPage = {
 	description: '系统运行参数。修改后需要重启服务才能生效。',
 	submitLabel: '保存配置',
 	confirmOnUnchangedSubmit: '当前未修改，仍要提交吗？',
@@ -15,11 +16,11 @@ const form = {
 		{ name: 'trustedProxyIps', label: '可信代理 IP', type: 'text', extra: '逗号分隔；用于解析客户端真实 IP。', placeholder: '127.0.0.1,10.0.0.10', maxLength: 2048 },
 		{ name: 'mapAllowedIps', label: 'Source Map 允许 IP', type: 'text', extra: '逗号分隔；用于限制 bundle.js.map 访问。', placeholder: '127.0.0.1', maxLength: 2048 },
 	],
-};
+} satisfies FormPageConfig;
 
 const handler: ApiHandler = async (c, next) => {
 	const store = c.get('configStore');
-	if (c.req.method === 'GET') return apiResponse(c, 200, { currentValues: c.get('systemConfig'), formPage: form });
+	if (c.req.method === 'GET') return apiResponse(c, 200, { currentValues: c.get('systemConfig'), formPage });
 	if (c.req.method === 'PUT') {
 		const body = await c.req.json<unknown>().catch(() => ({}));
 		const config = normalizeSystemConfig(body);

@@ -2,14 +2,14 @@ import type { ApiFeedback } from './api.js';
 
 const DEFAULT_REDIRECT_AFTER = 2;
 
-const getRedirectAfter = (feedback?: Pick<ApiFeedback, 'redirectAfter'>): number | null => {
+const getRedirectAfter = (feedback?: Partial<Pick<ApiFeedback, 'redirectAfter'>>): number | null => {
 	if (!feedback) return null;
 	if (feedback.redirectAfter === undefined) return DEFAULT_REDIRECT_AFTER;
 	if (!Number.isFinite(feedback.redirectAfter)) return null;
 	return Math.max(0, Math.floor(feedback.redirectAfter));
 };
 
-const getRedirectDeadline = (feedback: Pick<ApiFeedback, 'redirectAfter'> | undefined, now = Date.now()): number | undefined => {
+const getRedirectDeadline = (feedback: Partial<Pick<ApiFeedback, 'redirectAfter'>> | undefined, now = Date.now()): number | undefined => {
 	const seconds = getRedirectAfter(feedback);
 	return seconds === null || seconds === 0 ? undefined : now + seconds * 1000;
 };
@@ -20,7 +20,7 @@ type FeedbackSchedule = {
 };
 
 export const runAfterFeedback = (
-	feedback: Pick<ApiFeedback, 'redirectAfter'> | undefined,
+	feedback: Partial<Pick<ApiFeedback, 'redirectAfter'>> | undefined,
 	action: () => void | Promise<void>,
 ): FeedbackSchedule => {
 	const deadline = getRedirectDeadline(feedback);

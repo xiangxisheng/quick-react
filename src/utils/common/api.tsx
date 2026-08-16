@@ -3,6 +3,7 @@ import { Modal, ModalFuncProps, Spin } from 'antd';
 import { message } from 'antd';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
 import { useState } from 'react';
+import type { ApiFeedback as SharedApiFeedback } from '@shared/types/api-response.mjs';
 
 /* 前端类型定义开始 */
 export interface DataType extends Record<string, unknown> { }
@@ -45,16 +46,7 @@ export interface ResJsonTable {
 	totalRecords?: number,
 }
 
-export interface ApiFeedback {
-	component?: 'inline' | 'message' | 'modal' | 'none';
-	type?: 'success' | 'info' | 'warning' | 'error';
-	showIcon?: boolean;
-	title?: string;
-	message?: string;
-	refreshNowLabel?: React.ReactNode;
-	cancelRefreshLabel?: React.ReactNode;
-	redirectAfter?: number;
-}
+export type ApiFeedback = SharedApiFeedback;
 
 export interface ResJSON {
 	table?: ResJsonTable;

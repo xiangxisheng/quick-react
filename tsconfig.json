@@ -20,6 +20,9 @@
 			"@server/*": [
 				"server/*",
 			],
+			"@shared/*": [
+				"shared/*",
+			],
 		},
 	}
 }

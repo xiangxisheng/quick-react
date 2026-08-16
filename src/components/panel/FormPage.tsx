@@ -1,20 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Form, Input, message, Modal, Space, Switch, Typography } from 'antd';
 import type { ApiFeedback, CommonApi } from '@/utils/common/api.js';
+import type { FormPageConfig } from '@shared/types/form-page.mjs';
 import { CountdownDisplay, formatCountdown } from '@/components/common/Countdown.js';
 import { runAfterFeedback } from '@/utils/common/feedback.js';
-
-export type FormField = {
-	name: string;
-	label: React.ReactNode;
-	type: 'text' | 'password' | 'switch';
-	extra?: React.ReactNode;
-	placeholder?: string;
-	maxLength?: number;
-	rules?: { required?: boolean; message?: string }[];
-	checkedChildren?: React.ReactNode;
-	unCheckedChildren?: React.ReactNode;
-};
 
 const renderTemplate = (template: string, values: Record<string, React.ReactNode>) => template
 	.split(/(\{[^{}]+\})/g)
@@ -26,14 +15,7 @@ const renderTemplate = (template: string, values: Record<string, React.ReactNode
 type FormResponse = {
 	currentValues?: Record<string, unknown>;
 	feedback?: ApiFeedback;
-	formPage?: {
-		description?: React.ReactNode;
-		submitLabel?: React.ReactNode;
-		confirmOnUnchangedSubmit?: string;
-		submitHint?: React.ReactNode;
-		initialValues: Record<string, unknown>;
-		fields: FormField[];
-	};
+	formPage?: FormPageConfig;
 };
 
 type FormProps = {

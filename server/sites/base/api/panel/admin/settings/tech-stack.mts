@@ -1,8 +1,9 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { normalizeTechStackConfig } from '@server/tech-stack.mjs';
 import { apiMessageData, apiResponse } from '@server/api-response.mjs';
+import type { FormPageConfig } from '@shared/types/form-page.mjs';
 
-const form = {
+const formPage = {
 	description: '配置会作用于后续 HTTP 响应，并保存到服务器配置文件。仅用于兼容性测试、演示或隐藏真实服务实现。',
 	submitLabel: '保存配置',
 	confirmOnUnchangedSubmit: '当前未修改，仍要提交吗？',
@@ -14,11 +15,11 @@ const form = {
 		{ name: 'apiSuffix', label: 'API 路径后缀', type: 'text', extra: '例如 .php、.json；留空则使用无后缀 API 路径。', placeholder: '例如 .php', maxLength: 16 },
 		{ name: 'pageSuffix', label: '页面路径后缀', type: 'text', extra: '例如 .html；留空则使用无后缀页面路径。', placeholder: '例如 .html', maxLength: 16 },
 	],
-};
+} satisfies FormPageConfig;
 
 const handler: ApiHandler = async (c, next) => {
 	const store = c.get('configStore');
-	if (c.req.method === 'GET') return apiResponse(c, 200, { currentValues: c.get('techStackConfig'), formPage: form });
+	if (c.req.method === 'GET') return apiResponse(c, 200, { currentValues: c.get('techStackConfig'), formPage });
 	if (c.req.method === 'PUT') {
 		const body = await c.req.json<unknown>().catch(() => ({}));
 		const config = normalizeTechStackConfig(body);

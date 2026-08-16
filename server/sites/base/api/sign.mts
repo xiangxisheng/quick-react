@@ -2,6 +2,7 @@ import type { ApiHandler } from '@server/api-router.mjs';
 import { clearSessionCookie, createSessionCookie, hashPassword, readSessionId, verifyPassword } from '@server/auth.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
+import type { FormPageConfig } from '@shared/types/form-page.mjs';
 
 const parseCredentials = async (c: Parameters<ApiHandler>[0]) => {
 	let body: Record<string, unknown> = {};
@@ -23,19 +24,20 @@ const handler: ApiHandler = async (c, next) => {
 	const database = c.get('database');
 	if (c.req.method === 'GET') {
 		const isSignUp = new URL(c.req.url).searchParams.get('mode') === 'sign-up';
+		const formPage: FormPageConfig = {
+			initialValues: { username: '', password: '', ...(isSignUp ? { password_confirm: '' } : {}), remember: false },
+			submitLabel: isSignUp ? '注册' : '登录',
+			fields: [
+				{ name: 'username', label: '用户名', maxLength: 64, rules: [{ required: true, message: '请输入用户名' }] },
+				{ name: 'password', label: '密码', type: 'password', rules: [{ required: true, message: '请输入密码' }] },
+				...(isSignUp ? [{ name: 'password_confirm', label: '确认密码', type: 'password' as const, rules: [{ required: true, message: '请确认密码' }] }] : []),
+				...(!isSignUp ? [{ name: 'remember', label: '记住我', type: 'switch' as const }] : []),
+			],
+		};
 		return apiResponse(c, 200, {
 			user: c.get('currentUser') ?? null,
 			registrationAvailable: await registrationAvailable(database),
-			formPage: {
-				initialValues: { username: '', password: '', ...(isSignUp ? { password_confirm: '' } : {}), remember: false },
-				submitLabel: isSignUp ? '注册' : '登录',
-				fields: [
-					{ name: 'username', label: '用户名', maxLength: 64, rules: [{ required: true, message: '请输入用户名' }] },
-					{ name: 'password', label: '密码', type: 'password', rules: [{ required: true, message: '请输入密码' }] },
-					...(isSignUp ? [{ name: 'password_confirm', label: '确认密码', type: 'password' as const, rules: [{ required: true, message: '请确认密码' }] }] : []),
-					...(!isSignUp ? [{ name: 'remember', label: '记住我', type: 'switch' as const }] : []),
-				],
-			},
+			formPage,
 		});
 	}
 	if (c.req.method === 'PUT') {

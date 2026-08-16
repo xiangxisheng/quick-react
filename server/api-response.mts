@@ -1,23 +1,8 @@
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { AppEnv } from './types.mjs';
-
-export type ApiFeedbackComponent = 'inline' | 'message' | 'modal' | 'none';
-export type ApiFeedbackType = 'success' | 'info' | 'warning' | 'error';
-
-export type ApiFeedback = {
-	component: ApiFeedbackComponent;
-	type: ApiFeedbackType;
-	showIcon?: boolean;
-	title?: string;
-	message: string;
-	refreshNowLabel?: string;
-	cancelRefreshLabel?: string;
-	redirectAfter?: number;
-};
-
-export type ApiFeedbackOptions = Partial<Omit<ApiFeedback, 'message'>>;
-export type ApiSuccessData = Record<string, unknown> & { message?: never };
+import type { ApiFeedback, ApiFeedbackOptions, ApiSuccessData } from '@shared/types/api-response.mjs';
+export type { ApiFeedback, ApiFeedbackOptions, ApiSuccessData } from '@shared/types/api-response.mjs';
 
 const isSuccessStatus = (status: number) => status >= 200 && status < 300;
 
