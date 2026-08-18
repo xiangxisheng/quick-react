@@ -60,14 +60,14 @@ export function useDrawer(commonApi: CommonApi): [drawerType, React.JSX.Element]
 			};
 		}
 	};
-	const onFinish = async (values: Record<string, string | number | Date | Dayjs | null | undefined>) => {
+	const onFinish = async (values: Record<string, unknown>) => {
 		if (resolveRef.current) {
 			for (const column of columns) {
 				if (column.component !== 'datepicker' || !values[column.dataIndex]) {
 					continue;
 				}
 				// 返回日期之前将 Dayjs 转换成后端可存储的字符串。
-				const date = dayjs(values[column.dataIndex]);
+				const date = dayjs(values[column.dataIndex] as string | number | Date | Dayjs | null | undefined);
 				values[column.dataIndex] = column.dayjsFormat
 					? date.format(column.dayjsFormat)
 					: date.toISOString();

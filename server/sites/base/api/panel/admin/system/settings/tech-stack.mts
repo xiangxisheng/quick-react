@@ -1,5 +1,6 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { normalizeTechStackConfig } from '@server/tech-stack.mjs';
+import { mergeChangedFields } from '@server/changed-fields.mjs';
 import { apiMessageData, apiResponse } from '@server/api-response.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 
@@ -22,7 +23,8 @@ const handler: ApiHandler = async (c, next) => {
 	if (c.req.method === 'GET') return apiResponse(c, 200, { currentValues: c.get('techStackConfig'), formPage });
 	if (c.req.method === 'PUT') {
 		const body = await c.req.json<unknown>().catch(() => ({}));
-		const config = normalizeTechStackConfig(body);
+		const next = mergeChangedFields(c.get('techStackConfig'), body, ['nginx', 'phpVersion', 'apiSuffix', 'pageSuffix']);
+		const config = normalizeTechStackConfig(next);
 		await store.put('tech-stack', config);
 		c.set('techStackConfig', config);
 		return apiMessageData(c, 200, '保存成功，页面将在 {redirectAfter} 秒后刷新', { currentValues: config }, { component: 'modal', type: 'info', title: '保存结果', refreshNowLabel: '立即刷新', cancelRefreshLabel: '取消' });

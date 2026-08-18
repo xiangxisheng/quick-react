@@ -1,5 +1,5 @@
 import type { ApiHandler } from '@server/api-router.mjs';
-import { clearSessionCookie, createSessionCookie, hashPassword, readSessionId, verifyPassword } from '@server/auth.mjs';
+import { clearSessionCookie, createSessionCookie, createStoredPassword, readSessionId, verifyStoredPassword } from '@server/auth.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
@@ -47,14 +47,14 @@ const handler: ApiHandler = async (c, next) => {
 			return apiMessage(c, 400, '用户名至少 3 个合法字符，密码至少 8 个字符');
 		}
 		const now = Date.now();
-		const passwordHash = await hashPassword(credentials.password);
+		const storedPassword = await createStoredPassword(credentials.password);
 		const claimed = await database.prepare(`UPDATE base_system_bootstrap SET value = 'claimed'
 			WHERE key = 'initial_admin' AND value = 'open'`).run();
 		if (Number(claimed.meta?.changes ?? 0) !== 1) return apiMessage(c, 409, '初始管理员已经存在');
 		try {
 			await database.prepare(`INSERT INTO base_system_users
-				(username, password_hash, roles, status, created_at, updated_at) VALUES (?1, ?2, '["admin"]', 'enabled', ?3, ?3)`)
-				.bind(credentials.username, passwordHash, now).run();
+				(username, password, roles, status, created_at, updated_at) VALUES (?1, ?2, '["admin"]', 'enabled', ?3, ?3)`)
+				.bind(credentials.username, storedPassword, now).run();
 		} catch (error) {
 			await database.prepare(`UPDATE base_system_bootstrap SET value = 'open' WHERE key = 'initial_admin' AND value = 'claimed'`).run();
 			throw error;
@@ -63,10 +63,10 @@ const handler: ApiHandler = async (c, next) => {
 	}
 	if (c.req.method === 'POST') {
 		const credentials = await parseCredentials(c);
-		const user = await database.prepare(`SELECT id, username, password_hash, roles FROM base_system_users
+		const user = await database.prepare(`SELECT id, username, password, roles FROM base_system_users
 			WHERE username = ?1 AND status = 'enabled'`).bind(credentials.username)
-			.first<{ id: number; username: string; password_hash: string; roles: string }>();
-		if (!user || !await verifyPassword(credentials.password, user.password_hash)) return apiMessage(c, 401, '用户名或密码错误', { component: 'modal', type: 'error' });
+			.first<{ id: number; username: string; password: string; roles: string }>();
+		if (!user || !await verifyStoredPassword(credentials.password, user.password)) return apiMessage(c, 401, '用户名或密码错误', { component: 'modal', type: 'error' });
 		const sessionId = crypto.randomUUID();
 		const maxAge = credentials.remember ? 30 * 24 * 60 * 60 : 24 * 60 * 60;
 		const now = Date.now();

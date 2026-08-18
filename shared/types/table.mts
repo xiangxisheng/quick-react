@@ -7,6 +7,7 @@ export type TableColumn = {
 	dataIndex: string;
 	title: string;
 	component?: TableColumnComponent;
+	inputType?: 'text' | 'password';
 	rules?: TableColumnRule[];
 	ellipsis?: boolean;
 	placeholder?: string;

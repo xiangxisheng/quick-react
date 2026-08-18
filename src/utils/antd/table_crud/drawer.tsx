@@ -1,12 +1,13 @@
 import type { DataType, ResJsonTableColumn } from '@/utils/common/api.js';
 import type { CommonApi } from '@/utils/common/api.js';
 import type { UploadProps } from 'antd';
+import { changedFieldsKey, type ChangedFieldsPayload } from '@shared/types/changed-fields.mjs';
 
-import { InboxOutlined } from '@ant-design/icons';
+import { ClearOutlined, InboxOutlined, RollbackOutlined } from '@ant-design/icons';
 import { Button, Col, DatePicker, Drawer, Form, Input, Row, Select, Space } from 'antd';
 import { Upload } from 'antd';
 import { InputNumber } from 'antd';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 // 定义TableCRUD的传参
 type TableCrudType = {
@@ -16,7 +17,7 @@ type TableCrudType = {
 	open: boolean;
 	onClose: () => void;
 	commonApi: CommonApi;
-	onFinish: (values: Record<string, string>) => Promise<void>;
+	onFinish: (values: Record<string, unknown>) => Promise<void>;
 	okText: string;
 	cancelText: string;
 	loading: boolean;
@@ -32,7 +33,9 @@ function getFormItemComponent(item: ResJsonTableColumn, row: DataType) {
 	switch (item.component) {
 		case ('textbox'):
 			return (
-				<Input placeholder={item.placeholder} />
+				item.inputType === 'password'
+					? <Input.Password placeholder={item.placeholder} />
+					: <Input placeholder={item.placeholder} />
 			);
 		case ('url'):
 			return (
@@ -154,6 +157,7 @@ export default ({
 }: TableCrudType) => {
 
 	const [form] = Form.useForm();
+	const changedFields = useRef(new Set<string>());
 	const handleSubmit = () => {
 		form.submit();
 	};
@@ -168,6 +172,7 @@ export default ({
 
 	useEffect(() => {
 		// 外部调用设置新的row值时，刷新新值
+		changedFields.current.clear();
 		form.resetFields();
 		form.setFieldsValue(row);
 	}, [row]);
@@ -217,7 +222,10 @@ export default ({
 			<Form
 				layout="vertical"
 				form={form}
-				onFinish={onFinish}
+				onValuesChange={(values) => {
+					for (const field of Object.keys(values)) changedFields.current.add(field);
+				}}
+				onFinish={(values) => onFinish({ ...values, [changedFieldsKey]: [...changedFields.current] } satisfies ChangedFieldsPayload & Record<string, unknown>)}
 				initialValues={row}
 				disabled={submitting‌}
 			>
@@ -234,7 +242,31 @@ export default ({
 							<Col span={24}>
 								<Form.Item
 									name={item.dataIndex}
-									label={item.title}
+									label={(
+										<Space size={2}>
+											<span>{item.title}</span>
+											<Button
+												type="text"
+												size="small"
+												title="清空"
+												icon={<ClearOutlined />}
+												onClick={() => {
+													form.setFields([{ name: item.dataIndex, value: null, touched: true }]);
+													changedFields.current.add(item.dataIndex);
+												}}
+											/>
+											<Button
+												type="text"
+												size="small"
+												title="还原"
+												icon={<RollbackOutlined />}
+												onClick={() => {
+													form.setFields([{ name: item.dataIndex, value: row[item.dataIndex], touched: false, errors: [] }]);
+													changedFields.current.delete(item.dataIndex);
+												}}
+											/>
+										</Space>
+									)}
 									rules={item.rules}
 								>
 									{component}

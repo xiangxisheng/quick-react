@@ -1,5 +1,6 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { normalizeSystemConfig } from '@server/system-config.mjs';
+import { mergeChangedFields } from '@server/changed-fields.mjs';
 import { apiMessageData, apiResponse } from '@server/api-response.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 
@@ -23,7 +24,8 @@ const handler: ApiHandler = async (c, next) => {
 	if (c.req.method === 'GET') return apiResponse(c, 200, { currentValues: c.get('systemConfig'), formPage });
 	if (c.req.method === 'PUT') {
 		const body = await c.req.json<unknown>().catch(() => ({}));
-		const config = normalizeSystemConfig(body);
+		const next = mergeChangedFields(c.get('systemConfig'), body, ['httpPort', 'domain', 'publicOrigin', 'trustedProxyIps', 'mapAllowedIps']);
+		const config = normalizeSystemConfig(next);
 		await store.put('system-config', config);
 		c.set('systemConfig', config);
 		return apiMessageData(c, 200, '系统配置已保存，重启服务后生效', { currentValues: config }, { component: 'inline', showIcon: true, title: '保存结果' });

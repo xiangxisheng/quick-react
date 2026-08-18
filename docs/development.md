@@ -86,6 +86,8 @@ return apiResponse(c, 200, { table });
 
 `apiMessage()` 和 `apiMessageData()` 无论状态码为何，都会将用户可见消息放入 `feedback.message`；错误状态会默认使用 `error` 类型。响应中不再使用顶层 `message`。
 
+表格 CRUD 和 `FormPage` 编辑请求必须携带 `__changedFields` 字段数组（定义于 `shared/types/changed-fields.mts`），由通用表单根据用户实际操作维护。后端只更新数组中声明的字段，不得通过新值与旧值字符串比较来推断是否修改。字段标签提供“清空”和“还原”操作：清空会标记字段已修改，还原会恢复初始值并移除修改状态。新增请求可以忽略该数组。
+
 错误状态未指定反馈时默认使用 `modal + error`；需要自定义展示方式时只传反馈配置：
 
 ```ts

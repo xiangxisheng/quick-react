@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Form, Input, message, Modal, Space, Switch, Typography } from 'antd';
+import { ClearOutlined, RollbackOutlined } from '@ant-design/icons';
 import type { CommonApi } from '@/utils/common/api.js';
 import type { FormPageResponse } from '@shared/types/form-page.mjs';
+import { changedFieldsKey, type ChangedFieldsPayload } from '@shared/types/changed-fields.mjs';
 import { CountdownDisplay, formatCountdown } from '@/components/common/Countdown.js';
 import { runAfterFeedback } from '@/utils/common/feedback.js';
 
@@ -27,10 +29,6 @@ const isRecord = (value: unknown): value is Record<string, unknown> => (
 	Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 );
 
-const areValuesEqual = (left: Record<string, unknown>, right: Record<string, unknown>) => (
-	JSON.stringify(left) === JSON.stringify(right)
-);
-
 export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PUT', redirectOnFeedback = false, onSaved }: FormProps) {
 	const [form] = Form.useForm<Record<string, unknown>>();
 	const [messageApi, messageContextHolder] = message.useMessage();
@@ -45,6 +43,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 	const [refreshCancelled, setRefreshCancelled] = useState(false);
 	const [saved, setSaved] = useState(false);
 	const [responseFeedback, setResponseFeedback] = useState<FormResponse['feedback']>();
+	const changedFields = useRef(new Set<string>());
 
 	useEffect(() => {
 		setLoading(true);
@@ -78,6 +77,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 				setFormConfig(result.formPage);
 				setInitialValues(values);
 				setDirty(false);
+				changedFields.current.clear();
 				form.setFieldsValue(values);
 			}
 		}).catch((error) => console.error(`加载配置失败: ${apiPath}`, error)).finally(() => {
@@ -96,13 +96,15 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 			const response = await commonApi.apiFetch(apiPath, {
 				method: submitMethod,
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(values),
+				body: JSON.stringify({ ...values, [changedFieldsKey]: [...changedFields.current] } satisfies ChangedFieldsPayload & Record<string, unknown>),
 			});
 			const result = await response.json() as FormResponse;
 			Modal.destroyAll();
 			setResponseFeedback(result.feedback);
 			const target = await onSaved?.(values);
-			setInitialValues(values);
+			const savedValues = isRecord(result.currentValues) ? result.currentValues : values;
+			setInitialValues(savedValues);
+			changedFields.current.clear();
 			setDirty(false);
 			setSaved(true);
 			if (target && result.feedback && (redirectOnFeedback || result.feedback.redirectAfter !== undefined)) {
@@ -152,12 +154,41 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 			layout="vertical"
 			onFinish={onFinish}
 			initialValues={formConfig?.initialValues}
-			onValuesChange={(_, values) => setDirty(!areValuesEqual(values, initialValues))}
+			onValuesChange={(changedValues) => {
+				for (const field of Object.keys(changedValues)) changedFields.current.add(field);
+				setDirty(changedFields.current.size > 0);
+			}}
 		>
 			{formConfig?.fields.map((field) => (
 				<Form.Item
 					key={field.name}
-					label={field.label}
+					label={(
+						<Space size={2}>
+							<span>{field.label}</span>
+							<Button
+								type="text"
+								size="small"
+								title="清空"
+								icon={<ClearOutlined />}
+								onClick={() => {
+									form.setFields([{ name: field.name, value: field.type === 'switch' ? false : null, touched: true }]);
+									changedFields.current.add(field.name);
+									setDirty(true);
+								}}
+							/>
+							<Button
+								type="text"
+								size="small"
+								title="还原"
+								icon={<RollbackOutlined />}
+								onClick={() => {
+									form.setFields([{ name: field.name, value: initialValues[field.name], touched: false, errors: [] }]);
+									changedFields.current.delete(field.name);
+									setDirty(changedFields.current.size > 0);
+								}}
+							/>
+						</Space>
+					)}
 					name={field.name}
 					extra={field.extra}
 					valuePropName={field.type === 'switch' ? 'checked' : 'value'}

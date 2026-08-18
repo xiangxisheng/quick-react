@@ -27,6 +27,45 @@ export const hashPassword = async (password: string) => {
 	return `pbkdf2-sha256$${iterations}$${toBase64(salt)}$${toBase64(hash)}`;
 };
 
+export type StoredPassword = {
+	hash: string;
+	pattern: string;
+};
+
+export const createStoredPassword = async (password: string) => {
+	let pattern = '';
+	for (const character of password) {
+		if (/^[0-9]$/.test(character)) pattern += 'D';
+		else if (/^[A-Z]$/.test(character)) pattern += 'U';
+		else if (/^[a-z]$/.test(character)) pattern += 'L';
+		else pattern += 'S';
+	}
+	return JSON.stringify({
+		hash: await hashPassword(password),
+		pattern,
+	} satisfies StoredPassword);
+};
+
+export const readStoredPassword = (value: unknown): StoredPassword | undefined => {
+	if (typeof value !== 'string') return undefined;
+	try {
+		const parsed = JSON.parse(value) as Partial<StoredPassword>;
+		const pattern = parsed.pattern;
+		if (
+			typeof parsed.hash !== 'string'
+			|| typeof pattern !== 'string' || !/^[DULS]*$/.test(pattern)
+		) return undefined;
+		return { hash: parsed.hash, pattern };
+	} catch {
+		return undefined;
+	}
+};
+
+export const verifyStoredPassword = async (password: string, value: unknown) => {
+	const stored = readStoredPassword(value);
+	return stored ? verifyPassword(password, stored.hash) : false;
+};
+
 export const verifyPassword = async (password: string, encoded: string) => {
 	const [algorithm, countText, saltText, hashText] = encoded.split('$');
 	const count = Number(countText);
