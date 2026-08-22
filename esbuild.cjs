@@ -52,6 +52,7 @@ const createBuildContext = async (entryPoint, outputDir, outfile, options = {}) 
 
 const main = async () => {
 	const watch = process.argv.includes('--watch');
+	const startServer = process.argv.includes('--start') || process.env.START_SERVER === '1';
 	generateWorkerRegistryFile();
 	const frontend = await createBuildContext('src/index.tsx', publicDir, 'bundle.js', {
 		minify: true,
@@ -83,7 +84,7 @@ const main = async () => {
 		createRuntimeConfig();
 	}
 
-	await import(`${pathToFileURL(path.join(distDir, 'server.mjs')).href}?startup=${Date.now()}`);
+	if (startServer) await import(`${pathToFileURL(path.join(distDir, 'server.mjs')).href}?startup=${Date.now()}`);
 };
 
 main().catch((error) => {

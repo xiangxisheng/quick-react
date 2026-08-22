@@ -6,10 +6,16 @@
 npm install
 ```
 
-启动构建和服务：
+构建项目：
 
 ```bash
-node esbuild.cjs
+npm run build
+```
+
+启动 Node 服务：
+
+```bash
+npm start
 ```
 
 启动监听模式：

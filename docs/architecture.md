@@ -2,7 +2,7 @@
 
 ## 构建和启动流程
 
-执行 `node esbuild.cjs` 后：
+执行 `npm run build` 后：
 
 ```text
 src/index.tsx       -> public/bundle.js
@@ -10,7 +10,7 @@ server/app.mts      -> dist/server.mjs
 server/templates/   -> 动态首页响应
 ```
 
-构建完成后，`esbuild.cjs` 会加载 `dist/server.mjs`。Hono 在同一个 8088 端口提供页面、静态资源和 `/api/*` 接口。
+构建只生成上述产物，不启动 Node 服务，也不执行数据库初始化。执行 `npm start` 后才会加载 `dist/server.mjs`；Hono 在同一个 8088 端口提供页面、静态资源和 `/api/*` 接口。开发模式使用 `npm run dev`，会在监听构建完成后自动启动 Node 服务。
 
 ## 请求流程
 
