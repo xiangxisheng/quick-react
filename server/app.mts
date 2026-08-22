@@ -12,18 +12,22 @@ import { etag } from 'hono/etag';
 import { getClientIp } from './client-ip.mjs';
 import worker from './worker.mjs';
 import { createSqliteAdapter } from './database/sqlite.mjs';
-import { migrateDatabase, migrateDefaultDatabase } from './database/migrate.mjs';
+import { initializeCodeSites, migrateDatabase, migrateDefaultDatabase } from './database/migrate.mjs';
 import { createDatabaseConfigStore } from './config-store.mjs';
 import { configureSystemConfig, loadSystemConfig } from './system-config.mjs';
 import { configureTechStack, loadTechStackConfig } from './tech-stack.mjs';
 import type { WorkerBindings } from './worker.mjs';
 import type { AppEnv } from './types.mjs';
+import { workerCodeSites, workerSiteNavigations } from './.generated/worker-api-registry.mjs';
 
 const env = process.env;
 const projectDirectory = fileURLToPath(new URL('../', import.meta.url));
 const defaultDatabase = createSqliteAdapter(env.DEFAULT_DATABASE_FILE || resolve(projectDirectory, 'database/default.sqlite'));
 const siteDatabases = new Map<string, ReturnType<typeof createSqliteAdapter>>();
 await migrateDefaultDatabase(defaultDatabase, resolve(projectDirectory, 'migrations'));
+await initializeCodeSites(defaultDatabase, workerCodeSites, Object.fromEntries(
+	Object.entries(workerSiteNavigations).map(([siteKey, navigation]) => [siteKey, navigation[0]?.label || siteKey]),
+));
 const resolveSqliteDsn = (dsn: string) => {
 	if (!dsn.startsWith('sqlite://')) throw new Error('Only sqlite:// custom DSNs are supported by the Node runtime');
 	const dsnPath = dsn.slice('sqlite://'.length);

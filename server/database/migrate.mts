@@ -41,3 +41,21 @@ export const migrateDatabase = async (database: DatabaseAdapter, migrationsRoot:
 
 export const migrateDefaultDatabase = (database: DatabaseAdapter, migrationsRoot: string) =>
 	migrateDatabase(database, migrationsRoot, ['global', 'base']);
+
+const siteKeyPattern = /^[a-z][a-z0-9_]*$/;
+
+/** Register code-defined business sites without overwriting administrator settings. */
+export const initializeCodeSites = async (
+	database: DatabaseAdapter,
+	codeSites: readonly string[],
+	siteNames: Record<string, string> = {},
+) => {
+	for (const siteKey of codeSites) {
+		if (!siteKeyPattern.test(siteKey) || siteKey === 'base' || siteKey === 'global') continue;
+		const name = siteNames[siteKey] || siteKey;
+		await database.prepare(`INSERT INTO global_sites
+			(site_key, name, base_site_key, dsn, database_binding, status, migration_status, is_default, is_system)
+			VALUES (?1, ?2, 'base', '', '', 'enabled', 'ready', 0, 0)
+			ON CONFLICT(site_key) DO NOTHING`).bind(siteKey, name).run();
+	}
+};
