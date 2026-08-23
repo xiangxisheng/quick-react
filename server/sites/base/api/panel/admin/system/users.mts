@@ -2,13 +2,14 @@ import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
 import { createStoredPassword, readStoredPassword } from '@server/auth.mjs';
 import { getChangedFields } from '@server/changed-fields.mjs';
+import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 
 const columns = [
 	{ dataIndex: 'id', title: 'ID', dataType: 'int' as const },
 	{ dataIndex: 'username', title: '用户名', component: 'textbox' as const },
 	{ dataIndex: 'password', title: '新密码', component: 'textbox' as const, inputType: 'password' as const, placeholder: '留空表示不修改' },
 	{ dataIndex: 'roles', title: '角色', component: 'textbox' as const },
-	{ dataIndex: 'status', title: '状态', component: 'switch' as const, checkedValue: 'enabled', uncheckedValue: 'disabled', options: [{ value: 'enabled', text: '启用', color: 'green' }, { value: 'disabled', text: '禁用', color: 'red' }] },
+	{ dataIndex: 'status', title: '状态', component: 'switch' as const, checkedValue: statusValues.enabled, uncheckedValue: statusValues.disabled, options: enabledDisabledOptions },
 	{ dataIndex: 'created_at', title: '创建时间', dataType: 'js_timestamp' as const, dayjsFormat: 'YYYY-MM-DD HH:mm:ss' },
 	{ dataIndex: 'updated_at', title: '更新时间', dataType: 'js_timestamp' as const, dayjsFormat: 'YYYY-MM-DD HH:mm:ss' },
 ];

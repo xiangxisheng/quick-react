@@ -1,17 +1,13 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiResponse } from '@server/api-response.mjs';
 import { normalizeHostname } from '@server/site-router.mjs';
-
-const statusOptions = [
-	{ value: 'enabled', text: '启用', color: 'green' },
-	{ value: 'disabled', text: '禁用', color: 'red' },
-];
+import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 
 const columns = [
 	{ dataIndex: 'id', title: 'ID' },
 	{ dataIndex: 'hostname', title: '域名', component: 'textbox' },
 	{ dataIndex: 'site_key', title: '站点', component: 'select', placeholder: '搜索并选择站点', rules: [{ required: true, message: '请选择站点' }] },
-	{ dataIndex: 'status', title: '状态', component: 'switch', checkedValue: 'enabled', uncheckedValue: 'disabled', options: statusOptions },
+	{ dataIndex: 'status', title: '状态', component: 'switch', checkedValue: statusValues.enabled, uncheckedValue: statusValues.disabled, options: enabledDisabledOptions },
 ];
 
 const normalizeHostPattern = (value: unknown) => {
@@ -68,7 +64,7 @@ const handler: ApiHandler = async (c, next, params) => {
 		const body = await parseBody(c);
 		const hostname = body.hostname === undefined ? null : normalizeHostPattern(body.hostname);
 		if (body.hostname !== undefined && !hostname) return apiMessage(c, 400, 'Host 不合法');
-		const status = body.status === 'disabled' ? 'disabled' : body.status === 'enabled' ? 'enabled' : null;
+		const status = body.status === statusValues.disabled ? statusValues.disabled : body.status === statusValues.enabled ? statusValues.enabled : null;
 		await database.prepare(`UPDATE global_hosts SET hostname = COALESCE(?2, hostname),
 			site_key = COALESCE(?3, site_key), status = COALESCE(?4, status) WHERE id = ?1`)
 			.bind(Number(params.id), hostname, typeof body.site_key === 'string' ? body.site_key : null, status).run();

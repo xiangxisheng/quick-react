@@ -1,21 +1,18 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
+import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 
 const siteKeyPattern = /^[a-z][a-z0-9_]*$/;
 const bindingPattern = /^(?:[A-Z][A-Z0-9_]{0,63})?$/;
-const allowedStatuses = new Set(['enabled', 'disabled']);
-const statusOptions = [
-	{ value: 'enabled', text: '启用', color: 'green' },
-	{ value: 'disabled', text: '禁用', color: 'red' },
-];
+const allowedStatuses = new Set<string>(Object.values(statusValues));
 
 const columns = [
 	{ dataIndex: 'site_key', title: '站点标识', component: 'textbox' },
 	{ dataIndex: 'name', title: '名称', component: 'textbox' },
 	{ dataIndex: 'base_site_key', title: '父站点', component: 'select', placeholder: '搜索并选择父站点', rules: [{ required: true, message: '请选择父站点' }] },
 	{ dataIndex: 'dsn', title: 'Node DSN', component: 'textbox' },
-	{ dataIndex: 'status', title: '状态', component: 'switch', checkedValue: 'enabled', uncheckedValue: 'disabled', options: statusOptions },
+	{ dataIndex: 'status', title: '状态', component: 'switch', checkedValue: statusValues.enabled, uncheckedValue: statusValues.disabled, options: enabledDisabledOptions },
 	{ dataIndex: 'migration_status', title: '迁移状态' },
 	{ dataIndex: 'database_binding', title: 'D1 Binding', component: 'textbox' },
 ];
@@ -116,8 +113,8 @@ const handler: ApiHandler = async (c, next, params) => {
 		if (!current) return apiMessage(c, 404, '站点不存在');
 		const body = await parseBody(c);
 		const status = allowedStatuses.has(String(body.status)) ? String(body.status) : undefined;
-		if (status === 'enabled' && current.migration_status !== 'ready') return apiMessage(c, 400, 'Migration 未完成，站点不可启用');
-		if (current.is_system && status === 'disabled') return apiMessage(c, 400, '系统站点不可禁用');
+		if (status === statusValues.enabled && current.migration_status !== 'ready') return apiMessage(c, 400, 'Migration 未完成，站点不可启用');
+		if (current.is_system && status === statusValues.disabled) return apiMessage(c, 400, '系统站点不可禁用');
 		const dsn = typeof body.dsn === 'string' ? body.dsn.trim() : undefined;
 		const databaseBinding = typeof body.database_binding === 'string' ? body.database_binding.trim() : undefined;
 		const nextDsn = dsn ?? current.dsn;
