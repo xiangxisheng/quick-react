@@ -1,4 +1,5 @@
 import type { NavigationItem } from '@shared/types/navigation.mjs';
+import { resolveNavigationPaths } from '@shared/navigation-tree.mjs';
 export type MenuNode = NavigationItem;
 
 const rawSiteNavigation = (): MenuNode[] => [
@@ -44,47 +45,6 @@ const rawSiteNavigation = (): MenuNode[] => [
 	{ label: '注册', key: 'sign-up', icon: 'appstore', component: 'sign', title: '注册', description: '创建初始管理员', hidden: true },
 ];
 
-const resolveMenuPaths = (items: MenuNode[], parentPath = ''): MenuNode[] => items.map((item) => {
-	const key = String(item.key ?? '');
-	const path = key.startsWith('/') ? key : `${parentPath}/${key}`.replaceAll('//', '/');
-	const children = item.children ? resolveMenuPaths(item.children, path) : undefined;
-	return { ...item, key: path, children };
-});
-
-export const menuItems = resolveMenuPaths(rawSiteNavigation());
+export const menuItems = resolveNavigationPaths(rawSiteNavigation());
 
 export default menuItems;
-
-export type PageDefinition = {
-	path: string;
-	component: string;
-	title: string;
-	description: string;
-	navigation?: MenuNode[];
-	dashboardPath?: string;
-};
-
-const collectPages = (items: MenuNode[], navigation: MenuNode[] = items, dashboardPath?: string): PageDefinition[] => items.flatMap((item) => {
-	const pageNavigation = item.navigationGroup ? item.children ?? [] : navigation;
-	const pageDashboardPath = item.component === 'panel'
-		? item.children?.find((child) => child.component === 'dashboard')?.key
-		: dashboardPath;
-	const pages = typeof item.component === 'string' && typeof item.title === 'string'
-		? [{ path: item.key, component: item.component, title: item.title, description: String(item.description ?? ''), navigation: pageNavigation, dashboardPath: pageDashboardPath }]
-		: [];
-	const children = item.children ? collectPages(item.children, pageNavigation, pageDashboardPath) : [];
-	return [...pages, ...children];
-});
-
-export const getPageDefinitions = () => {
-	const pages = collectPages(menuItems);
-	return [...new Map(pages.map((page) => [page.path, page])).values()];
-};
-
-export const getPageMetadata = (pathname: string, pageSuffix = '.html') => {
-	pathname = pageSuffix && pathname.endsWith(pageSuffix) ? pathname.slice(0, -pageSuffix.length) : pathname;
-	const page = getPageDefinitions().find((item) => item.path === pathname);
-	return page
-		? { title: page.title, description: page.description }
-		: { title: 'Quick React', description: 'Quick React 应用' };
-};

@@ -3,6 +3,7 @@ import type { MenuProps } from 'antd';
 import type { CommonApi } from '@/utils/common/api.js';
 import type { InitialData } from '@shared/types/initial-data.mjs';
 import type { NavigationItem } from '@shared/types/navigation.mjs';
+import { collectPageDefinitions, type NavigationPageDefinition } from '@shared/navigation-tree.mjs';
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
@@ -27,21 +28,9 @@ const serverData = (window as Window & { __INITIAL_DATA__?: InitialData }).__INI
 const siteNavigation = initialData.siteNavigation;
 const pageUrl = (path: string) => path === '/' ? path : `${path}${initialData.pageSuffix}`;
 
-type PageDefinition = NavigationItem & { path: string; component: string; navigation: NavigationItem[]; dashboardPath?: string };
+type PageDefinition = NavigationPageDefinition;
 
-const collectPages = (items: NavigationItem[], navigation: NavigationItem[] = items, dashboardPath?: string): PageDefinition[] => items.flatMap((item) => {
-	const pageNavigation = item.component === 'panel' ? item.children ?? [] : navigation;
-	const pageDashboardPath = item.component === 'panel'
-		? item.children?.find((child) => child.component === 'dashboard')?.key
-		: dashboardPath;
-	const page = item.component && item.title
-		? [{ ...item, path: item.key, component: item.component, title: item.title, navigation: pageNavigation, dashboardPath: pageDashboardPath }]
-		: [];
-	const children = item.children ? collectPages(item.children, pageNavigation, pageDashboardPath) : [];
-	return [...page, ...children];
-});
-
-const pages = collectPages(siteNavigation);
+const pages = collectPageDefinitions(siteNavigation);
 const iconComponents = {
 	mail: <MailOutlined />,
 	appstore: <AppstoreOutlined />,
