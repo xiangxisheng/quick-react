@@ -5,13 +5,17 @@ import type { DatabaseAdapter } from '@server/database/index.mjs';
 const siteKeyPattern = /^[a-z][a-z0-9_]*$/;
 const bindingPattern = /^(?:[A-Z][A-Z0-9_]{0,63})?$/;
 const allowedStatuses = new Set(['enabled', 'disabled']);
+const statusOptions = [
+	{ value: 'enabled', text: '启用', color: 'green' },
+	{ value: 'disabled', text: '禁用', color: 'red' },
+];
 
 const columns = [
 	{ dataIndex: 'site_key', title: '站点标识', component: 'textbox' },
 	{ dataIndex: 'name', title: '名称', component: 'textbox' },
 	{ dataIndex: 'base_site_key', title: '父站点', component: 'select', placeholder: '搜索并选择父站点', rules: [{ required: true, message: '请选择父站点' }] },
 	{ dataIndex: 'dsn', title: 'Node DSN', component: 'textbox' },
-	{ dataIndex: 'status', title: '状态', component: 'switch', checkedValue: 'enabled', uncheckedValue: 'disabled' },
+	{ dataIndex: 'status', title: '状态', component: 'switch', checkedValue: 'enabled', uncheckedValue: 'disabled', options: statusOptions },
 	{ dataIndex: 'migration_status', title: '迁移状态' },
 	{ dataIndex: 'database_binding', title: 'D1 Binding', component: 'textbox' },
 ];
