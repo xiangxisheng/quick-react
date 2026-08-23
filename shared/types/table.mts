@@ -1,5 +1,5 @@
 export type TableData = Record<string, unknown>;
-export type TableColumnComponent = 'textbox' | 'url' | 'textarea' | 'select' | 'datepicker' | 'datepicker_rangepicker' | 'inputnumber' | 'upload';
+export type TableColumnComponent = 'textbox' | 'url' | 'textarea' | 'select' | 'switch' | 'datepicker' | 'datepicker_rangepicker' | 'inputnumber' | 'upload';
 export type TableDataType = 'js_timestamp' | 'int' | 'float' | 'string' | 'datetime';
 export type TableColumnRule = { required: boolean; message: string };
 export type TableSelectOption = { value: string; text: string; color?: string; dataTypes?: string[] };
@@ -12,6 +12,8 @@ export type TableColumn = {
 	ellipsis?: boolean;
 	placeholder?: string;
 	options?: TableSelectOption[];
+	checkedValue?: string | boolean;
+	uncheckedValue?: string | boolean;
 	dataType?: TableDataType;
 	dayjsFormat?: string;
 };

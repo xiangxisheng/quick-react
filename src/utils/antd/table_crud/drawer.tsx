@@ -4,7 +4,7 @@ import type { UploadProps } from 'antd';
 import { changedFieldsKey, type ChangedFieldsPayload } from '@shared/types/changed-fields.mjs';
 
 import { ClearOutlined, InboxOutlined, RollbackOutlined } from '@ant-design/icons';
-import { Button, Col, DatePicker, Drawer, Form, Input, Row, Select, Space } from 'antd';
+import { Button, Col, DatePicker, Drawer, Form, Input, Row, Select, Space, Switch } from 'antd';
 import { Upload } from 'antd';
 import { InputNumber } from 'antd';
 import { useEffect, useRef } from 'react';
@@ -57,6 +57,8 @@ function getFormItemComponent(item: ResJsonTableColumn, row: DataType) {
 					options={item.options?.map((option) => ({ value: option.value, label: option.text }))}
 				/>
 			);
+		case ('switch'):
+			return <Switch checkedChildren="启用" unCheckedChildren="禁用" />;
 		case ('textarea'):
 			return (
 				<Input.TextArea rows={4} placeholder={item.placeholder} />
@@ -242,6 +244,9 @@ export default ({
 							<Col span={24}>
 								<Form.Item
 									name={item.dataIndex}
+									valuePropName={item.component === 'switch' ? 'checked' : undefined}
+									getValueProps={item.component === 'switch' ? (value) => ({ checked: value === (item.checkedValue ?? true) }) : undefined}
+									getValueFromEvent={item.component === 'switch' ? (checked: boolean) => checked ? (item.checkedValue ?? true) : (item.uncheckedValue ?? false) : undefined}
 									label={(
 										<Space size={2}>
 											<span>{item.title}</span>

@@ -8,7 +8,7 @@ const columns = [
 	{ dataIndex: 'username', title: '用户名', component: 'textbox' as const },
 	{ dataIndex: 'password', title: '新密码', component: 'textbox' as const, inputType: 'password' as const, placeholder: '留空表示不修改' },
 	{ dataIndex: 'roles', title: '角色', component: 'textbox' as const },
-	{ dataIndex: 'status', title: '状态', component: 'select' as const, options: [{ value: 'enabled', text: '启用', color: 'green' }, { value: 'disabled', text: '禁用', color: 'red' }] },
+	{ dataIndex: 'status', title: '状态', component: 'switch' as const, checkedValue: 'enabled', uncheckedValue: 'disabled' },
 	{ dataIndex: 'created_at', title: '创建时间', dataType: 'js_timestamp' as const, dayjsFormat: 'YYYY-MM-DD HH:mm:ss' },
 	{ dataIndex: 'updated_at', title: '更新时间', dataType: 'js_timestamp' as const, dayjsFormat: 'YYYY-MM-DD HH:mm:ss' },
 ];

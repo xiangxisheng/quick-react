@@ -2,16 +2,11 @@ import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiResponse } from '@server/api-response.mjs';
 import { normalizeHostname } from '@server/site-router.mjs';
 
-const statusOptions = [
-	{ value: 'enabled', text: '启用', color: 'green' },
-	{ value: 'disabled', text: '禁用', color: 'red' },
-];
-
 const columns = [
 	{ dataIndex: 'id', title: 'ID' },
 	{ dataIndex: 'hostname', title: '域名', component: 'textbox' },
 	{ dataIndex: 'site_key', title: '站点', component: 'select', placeholder: '搜索并选择站点', rules: [{ required: true, message: '请选择站点' }] },
-	{ dataIndex: 'status', title: '状态', component: 'select', options: statusOptions },
+	{ dataIndex: 'status', title: '状态', component: 'switch', checkedValue: 'enabled', uncheckedValue: 'disabled' },
 ];
 
 const normalizeHostPattern = (value: unknown) => {
