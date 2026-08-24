@@ -2,6 +2,7 @@ import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiResponse } from '@server/api-response.mjs';
 import { normalizeHostname } from '@server/site-router.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
+import { getChangedFields } from '@server/changed-fields.mjs';
 
 const columns = [
 	{ dataIndex: 'id', title: 'ID' },
@@ -62,12 +63,13 @@ const handler: ApiHandler = async (c, next, params) => {
 	}
 	if (params.id && c.req.method === 'PUT') {
 		const body = await parseBody(c);
-		const hostname = body.hostname === undefined ? null : normalizeHostPattern(body.hostname);
-		if (body.hostname !== undefined && !hostname) return apiMessage(c, 400, 'Host 不合法');
-		const status = body.status === statusValues.disabled ? statusValues.disabled : body.status === statusValues.enabled ? statusValues.enabled : null;
+		const changedFields = getChangedFields(body, ['hostname', 'site_key', 'status']);
+		const hostname = changedFields.has('hostname') ? normalizeHostPattern(body.hostname) : null;
+		if (changedFields.has('hostname') && !hostname) return apiMessage(c, 400, 'Host 不合法');
+		const status = !changedFields.has('status') ? null : body.status === statusValues.disabled ? statusValues.disabled : body.status === statusValues.enabled ? statusValues.enabled : null;
 		await database.prepare(`UPDATE global_hosts SET hostname = COALESCE(?2, hostname),
 			site_key = COALESCE(?3, site_key), status = COALESCE(?4, status) WHERE id = ?1`)
-			.bind(Number(params.id), hostname, typeof body.site_key === 'string' ? body.site_key : null, status).run();
+			.bind(Number(params.id), hostname, changedFields.has('site_key') && typeof body.site_key === 'string' ? body.site_key : null, status).run();
 		await c.get('siteRouter').refresh();
 		return apiMessage(c, 200, '保存成功');
 	}

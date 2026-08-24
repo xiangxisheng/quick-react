@@ -7,7 +7,7 @@ import type { ResJsonTableOption } from '@/utils/common/api.js';
 import type { CommonApi, ResJsonTableColumn } from '@/utils/common/api.js';
 
 import { useRef, useState, useEffect } from 'react';
-import { Table, Button, Flex, Space, Tag } from 'antd';
+import { Table, Button, Flex, Space, Tag, Select } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useDrawer } from '@/utils/common/drawer.js';
@@ -57,6 +57,12 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 	const [tableColumns, setTableColumns] = useState<TableColumnsType<DataType>>();
 	const [resJsonColumns, setResJsonColumns] = useState<ResJsonTableColumn[]>([]);
 	const [resJsonTableOption, setResJsonTableOption] = useState<ResJsonTableOption>({ rowKey: 'key' });
+	const [database, setDatabase] = useState('current');
+	const [tableName, setTableName] = useState('');
+	const [databaseOptions, setDatabaseOptions] = useState<{ value: string; text: string }[]>([]);
+	const [tableOptions, setTableOptions] = useState<{ value: string; text: string }[]>([]);
+	const selectedQuery = tableName ? `?table=${encodeURIComponent(tableName)}` : '';
+	const selectedApiPath = `${apiPath}${selectedQuery}`;
 	const cacheResJsonTable = useRef<ResJsonTable>({
 		columns: [],
 	});
@@ -65,7 +71,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 		// 向后段API发送删除指令
 		try {
 			setLoading(true);
-			await commonApi.apiFetch(apiPath, { method: 'DELETE', body: JSON.stringify(ids) });
+			await commonApi.apiFetch(selectedApiPath, { method: 'DELETE', body: JSON.stringify(ids) });
 			await fetchData();
 		} catch (ex) {
 			console.error(ex);
@@ -95,7 +101,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 			console.error('编辑失败：记录缺少 rowKey', record);
 			return;
 		}
-		const url = `${apiPath}/${encodeURIComponent(rowId)}`;
+		const url = `${apiPath}/${encodeURIComponent(rowId)}${selectedQuery}`;
 		let row: DataType;
 		try {
 			const res = await commonApi.apiFetch(url, {
@@ -149,10 +155,17 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 				pageNum: pagination.current?.toString() || '0',
 				pageSize: pagination.pageSize?.toString() || '0',
 			};
+			if (database) query.database = database;
+			if (tableName) query.table = tableName;
 			const queryString = new URLSearchParams(query).toString();
 			const response: Response = await commonApi.apiFetch(`${apiPath}?${queryString}`);
 			const resJSON: ResJSON = await response.json();
 			if (resJSON.table) {
+				if (resJSON.table.databases) setDatabaseOptions(resJSON.table.databases);
+				if (resJSON.table.tables) {
+					setTableOptions(resJSON.table.tables);
+					if (!tableName && resJSON.table.tables[0]) setTableName(resJSON.table.tables[0].value);
+				}
 				if (resJSON.table.option) {
 					Object.assign(resJsonTableOption, resJSON.table.option);
 					setResJsonTableOption((prev) => ({ ...prev, ...resJSON.table?.option }));
@@ -181,6 +194,9 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 										return <Tag color={option.color} key={option.value}>{option.text}</Tag>;
 									}
 								}
+								if (column.component === 'switch') {
+									return <Tag color={value ? 'green' : 'default'}>{value ? '是' : '否'}</Tag>;
+								}
 								return value;
 							},
 						});
@@ -191,8 +207,8 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 						fixed: 'right',
 						width: 100,
 						render: (value: any, record: DataType, index: number) => (<Space>
-							<a onClick={() => onOpenEdit(value, record, index)}>编辑</a>
-							<a onClick={() => onDeleteOne(value, record, index)}>删除</a>
+							{resJsonTableOption.editable !== false && <><a onClick={() => onOpenEdit(value, record, index)}>编辑</a>
+							<a onClick={() => onDeleteOne(value, record, index)}>删除</a></>}
 						</Space>),
 					});
 					setTableColumns(tableColumns);
@@ -215,7 +231,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 
 	useEffect(() => {
 		fetchData();
-	}, [apiPath, filters, pagination.pageSize, pagination.current]);
+	}, [apiPath, database, tableName, filters, pagination.pageSize, pagination.current]);
 	const onChange: TableProps<DataType>['onChange'] = (_pagination: TablePaginationConfig, _filters, _sorter, _extra) => {
 		// console.log('onChange-params', { _pagination, _filters, _sorter, _extra });
 		setPagination((prev) => ({ ...prev, pageSize: _pagination.pageSize, current: _pagination.current }));
@@ -243,7 +259,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 			// 前端校验通过，开始向后端提交表单
 			drawerForm.setSubmitting‌(true);
 			try {
-				const res = await commonApi.apiFetch(apiPath, {
+				const res = await commonApi.apiFetch(selectedApiPath, {
 					method: 'POST', // 指定请求方法
 					headers: {
 						'Content-Type': 'application/json', // 指定请求头，表明是 JSON 数据
@@ -276,9 +292,15 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 
 	return (<Flex vertical gap="small">
 		{contextHolderDrawer}
+		<Flex wrap gap="small" align="center">
+			<span>SQLite 数据库</span>
+			<Select style={{ minWidth: 190 }} value={database} options={databaseOptions.map((item) => ({ value: item.value, label: item.text }))} onChange={(value) => { setDatabase(value); setTableName(''); }} placeholder="选择数据库" />
+			<span>数据表</span>
+			<Select style={{ minWidth: 220 }} value={tableName || undefined} options={tableOptions.map((item) => ({ value: item.value, label: item.text }))} onChange={setTableName} placeholder="选择数据表" allowClear />
+		</Flex>
 		<Flex wrap gap="small">
-			<Button type="primary" onClick={() => onAddNew(resJsonColumns)} icon={<PlusOutlined />} disabled={loading}>新增</Button>
-			<Button danger type="primary" disabled={selectedRowKeys.length === 0} onClick={onDelete} icon={<DeleteOutlined />}>删除</Button>
+			<Button type="primary" onClick={() => onAddNew(resJsonColumns)} icon={<PlusOutlined />} disabled={loading || resJsonTableOption.editable === false || !tableName}>新增</Button>
+			<Button danger type="primary" disabled={selectedRowKeys.length === 0 || resJsonTableOption.editable === false} onClick={onDelete} icon={<DeleteOutlined />}>删除</Button>
 		</Flex>
 		<Table<DataType>
 			rowSelection={rowSelection}

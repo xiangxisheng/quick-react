@@ -2,7 +2,6 @@ export type TableData = Record<string, unknown>;
 export type TableColumnComponent = 'textbox' | 'url' | 'textarea' | 'select' | 'switch' | 'datepicker' | 'datepicker_rangepicker' | 'inputnumber' | 'upload';
 export type TableDataType = 'js_timestamp' | 'int' | 'float' | 'string' | 'datetime';
 export type TableColumnRule = { required: boolean; message: string };
-export type TableSelectOption = { value: string; text: string; color?: string; dataTypes?: string[] };
 export type TableColumn = {
 	dataIndex: string;
 	title: string;
@@ -17,6 +16,16 @@ export type TableColumn = {
 	dataType?: TableDataType;
 	dayjsFormat?: string;
 };
-export type TableOption = { rowKey: string };
-export type TableResponse = { option?: TableOption; columns?: TableColumn[]; dataSource?: TableData[]; totalRecords?: number };
+export type TableOption = { rowKey: string; editable?: boolean };
+export type TableSelectOption = { value: string; text: string; color?: string; dataTypes?: string[] };
+export type TableResponse = {
+	option?: TableOption;
+	columns?: TableColumn[];
+	dataSource?: TableData[];
+	totalRecords?: number;
+	databases?: TableSelectOption[];
+	tables?: TableSelectOption[];
+	database?: string;
+	table?: string;
+};
 export type TableRow = TableData & { key: string };

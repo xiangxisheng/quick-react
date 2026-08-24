@@ -2,6 +2,7 @@ import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
+import { getChangedFields } from '@server/changed-fields.mjs';
 
 const siteKeyPattern = /^[a-z][a-z0-9_]*$/;
 const bindingPattern = /^(?:[A-Z][A-Z0-9_]{0,63})?$/;
@@ -112,15 +113,16 @@ const handler: ApiHandler = async (c, next, params) => {
 			.first<{ site_key: string; is_system: number; dsn: string; database_binding: string; base_site_key: string | null; migration_status: string }>();
 		if (!current) return apiMessage(c, 404, '站点不存在');
 		const body = await parseBody(c);
-		const status = allowedStatuses.has(String(body.status)) ? String(body.status) : undefined;
+		const changedFields = getChangedFields(body, ['name', 'base_site_key', 'dsn', 'database_binding', 'status']);
+		const status = changedFields.has('status') && allowedStatuses.has(String(body.status)) ? String(body.status) : undefined;
 		if (status === statusValues.enabled && current.migration_status !== 'ready') return apiMessage(c, 400, 'Migration 未完成，站点不可启用');
 		if (current.is_system && status === statusValues.disabled) return apiMessage(c, 400, '系统站点不可禁用');
-		const dsn = typeof body.dsn === 'string' ? body.dsn.trim() : undefined;
-		const databaseBinding = typeof body.database_binding === 'string' ? body.database_binding.trim() : undefined;
+		const dsn = changedFields.has('dsn') && typeof body.dsn === 'string' ? body.dsn.trim() : undefined;
+		const databaseBinding = changedFields.has('database_binding') && typeof body.database_binding === 'string' ? body.database_binding.trim() : undefined;
 		const nextDsn = dsn ?? current.dsn;
 		const nextBinding = databaseBinding ?? current.database_binding;
 		if ((nextDsn && nextBinding) || !bindingPattern.test(nextBinding)) return apiMessage(c, 400, 'DSN 与 D1 Binding 只能配置一个，且 Binding 名称必须合法');
-		const nextParent = typeof body.base_site_key === 'string' ? body.base_site_key.trim() : current.base_site_key || 'base';
+		const nextParent = changedFields.has('base_site_key') && typeof body.base_site_key === 'string' ? body.base_site_key.trim() : current.base_site_key || 'base';
 		if (!await validateParent(database, params.id, nextParent)) return apiMessage(c, 400, '父站点不存在、不可继承或会形成循环');
 		const targetChanged = (dsn !== undefined && dsn !== current.dsn)
 			|| (databaseBinding !== undefined && databaseBinding !== current.database_binding);
@@ -131,7 +133,7 @@ const handler: ApiHandler = async (c, next, params) => {
 			status = CASE WHEN ?7 = 1 THEN 'disabled' ELSE COALESCE(?6, status) END,
 			migration_status = CASE WHEN ?7 = 1 THEN 'creating' ELSE migration_status END
 			WHERE site_key = ?1`).bind(params.id,
-			typeof body.name === 'string' ? body.name.trim() : null,
+			changedFields.has('name') && typeof body.name === 'string' ? body.name.trim() : null,
 			nextParent, dsn ?? null, databaseBinding ?? null,
 			status ?? null, (targetChanged || inheritanceChanged) ? 1 : 0).run();
 		await c.get('siteRouter').refresh();

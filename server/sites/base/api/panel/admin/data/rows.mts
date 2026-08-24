@@ -1,33 +1,53 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
-import { addRow, getMockTable, getMockTableResponse, parseJsonBody } from '@server/panel-data.mjs';
+import { databaseOptions, getColumns, assertTable, readTable, tableIdentifier } from '@server/sites/base/data/sqlite-table.mjs';
+import { getChangedFields } from '@server/changed-fields.mjs';
 
-const table = () => getMockTable('rows');
+const body = async (c: Parameters<ApiHandler>[0]) => c.req.json<Record<string, unknown>>().catch(() => ({}));
+const editableFields = (values: Record<string, unknown>, names: Set<string>) => Object.entries(values).filter(([name]) => names.has(name));
 
 const handler: ApiHandler = async (c, next, params) => {
-	const currentTable = table();
-	if (!currentTable) return apiMessage(c, 404, '模拟数据表不存在');
-	if (params.id) {
-		const row = currentTable.rows.find((item) => item.key === params.id);
-		if (c.req.method === 'GET') return row ? apiResponse(c, 200, row) : apiMessage(c, 404, '模拟数据不存在');
-		if (c.req.method === 'PUT') {
-			if (!row) return apiMessage(c, 404, '模拟数据不存在');
-			const body = await parseJsonBody(c);
-			Object.assign(row, body, { key: row.key });
-		return apiMessageData(c, 200, '保存成功', { data: row });
-		}
-		return next();
+	const database = c.get('database');
+	const tableName = c.req.query('table');
+	if (params.id && c.req.method === 'GET' && tableName) {
+		try { await assertTable(database, tableName); } catch { return apiMessage(c, 404, '数据表不存在'); }
+		const info = await getColumns(database, tableName);
+		const rowKey = info.find((column) => column.pk)?.name ?? 'rowid';
+		const row = await database.prepare(`SELECT rowid AS __rowid__, * FROM ${tableIdentifier(tableName)} WHERE ${tableIdentifier(rowKey)} = ?1`).bind(params.id).first<Record<string, unknown>>();
+		return row ? apiResponse(c, 200, row) : apiMessage(c, 404, '数据不存在');
 	}
 	if (c.req.method === 'GET') {
-		const pageNum = Math.max(1, Number(c.req.query('pageNum')) || 1);
-		const pageSize = Math.max(1, Number(c.req.query('pageSize')) || 10);
-		return apiResponse(c, 200, getMockTableResponse(currentTable, pageNum, pageSize));
+		const result = await readTable(database, 'rows', tableName, c.req.query('pageNum'), c.req.query('pageSize'));
+		const site = c.get('site');
+		return apiResponse(c, 200, { table: { ...result, databases: databaseOptions(`${site.databaseTarget.kind === 'binding' ? 'D1' : 'SQLite'}（当前）`), database: 'current' } });
 	}
-	if (c.req.method === 'POST') return apiMessageData(c, 201, '新增成功', { data: addRow(currentTable, await parseJsonBody(c)) });
+	if (!tableName) return apiMessage(c, 400, '请选择数据表');
+	try { await assertTable(database, tableName); } catch { return apiMessage(c, 404, '数据表不存在'); }
+	const info = await getColumns(database, tableName);
+	const names = new Set(info.map((column) => column.name));
+	const rowKey = info.find((column) => column.pk)?.name ?? 'rowid';
+	const table = tableIdentifier(tableName);
+	if (params.id && c.req.method === 'PUT') {
+		const source = await body(c);
+		const changedFields = getChangedFields(source, [...names]);
+		const values = editableFields(source, changedFields);
+		if (!values.length) return apiMessage(c, 400, '没有可更新的字段');
+		const set = values.map(([name], index) => `${tableIdentifier(name)} = ?${index + 1}`).join(', ');
+		await database.prepare(`UPDATE ${table} SET ${set} WHERE ${tableIdentifier(rowKey)} = ?${values.length + 1}`).bind(...values.map(([, value]) => value), params.id).run();
+		return apiMessage(c, 200, '保存成功');
+	}
+	if (c.req.method === 'POST') {
+		const values = editableFields(await body(c), names);
+		if (!values.length) return apiMessage(c, 400, '没有可写入的字段');
+		const fields = values.map(([name]) => tableIdentifier(name)).join(', ');
+		const marks = values.map((_, index) => `?${index + 1}`).join(', ');
+		await database.prepare(`INSERT INTO ${table} (${fields}) VALUES (${marks})`).bind(...values.map(([, value]) => value)).run();
+		return apiMessageData(c, 201, '新增成功', {});
+	}
 	if (c.req.method === 'DELETE') {
-		const body = await c.req.json<unknown>().catch(() => []);
-		const ids = Array.isArray(body) ? body.map(String) : [];
-		currentTable.rows = currentTable.rows.filter((row) => !ids.includes(row.key));
+		const ids = await c.req.json<unknown>().catch(() => []);
+		if (!Array.isArray(ids)) return apiMessage(c, 400, '删除参数无效');
+		for (const id of ids) await database.prepare(`DELETE FROM ${table} WHERE ${tableIdentifier(rowKey)} = ?1`).bind(String(id)).run();
 		return apiMessage(c, 200, '删除成功');
 	}
 	return next();
