@@ -14,7 +14,6 @@ import { loadSystemConfigFromStore } from './system-config.mjs';
 import { applyTechStackHeaders, loadTechStackConfigFromStore } from './tech-stack.mjs';
 import type { AppEnv, RuntimeBindings } from './types.mjs';
 import { workerApiModules, workerApiRoutes } from './.generated/worker-api-registry.mjs';
-import type { HeaderAction } from '@shared/types/initial-data.mjs';
 
 export type WorkerBindings = RuntimeBindings & {
 	ASSETS?: { fetch: (request: Request) => Promise<Response> };
@@ -93,22 +92,26 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 	const siteConfig = c.get('techStackConfig');
 	const systemConfig = c.get('systemConfig');
 	const menuItems = getSiteNavigation(site.codeSiteChain, c.get('effectiveRoles'));
-	const findNavigationItem = (items: typeof menuItems, key: string): typeof menuItems[number] | undefined => {
-		for (const item of items) {
-			if (item.key === key) return item;
-			const child = item.children ? findNavigationItem(item.children, key) : undefined;
-			if (child) return child;
+	const auth = c.get('currentUser')
+		? {
+			component: 'dropdown' as const,
+			actions: [{ key: '/sign', label: '退出登录', action: 'logout' as const, icon: 'logout' as const }],
+			pages: [
+				{ path: '/sign', title: '登录', description: '登录 Quick React', mode: 'sign' as const },
+				{ path: '/sign-up', title: '注册', description: '创建初始管理员', mode: 'sign-up' as const },
+			],
 		}
-		return undefined;
-	};
-	const signItem = findNavigationItem(menuItems, '/sign');
-	const signUpItem = findNavigationItem(menuItems, '/sign-up');
-	const authActions: HeaderAction[] = c.get('currentUser')
-		? [{ key: '/sign', label: '退出登录', action: 'logout' }]
-		: [
-			...(signItem ? [{ key: signItem.key, label: signItem.label, action: 'navigate' as const }] : []),
-			...(signUpItem ? [{ key: signUpItem.key, label: signUpItem.label, action: 'navigate' as const }] : []),
-		];
+		: {
+			component: 'buttons' as const,
+			actions: [
+				{ key: '/sign', label: '登录', action: 'navigate' as const, icon: 'login' as const },
+				{ key: '/sign-up', label: '注册', action: 'navigate' as const, icon: 'register' as const },
+			],
+			pages: [
+				{ path: '/sign', title: '登录', description: '登录 Quick React', mode: 'sign' as const },
+				{ path: '/sign-up', title: '注册', description: '创建初始管理员', mode: 'sign-up' as const },
+			],
+		};
 	const metadata = getPageMetadata(c.req.path, menuItems, siteConfig.pageSuffix);
 	const publicOrigin = systemConfig.publicOrigin || undefined;
 	const canonical = publicOrigin ? new URL(c.req.path, publicOrigin).toString() : undefined;
@@ -120,8 +123,7 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 			apiSuffix: siteConfig.apiSuffix,
 			pageSuffix: siteConfig.pageSuffix,
 			siteNavigation: menuItems,
-			currentUser: c.get('currentUser'),
-			authActions,
+			auth: { ...auth, currentUser: c.get('currentUser') },
 			footer: `Ant Design ©${new Date().getFullYear()} Created by Ant UED`,
 		},
 	}));

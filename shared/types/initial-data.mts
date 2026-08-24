@@ -5,6 +5,21 @@ export type HeaderAction = {
 	key: string;
 	label: string;
 	action: 'navigate' | 'logout';
+	icon?: 'login' | 'register' | 'logout';
+};
+
+export type AuthPage = {
+	path: string;
+	title: string;
+	description?: string;
+	mode: 'sign' | 'sign-up';
+};
+
+export type AuthState = {
+	component: 'buttons' | 'dropdown';
+	actions: HeaderAction[];
+	currentUser?: UserIdentity;
+	pages: AuthPage[];
 };
 
 export type InitialData = {
@@ -12,6 +27,5 @@ export type InitialData = {
 	pageSuffix: string;
 	siteNavigation: NavigationItem[];
 	footer?: string;
-	currentUser?: UserIdentity;
-	authActions?: HeaderAction[];
+	auth?: AuthState;
 };

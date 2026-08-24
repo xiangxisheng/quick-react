@@ -41,8 +41,6 @@ const rawSiteNavigation = (): MenuNode[] => [
 		],
 	},
 	{ label: '关于', key: 'about', icon: 'appstore', component: 'about', title: '关于', description: '关于 Quick React 项目' },
-	{ label: '登录', key: 'sign', icon: 'appstore', component: 'sign', title: '登录', description: '登录 Quick React', hidden: true },
-	{ label: '注册', key: 'sign-up', icon: 'appstore', component: 'sign', title: '注册', description: '创建初始管理员', hidden: true },
 ];
 
 export const menuItems = resolveNavigationPaths(rawSiteNavigation());

@@ -1,20 +1,20 @@
 import type React from 'react';
 import type { MenuProps } from 'antd';
 import type { CommonApi } from '@/utils/common/api.js';
-import type { HeaderAction, InitialData } from '@shared/types/initial-data.mjs';
+import type { InitialData } from '@shared/types/initial-data.mjs';
 import type { NavigationItem } from '@shared/types/navigation.mjs';
 import { collectPageDefinitions, type NavigationPageDefinition } from '@shared/navigation-tree.mjs';
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Avatar, Button, Dropdown, Layout, Menu, Space } from 'antd';
-import { AppstoreOutlined, LoginOutlined, LogoutOutlined, MailOutlined, UserAddOutlined, UserOutlined } from '@ant-design/icons';
+import { Layout, Menu, Space } from 'antd';
+import { AppstoreOutlined, MailOutlined } from '@ant-design/icons';
 import DescribeInstances from './components/aliyun/DescribeInstances.js';
 import Panel from './components/panel/PanelLayout.js';
 import Dashboard from './components/panel/Dashboard.js';
 import TableCRUD from '@/utils/antd/table_crud/index.js';
 import FormPage from './components/panel/FormPage.js';
-import { runAfterFeedback } from '@/utils/common/feedback.js';
+import AuthActions from './components/AuthActions.js';
 const { Content } = Layout;
 
 // 定义路由对应的页面组件
@@ -31,6 +31,14 @@ const pageUrl = (path: string) => path === '/' ? path : `${path}${initialData.pa
 type PageDefinition = NavigationPageDefinition;
 
 const pages = collectPageDefinitions(siteNavigation);
+const authPages: PageDefinition[] = (initialData.auth?.pages ?? []).map((page) => ({
+	path: page.path,
+	component: 'sign',
+	title: page.title,
+	description: page.description ?? '',
+	navigation: [],
+	mode: page.mode,
+}));
 const iconComponents = {
 	mail: <MailOutlined />,
 	appstore: <AppstoreOutlined />,
@@ -53,7 +61,7 @@ const App = ({ commonApi }: AppType) => {
 		home: () => <Home />,
 		about: () => <About />,
 		sign: (page) => {
-			const isSignUp = page.path === '/sign-up';
+			const isSignUp = page.mode === 'sign-up';
 			return <FormPage
 				commonApi={commonApi}
 				apiPath={`/api/sign${initialData.apiSuffix}?mode=${isSignUp ? 'sign-up' : 'sign'}`}
@@ -77,7 +85,7 @@ const App = ({ commonApi }: AppType) => {
 		/></Panel>,
 		aliyunDescribeInstances: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><DescribeInstances /></Panel>,
 	};
-	const routes = pages.flatMap((page) => {
+	const routes = [...pages, ...authPages].flatMap((page) => {
 		const render = pageRenderers[page.component];
 		if (!render) return [];
 		return [{ path: pageUrl(page.path), element: render(page) }];
@@ -126,18 +134,6 @@ const App = ({ commonApi }: AppType) => {
 		}
 	};
 	const memoizedRoutes = useMemo(() => routes, []);
-	const currentUser = initialData.currentUser;
-	const authActionHandlers: Record<string, (action: HeaderAction) => React.ReactNode> = {
-		navigate: (action) => <Button key={action.key} type="text" icon={action.key === '/sign' ? <LoginOutlined /> : <UserAddOutlined />} onClick={() => navigate(pageUrl(action.key))}>{action.label}</Button>,
-		logout: (action) => <Dropdown key={action.key} menu={{ items: [{ key: action.key, icon: <LogoutOutlined />, label: action.label }], onClick: async () => {
-				const response = await commonApi.apiFetch(`/api${action.key}${initialData.apiSuffix}`, { method: 'DELETE' });
-				const result = await response.json() as { feedback?: { redirectAfter?: number } };
-				runAfterFeedback(result.feedback, () => window.location.reload());
-		} }} placement="bottomRight">
-			<Button type="text" style={{ height: 40, padding: '0 8px' }}><Space size={6}><Avatar size="small" icon={<UserOutlined />} />{currentUser?.username}</Space></Button>
-		</Dropdown>,
-	};
-
 	return (
 		<Layout style={{ height: '100%' }}>
 			<Layout.Header style={{ height: 48, minHeight: 48, lineHeight: '48px', padding: '0 24px', display: 'flex', alignItems: 'center', background: '#fff', borderBottom: '1px solid #f0f0f0' }}>
@@ -148,7 +144,7 @@ const App = ({ commonApi }: AppType) => {
 					items={items}
 					style={{ flex: 1, minWidth: 0, borderBottom: 0 }}
 				/>
-				<Space size={4}>{(initialData.authActions ?? []).map((action) => authActionHandlers[action.action]?.(action) ?? null)}</Space>
+				<Space size={4}><AuthActions auth={initialData.auth} commonApi={commonApi} apiSuffix={initialData.apiSuffix} pageSuffix={initialData.pageSuffix} /></Space>
 			</Layout.Header>
 			<Content>
 				<Routes>

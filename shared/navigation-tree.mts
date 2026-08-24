@@ -7,6 +7,7 @@ export type NavigationPageDefinition = {
 	description: string;
 	navigation: NavigationItem[];
 	dashboardPath?: string;
+	mode?: string;
 };
 
 const resolveNodeKey = (key: string, parentPath: string) => {
