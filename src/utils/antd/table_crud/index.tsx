@@ -5,6 +5,7 @@ import type { TableColumnsType } from 'antd';
 import type { ResJSON, DataType, ResJsonTable } from '@/utils/common/api.js';
 import type { ResJsonTableOption } from '@/utils/common/api.js';
 import type { CommonApi, ResJsonTableColumn } from '@/utils/common/api.js';
+import type { TableAction } from '@shared/types/table.mjs';
 
 import { useRef, useState, useEffect } from 'react';
 import { Table, Button, Flex, Space, Tag, Select } from 'antd';
@@ -80,10 +81,10 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 		}
 	}
 
-	const onDeleteOne = async (value: any, record: DataType, index: number): Promise<void> => {
+	const onDeleteOne = async (value: any, record: DataType, index: number, action?: TableAction): Promise<void> => {
 		// 点击删除按钮时，弹出提示让用户确认删除操作
 		const rowId = record[resJsonTableOption.rowKey];
-		const aContentLine: string[] = [`确定要删除 ${resJsonTableOption.rowKey} = ${rowId} 吗？`];
+		const aContentLine: string[] = [action?.confirm ?? `确定要删除 ${resJsonTableOption.rowKey} = ${rowId} 吗？`];
 		if (!await commonApi.modalConfirm(aContentLine)) {
 			return;
 		}
@@ -206,10 +207,9 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 						key: 'operation',
 						fixed: 'right',
 						width: 100,
-						render: (value: any, record: DataType, index: number) => (<Space>
-							{resJsonTableOption.editable !== false && <><a onClick={() => onOpenEdit(value, record, index)}>编辑</a>
-							<a onClick={() => onDeleteOne(value, record, index)}>删除</a></>}
-						</Space>),
+						render: (value: any, record: DataType, index: number) => <Space>
+							{(resJsonTableOption.rowActions ?? []).map((action) => rowActionHandlers[action.action]?.(action, value, record, index) ?? null)}
+						</Space>,
 					});
 					setTableColumns(tableColumns);
 				}
@@ -281,14 +281,23 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 
 	};
 
-	const onDelete = async () => {
+	const onDelete = async (action?: TableAction) => {
 		if (!await commonApi.modalConfirm(
-			[`确定删除所选的 ${selectedRowKeys.length} 项吗？`]
+			[action?.confirm ?? `确定删除所选的 ${selectedRowKeys.length} 项吗？`]
 		)) {
 			return;
 		}
 		await apiDelete(selectedRowKeys);
 	}
+
+	const rowActionHandlers: Record<string, (action: TableAction, value: any, record: DataType, index: number) => React.ReactNode> = {
+		edit: (action, value, record, index) => <a key={action.key} aria-disabled={action.disabled} onClick={() => !action.disabled && onOpenEdit(value, record, index)}>{action.label}</a>,
+		delete: (action, value, record, index) => <a key={action.key} aria-disabled={action.disabled} onClick={() => !action.disabled && onDeleteOne(value, record, index, action)}>{action.label}</a>,
+	};
+	const toolbarActionHandlers: Record<string, (action: TableAction) => React.ReactNode> = {
+		create: (action) => <Button key={action.key} type="primary" onClick={() => onAddNew(resJsonColumns)} icon={<PlusOutlined />} disabled={loading || action.disabled || !tableName}>{action.label}</Button>,
+		delete: (action) => <Button key={action.key} danger type="primary" disabled={selectedRowKeys.length === 0 || action.disabled} onClick={() => onDelete(action)} icon={<DeleteOutlined />}>{action.label}</Button>,
+	};
 
 	return (<Flex vertical gap="small">
 		{contextHolderDrawer}
@@ -299,8 +308,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 			<Select style={{ minWidth: 220 }} value={tableName || undefined} options={tableOptions.map((item) => ({ value: item.value, label: item.text }))} onChange={setTableName} placeholder="选择数据表" allowClear />
 		</Flex>
 		<Flex wrap gap="small">
-			<Button type="primary" onClick={() => onAddNew(resJsonColumns)} icon={<PlusOutlined />} disabled={loading || resJsonTableOption.editable === false || !tableName}>新增</Button>
-			<Button danger type="primary" disabled={selectedRowKeys.length === 0 || resJsonTableOption.editable === false} onClick={onDelete} icon={<DeleteOutlined />}>删除</Button>
+			{(resJsonTableOption.toolbarActions ?? []).map((action) => toolbarActionHandlers[action.action]?.(action) ?? null)}
 		</Flex>
 		<Table<DataType>
 			rowSelection={rowSelection}

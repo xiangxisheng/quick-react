@@ -33,7 +33,7 @@ const handler: ApiHandler = async (c, next, params) => {
 			WHERE status = 'enabled' AND migration_status = 'ready' ORDER BY site_key`).all<{ site_key: string; name: string }>();
 		const siteOptions = sites.results.map((site) => ({ value: site.site_key, text: `${site.name} (${site.site_key})` }));
 		const tableColumns = columns.map((column) => column.dataIndex === 'site_key' ? { ...column, options: siteOptions } : column);
-		return apiResponse(c, 200, { table: { option: { rowKey: 'id' }, columns: tableColumns, dataSource: rows.results, totalRecords: rows.results.length } });
+		return apiResponse(c, 200, { table: { option: { rowKey: 'id', toolbarActions: [{ key: 'create', label: '新增', action: 'create' }, { key: 'delete', label: '删除', action: 'delete' }], rowActions: [{ key: 'edit', label: '编辑', action: 'edit' }, { key: 'delete', label: '删除', action: 'delete' }] }, columns: tableColumns, dataSource: rows.results, totalRecords: rows.results.length } });
 	}
 	if (!params.id && c.req.method === 'POST') {
 		const body = await parseBody(c);

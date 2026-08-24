@@ -35,7 +35,7 @@ const list = async (c: Parameters<ApiHandler>[0]) => {
 			.map((site) => ({ value: String(site.site_key), text: `${String(site.name)} (${String(site.site_key)})` })),
 	];
 	const tableColumns = columns.map((column) => column.dataIndex === 'base_site_key' ? { ...column, options: parentOptions } : column);
-	return apiResponse(c, 200, { table: { option: { rowKey: 'site_key' }, columns: tableColumns, dataSource: rows.results, totalRecords: rows.results.length } });
+	return apiResponse(c, 200, { table: { option: { rowKey: 'site_key', toolbarActions: [{ key: 'create', label: '新增', action: 'create' }, { key: 'delete', label: '删除', action: 'delete' }], rowActions: [{ key: 'edit', label: '编辑', action: 'edit' }, { key: 'delete', label: '删除', action: 'delete' }] }, columns: tableColumns, dataSource: rows.results, totalRecords: rows.results.length } });
 };
 
 const validateParent = async (database: DatabaseAdapter, siteKey: string, parentSiteKey: string) => {
