@@ -24,6 +24,7 @@ export const sqliteTypeOptions = [
 ];
 export const sqliteTableActions: { toolbarActions: TableAction[]; rowActions: TableAction[] } = {
 	toolbarActions: [
+		{ key: 'search', label: '搜索', action: 'search' },
 		{ key: 'create', label: '新增', action: 'create' },
 		{ key: 'delete', label: '删除', action: 'delete', confirm: '确定删除所选记录吗？' },
 	],
@@ -35,14 +36,15 @@ export const sqliteTableActions: { toolbarActions: TableAction[]; rowActions: Ta
 const tableColumn = (column: SqliteInfo): TableColumn => ({ dataIndex: column.name, title: column.name, component: 'textbox', dataType: /INT/i.test(column.type) ? 'int' : /REAL|FLOA|DOUB/i.test(column.type) ? 'float' : 'string' });
 export const readTable = async (database: DatabaseAdapter, mode: 'columns' | 'rows', tableName: string | undefined, pageNumValue?: string, pageSizeValue?: string): Promise<TableResponse> => {
 	const tables = await getTables(database);
-	if (!tableName || !tables.some((item) => item.value === tableName)) return { tables, dataSource: [], totalRecords: 0, option: { rowKey: 'rowid' } };
-	const info = await getColumns(database, tableName);
+	const selectedTableName = tableName || tables[0]?.value;
+	if (!selectedTableName || !tables.some((item) => item.value === selectedTableName)) return { tables, dataSource: [], totalRecords: 0, option: { rowKey: 'rowid' } };
+	const info = await getColumns(database, selectedTableName);
 	if (mode === 'columns') {
 		const rows = info.map((column) => ({ key: column.name, cid: column.name, name: column.name, type: column.type || '—', notnull: Boolean(column.notnull), pk: Boolean(column.pk) }));
 		return { tables, columns: [{ dataIndex: 'cid', title: '字段名', component: 'textbox' }, { dataIndex: 'type', title: '类型', component: 'textbox' }, { dataIndex: 'notnull', title: '必填', component: 'switch' }, { dataIndex: 'pk', title: '主键', component: 'switch' }], dataSource: rows, totalRecords: rows.length, option: { rowKey: 'key' } };
 	}
 	const rowKey = info.find((column) => column.pk)?.name ?? 'rowid';
-	const pageNum = page(pageNumValue, 1), pageSize = page(pageSizeValue, 10), quotedTable = quoteIdentifier(tableName);
+	const pageNum = page(pageNumValue, 1), pageSize = page(pageSizeValue, 10), quotedTable = quoteIdentifier(selectedTableName);
 	const total = await database.prepare(`SELECT COUNT(*) AS count FROM ${quotedTable}`).first<{ count: number }>();
 	const rows = await database.prepare(`SELECT rowid AS __rowid__, * FROM ${quotedTable} LIMIT ?1 OFFSET ?2`).bind(pageSize, (pageNum - 1) * pageSize).all<TableData>();
 	const dataSource = rows.results.map((row) => ({ ...row, key: String(row[rowKey] ?? row.__rowid__) }));

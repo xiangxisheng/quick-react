@@ -10,7 +10,7 @@ import type { TableAction, TableQueryField } from '@shared/types/table.mjs';
 import { useRef, useState, useEffect } from 'react';
 import { Table, Button, Flex, Input, Space, Tag, Select } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
 import { useDrawer } from '@/utils/common/drawer.js';
 import dayjs from 'dayjs';
 
@@ -60,7 +60,8 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 	const [resJsonTableOption, setResJsonTableOption] = useState<ResJsonTableOption>({ rowKey: 'key' });
 	const [queryFields, setQueryFields] = useState<TableQueryField[]>([]);
 	const [queryValues, setQueryValues] = useState<Record<string, string>>({});
-	const selectedQuery = new URLSearchParams(queryValues).toString();
+	const [appliedQueryValues, setAppliedQueryValues] = useState<Record<string, string>>({});
+	const selectedQuery = new URLSearchParams(appliedQueryValues).toString();
 	const selectedQuerySuffix = selectedQuery ? `?${selectedQuery}` : '';
 	const cacheResJsonTable = useRef<ResJsonTable>({
 		columns: [],
@@ -154,7 +155,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 				pageNum: pagination.current?.toString() || '0',
 				pageSize: pagination.pageSize?.toString() || '0',
 			};
-			Object.assign(query, queryValues);
+			Object.assign(query, appliedQueryValues);
 			const queryString = new URLSearchParams(query).toString();
 			const response: Response = await commonApi.apiFetch(`${apiPath}?${queryString}`);
 			const resJSON: ResJSON = await response.json();
@@ -231,7 +232,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 
 	useEffect(() => {
 		fetchData();
-	}, [apiPath, JSON.stringify(queryValues), filters, pagination.pageSize, pagination.current]);
+	}, [apiPath, JSON.stringify(appliedQueryValues), filters, pagination.pageSize, pagination.current]);
 	const onChange: TableProps<DataType>['onChange'] = (_pagination: TablePaginationConfig, _filters, _sorter, _extra) => {
 		// console.log('onChange-params', { _pagination, _filters, _sorter, _extra });
 		setPagination((prev) => ({ ...prev, pageSize: _pagination.pageSize, current: _pagination.current }));
@@ -295,6 +296,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 		delete: (action, value, record, index) => <a key={action.key} aria-disabled={action.disabled} onClick={() => !action.disabled && onDeleteOne(value, record, index, action)}>{action.label}</a>,
 	};
 	const toolbarActionHandlers: Record<string, (action: TableAction) => React.ReactNode> = {
+		search: (action) => <Button key={action.key} onClick={() => { setAppliedQueryValues(queryValues); setPagination((prev) => ({ ...prev, current: 1 })); }} icon={<SearchOutlined />} disabled={loading || action.disabled}>{action.label}</Button>,
 		create: (action) => <Button key={action.key} type="primary" onClick={() => onAddNew(resJsonColumns, action)} icon={<PlusOutlined />} disabled={loading || action.disabled}>{action.label}</Button>,
 		delete: (action) => <Button key={action.key} danger type="primary" disabled={selectedRowKeys.length === 0 || action.disabled} onClick={() => onDelete(action)} icon={<DeleteOutlined />}>{action.label}</Button>,
 	};
