@@ -91,7 +91,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 		await apiDelete([rowId]);
 	}
 
-	const onOpenEdit = async (value: any, record: DataType, index: number): Promise<void> => {
+	const onOpenEdit = async (value: any, record: DataType, index: number, action: TableAction): Promise<void> => {
 		// 打开编辑框，获取单条数据
 		if (!cacheResJsonTable.current.columns?.length) {
 			alert('no cacheResJsonTable.columns');
@@ -118,7 +118,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 			return;
 		}
 		const drawerForm1 = drawer.drawerForm({
-			title: '编辑',
+			title: action.label,
 			columns: cacheResJsonTable.current.columns,
 		}, async (newRow) => {
 			if (!newRow) {
@@ -247,9 +247,9 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 	// 代码分类：导航
 	const navigate = useNavigate();
 
-	const onAddNew = async (columns: ResJsonTableColumn[]) => {
+	const onAddNew = async (columns: ResJsonTableColumn[], action: TableAction) => {
 		const drawerForm = drawer.drawerForm({
-			title: '新增',
+			title: action.label,
 			columns,
 		}, async (newRow) => {
 			if (!newRow) {
@@ -291,11 +291,11 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 	}
 
 	const rowActionHandlers: Record<string, (action: TableAction, value: any, record: DataType, index: number) => React.ReactNode> = {
-		edit: (action, value, record, index) => <a key={action.key} aria-disabled={action.disabled} onClick={() => !action.disabled && onOpenEdit(value, record, index)}>{action.label}</a>,
+		edit: (action, value, record, index) => <a key={action.key} aria-disabled={action.disabled} onClick={() => !action.disabled && onOpenEdit(value, record, index, action)}>{action.label}</a>,
 		delete: (action, value, record, index) => <a key={action.key} aria-disabled={action.disabled} onClick={() => !action.disabled && onDeleteOne(value, record, index, action)}>{action.label}</a>,
 	};
 	const toolbarActionHandlers: Record<string, (action: TableAction) => React.ReactNode> = {
-		create: (action) => <Button key={action.key} type="primary" onClick={() => onAddNew(resJsonColumns)} icon={<PlusOutlined />} disabled={loading || action.disabled || !tableName}>{action.label}</Button>,
+		create: (action) => <Button key={action.key} type="primary" onClick={() => onAddNew(resJsonColumns, action)} icon={<PlusOutlined />} disabled={loading || action.disabled || !tableName}>{action.label}</Button>,
 		delete: (action) => <Button key={action.key} danger type="primary" disabled={selectedRowKeys.length === 0 || action.disabled} onClick={() => onDelete(action)} icon={<DeleteOutlined />}>{action.label}</Button>,
 	};
 

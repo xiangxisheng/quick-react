@@ -1,7 +1,7 @@
 import type React from 'react';
 import type { MenuProps } from 'antd';
 import type { CommonApi } from '@/utils/common/api.js';
-import type { InitialData } from '@shared/types/initial-data.mjs';
+import type { HeaderAction, InitialData } from '@shared/types/initial-data.mjs';
 import type { NavigationItem } from '@shared/types/navigation.mjs';
 import { collectPageDefinitions, type NavigationPageDefinition } from '@shared/navigation-tree.mjs';
 import { useState, useEffect, useMemo } from 'react';
@@ -127,15 +127,16 @@ const App = ({ commonApi }: AppType) => {
 	};
 	const memoizedRoutes = useMemo(() => routes, []);
 	const currentUser = initialData.currentUser;
-	const accountMenu = currentUser ? {
-		items: [{ key: 'logout', icon: <LogoutOutlined />, label: '退出登录' }],
-			onClick: async ({ key }: { key: string }) => {
-			if (key !== 'logout') return;
-			const response = await commonApi.apiFetch(`/api/sign${initialData.apiSuffix}`, { method: 'DELETE' });
-			const result = await response.json() as { feedback?: { redirectAfter?: number } };
-			runAfterFeedback(result.feedback, () => window.location.reload());
-		},
-	} : undefined;
+	const authActionHandlers: Record<string, (action: HeaderAction) => React.ReactNode> = {
+		navigate: (action) => <Button key={action.key} type="text" icon={action.key === '/sign' ? <LoginOutlined /> : <UserAddOutlined />} onClick={() => navigate(pageUrl(action.key))}>{action.label}</Button>,
+		logout: (action) => <Dropdown key={action.key} menu={{ items: [{ key: action.key, icon: <LogoutOutlined />, label: action.label }], onClick: async () => {
+				const response = await commonApi.apiFetch(`/api${action.key}${initialData.apiSuffix}`, { method: 'DELETE' });
+				const result = await response.json() as { feedback?: { redirectAfter?: number } };
+				runAfterFeedback(result.feedback, () => window.location.reload());
+		} }} placement="bottomRight">
+			<Button type="text" style={{ height: 40, padding: '0 8px' }}><Space size={6}><Avatar size="small" icon={<UserOutlined />} />{currentUser?.username}</Space></Button>
+		</Dropdown>,
+	};
 
 	return (
 		<Layout style={{ height: '100%' }}>
@@ -147,14 +148,7 @@ const App = ({ commonApi }: AppType) => {
 					items={items}
 					style={{ flex: 1, minWidth: 0, borderBottom: 0 }}
 				/>
-				{currentUser ? <Dropdown menu={accountMenu} placement="bottomRight">
-					<Button type="text" style={{ height: 40, padding: '0 8px' }}>
-						<Space size={6}><Avatar size="small" icon={<UserOutlined />} />{currentUser.username}</Space>
-					</Button>
-				</Dropdown> : <Space size={4}>
-					<Button type="text" icon={<LoginOutlined />} onClick={() => navigate(pageUrl('/sign'))}>登录</Button>
-					<Button type="text" icon={<UserAddOutlined />} onClick={() => navigate(pageUrl('/sign-up'))}>注册</Button>
-				</Space>}
+				<Space size={4}>{(initialData.authActions ?? []).map((action) => authActionHandlers[action.action]?.(action) ?? null)}</Space>
 			</Layout.Header>
 			<Content>
 				<Routes>
