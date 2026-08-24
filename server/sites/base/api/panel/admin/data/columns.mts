@@ -1,6 +1,6 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
-import { assertTable, databaseOptions, getColumns, readTable, sqliteTypeOptions, tableIdentifier } from '@server/sites/base/data/sqlite-table.mjs';
+import { assertTable, databaseOptions, getColumns, readTable, sqliteTableActions, sqliteTypeOptions, tableIdentifier } from '@server/sites/base/data/sqlite-table.mjs';
 import { getChangedFields } from '@server/changed-fields.mjs';
 
 const readBody = async (c: Parameters<ApiHandler>[0]): Promise<Record<string, unknown>> => c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>));
@@ -64,7 +64,7 @@ const handler: ApiHandler = async (c, next, params) => {
 		return next();
 	}
 	const result = await readTable(c.get('database'), 'columns', c.req.query('table'), c.req.query('pageNum'), c.req.query('pageSize'));
-	return apiResponse(c, 200, { table: { ...result, databases: databaseOptions(`${site.databaseTarget.kind === 'binding' ? 'D1' : 'SQLite'}（当前）`), database: 'current', option: { rowKey: 'key' }, columns: [
+	return apiResponse(c, 200, { table: { ...result, databases: databaseOptions(`${site.databaseTarget.kind === 'binding' ? 'D1' : 'SQLite'}（当前）`), database: 'current', option: { rowKey: 'key', ...sqliteTableActions }, columns: [
 		{ dataIndex: 'name', title: '字段名', component: 'textbox' },
 		{ dataIndex: 'type', title: '类型', component: 'select', options: sqliteTypeOptions },
 		{ dataIndex: 'notnull', title: '必填', component: 'switch' },

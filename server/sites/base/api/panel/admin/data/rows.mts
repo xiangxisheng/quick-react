@@ -1,6 +1,6 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
-import { databaseOptions, getColumns, assertTable, readTable, tableIdentifier } from '@server/sites/base/data/sqlite-table.mjs';
+import { databaseOptions, getColumns, assertTable, readTable, sqliteTableActions, tableIdentifier } from '@server/sites/base/data/sqlite-table.mjs';
 import { getChangedFields } from '@server/changed-fields.mjs';
 
 const body = async (c: Parameters<ApiHandler>[0]) => c.req.json<Record<string, unknown>>().catch(() => ({}));
@@ -19,7 +19,7 @@ const handler: ApiHandler = async (c, next, params) => {
 	if (c.req.method === 'GET') {
 		const result = await readTable(database, 'rows', tableName, c.req.query('pageNum'), c.req.query('pageSize'));
 		const site = c.get('site');
-		return apiResponse(c, 200, { table: { ...result, databases: databaseOptions(`${site.databaseTarget.kind === 'binding' ? 'D1' : 'SQLite'}（当前）`), database: 'current' } });
+		return apiResponse(c, 200, { table: { ...result, databases: databaseOptions(`${site.databaseTarget.kind === 'binding' ? 'D1' : 'SQLite'}（当前）`), database: 'current', option: { ...result.option, ...sqliteTableActions } } });
 	}
 	if (!tableName) return apiMessage(c, 400, '请选择数据表');
 	try { await assertTable(database, tableName); } catch { return apiMessage(c, 404, '数据表不存在'); }

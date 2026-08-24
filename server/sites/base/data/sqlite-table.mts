@@ -1,5 +1,5 @@
 import type { DatabaseAdapter } from '@server/database/index.mjs';
-import type { TableColumn, TableData, TableResponse } from '@shared/types/table.mjs';
+import type { TableAction, TableColumn, TableData, TableResponse } from '@shared/types/table.mjs';
 
 type SqliteTable = { name: string };
 type SqliteInfo = { name: string; type: string; notnull: number; pk: number };
@@ -18,6 +18,16 @@ export const sqliteTypeOptions = [
 	{ value: 'NUMERIC', text: 'NUMERIC' },
 	{ value: 'BLOB', text: 'BLOB' },
 ];
+export const sqliteTableActions: { toolbarActions: TableAction[]; rowActions: TableAction[] } = {
+	toolbarActions: [
+		{ key: 'create', label: '新增', action: 'create' },
+		{ key: 'delete', label: '删除', action: 'delete', confirm: '确定删除所选记录吗？' },
+	],
+	rowActions: [
+		{ key: 'edit', label: '编辑', action: 'edit' },
+		{ key: 'delete', label: '删除', action: 'delete', confirm: '确定删除这条记录吗？' },
+	],
+};
 const tableColumn = (column: SqliteInfo): TableColumn => ({ dataIndex: column.name, title: column.name, component: 'textbox', dataType: /INT/i.test(column.type) ? 'int' : /REAL|FLOA|DOUB/i.test(column.type) ? 'float' : 'string' });
 export const readTable = async (database: DatabaseAdapter, mode: 'columns' | 'rows', tableName: string | undefined, pageNumValue?: string, pageSizeValue?: string): Promise<TableResponse> => {
 	const tables = await getTables(database);
