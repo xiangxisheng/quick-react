@@ -22,12 +22,12 @@ export const sqliteTypeOptions = [
 	{ value: 'NUMERIC', text: 'NUMERIC' },
 	{ value: 'BLOB', text: 'BLOB' },
 ];
-export const sqliteTableActions: { toolbarActions: TableAction[]; rowActions: TableAction[] } = {
+export const sqliteTableActions: { toolbarActions: TableAction[]; queryActions: TableAction[]; rowActions: TableAction[] } = {
 	toolbarActions: [
-		{ key: 'search', label: '搜索', action: 'search' },
 		{ key: 'create', label: '新增', action: 'create' },
 		{ key: 'delete', label: '删除', action: 'delete', confirm: '确定删除所选记录吗？' },
 	],
+	queryActions: [{ key: 'search', label: '搜索', action: 'search' }],
 	rowActions: [
 		{ key: 'edit', label: '编辑', action: 'edit' },
 		{ key: 'delete', label: '删除', action: 'delete', confirm: '确定删除这条记录吗？' },

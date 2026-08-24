@@ -31,7 +31,7 @@ export type TableColumn = {
 	dataType?: TableDataType;
 	dayjsFormat?: string;
 };
-export type TableOption = { rowKey: string; toolbarActions?: TableAction[]; rowActions?: TableAction[]; queryFields?: TableQueryField[] };
+export type TableOption = { rowKey: string; toolbarActions?: TableAction[]; queryActions?: TableAction[]; rowActions?: TableAction[]; queryFields?: TableQueryField[] };
 export type TableSelectOption = { value: string; text: string; color?: string; dataTypes?: string[] };
 export type TableResponse = {
 	option?: TableOption;

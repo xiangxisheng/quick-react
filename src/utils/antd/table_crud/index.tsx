@@ -59,6 +59,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 	const [resJsonColumns, setResJsonColumns] = useState<ResJsonTableColumn[]>([]);
 	const [resJsonTableOption, setResJsonTableOption] = useState<ResJsonTableOption>({ rowKey: 'key' });
 	const [queryFields, setQueryFields] = useState<TableQueryField[]>([]);
+	const [queryActions, setQueryActions] = useState<TableAction[]>([]);
 	const [queryValues, setQueryValues] = useState<Record<string, string>>({});
 	const [appliedQueryValues, setAppliedQueryValues] = useState<Record<string, string>>({});
 	const selectedQuery = new URLSearchParams(appliedQueryValues).toString();
@@ -164,6 +165,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 					Object.assign(resJsonTableOption, resJSON.table.option);
 					setResJsonTableOption((prev) => ({ ...prev, ...resJSON.table?.option }));
 					const fields = resJSON.table.option.queryFields;
+					setQueryActions(resJSON.table.option.queryActions ?? []);
 					if (fields) {
 						setQueryFields(fields);
 						setQueryValues((previous) => Object.fromEntries(fields.map((field) => [
@@ -172,6 +174,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 						])));
 					} else {
 						setQueryFields([]);
+						setQueryActions([]);
 						setQueryValues({});
 						setAppliedQueryValues({});
 					}
@@ -300,9 +303,11 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 		delete: (action, value, record, index) => <a key={action.key} aria-disabled={action.disabled} onClick={() => !action.disabled && onDeleteOne(value, record, index, action)}>{action.label}</a>,
 	};
 	const toolbarActionHandlers: Record<string, (action: TableAction) => React.ReactNode> = {
-		search: (action) => <Button key={action.key} onClick={() => { setAppliedQueryValues(queryValues); setPagination((prev) => ({ ...prev, current: 1 })); }} icon={<SearchOutlined />} disabled={loading || action.disabled}>{action.label}</Button>,
 		create: (action) => <Button key={action.key} type="primary" onClick={() => onAddNew(resJsonColumns, action)} icon={<PlusOutlined />} disabled={loading || action.disabled}>{action.label}</Button>,
 		delete: (action) => <Button key={action.key} danger type="primary" disabled={selectedRowKeys.length === 0 || action.disabled} onClick={() => onDelete(action)} icon={<DeleteOutlined />}>{action.label}</Button>,
+	};
+	const queryActionHandlers: Record<string, (action: TableAction) => React.ReactNode> = {
+		search: (action) => <Button key={action.key} onClick={() => { setAppliedQueryValues(queryValues); setPagination((prev) => ({ ...prev, current: 1 })); }} icon={<SearchOutlined />} disabled={loading || action.disabled}>{action.label}</Button>,
 	};
 
 	return (<Flex vertical gap="small">
@@ -316,6 +321,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 						: <Input value={queryValues[field.dataIndex] ?? ''} onChange={(event) => setQueryValues((previous) => ({ ...previous, [field.dataIndex]: event.target.value }))} placeholder={field.placeholder} />}
 				</Space>
 			))}
+			{queryActions.map((action) => queryActionHandlers[action.action]?.(action) ?? null)}
 		</Flex>
 		<Flex wrap gap="small">
 			{(resJsonTableOption.toolbarActions ?? []).map((action) => toolbarActionHandlers[action.action]?.(action) ?? null)}
