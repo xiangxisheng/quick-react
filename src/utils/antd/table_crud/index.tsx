@@ -170,6 +170,10 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 							field.dataIndex,
 							previous[field.dataIndex] ?? field.defaultValue ?? '',
 						])));
+					} else {
+						setQueryFields([]);
+						setQueryValues({});
+						setAppliedQueryValues({});
 					}
 				}
 				if (resJSON.table.columns) {
