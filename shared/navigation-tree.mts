@@ -8,6 +8,9 @@ export type NavigationPageDefinition = {
 	navigation: NavigationItem[];
 	dashboardPath?: string;
 	mode?: string;
+	apiPath?: string;
+	submitMethod?: 'POST' | 'PUT';
+	redirectPath?: string;
 };
 
 const resolveNodeKey = (key: string, parentPath: string) => {

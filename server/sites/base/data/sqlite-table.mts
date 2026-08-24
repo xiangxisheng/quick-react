@@ -11,6 +11,10 @@ export const getTables = async (database: DatabaseAdapter) => {
 };
 export const getColumns = async (database: DatabaseAdapter, tableName: string) => database.prepare(`PRAGMA table_info(${quoteIdentifier(tableName)})`).all<SqliteInfo>().then((result) => result.results);
 export const databaseOptions = (label: string) => [{ value: 'current', text: label }];
+export const sqliteQueryFields = (databaseLabel: string, tables: { value: string; text: string }[]) => [
+	{ dataIndex: 'database', label: 'SQLite 数据库', component: 'select' as const, defaultValue: 'current', options: databaseOptions(databaseLabel) },
+	{ dataIndex: 'table', label: '数据表', component: 'select' as const, placeholder: '选择数据表', options: tables, defaultValue: tables[0]?.value },
+];
 export const sqliteTypeOptions = [
 	{ value: 'TEXT', text: 'TEXT' },
 	{ value: 'INTEGER', text: 'INTEGER' },

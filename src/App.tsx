@@ -38,6 +38,9 @@ const authPages: PageDefinition[] = (initialData.auth?.pages ?? []).map((page) =
 	description: page.description ?? '',
 	navigation: [],
 	mode: page.mode,
+	apiPath: page.apiPath,
+	submitMethod: page.submitMethod,
+	redirectPath: page.redirectPath,
 }));
 const iconComponents = {
 	mail: <MailOutlined />,
@@ -61,14 +64,13 @@ const App = ({ commonApi }: AppType) => {
 		home: () => <Home />,
 		about: () => <About />,
 		sign: (page) => {
-			const isSignUp = page.mode === 'sign-up';
 			return <FormPage
 				commonApi={commonApi}
-				apiPath={`/api/sign${initialData.apiSuffix}?mode=${isSignUp ? 'sign-up' : 'sign'}`}
+				apiPath={`${page.apiPath}?mode=${page.mode}`}
 				title={page.title}
-				submitMethod={isSignUp ? 'PUT' : 'POST'}
+				submitMethod={page.submitMethod}
 				redirectOnFeedback
-				onSaved={() => isSignUp ? `/sign${initialData.pageSuffix}` : `/panel/admin${initialData.pageSuffix}`}
+				onSaved={() => page.redirectPath}
 			/>;
 		},
 		panel: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><Dashboard commonApi={commonApi} apiPath={`/api${page.dashboardPath ?? ''}${initialData.apiSuffix}`} /></Panel>,

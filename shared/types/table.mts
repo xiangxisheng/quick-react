@@ -9,6 +9,14 @@ export type TableAction = {
 	disabled?: boolean;
 	confirm?: string;
 };
+export type TableQueryField = {
+	dataIndex: string;
+	label: string;
+	component: 'textbox' | 'select';
+	placeholder?: string;
+	defaultValue?: string;
+	options?: TableSelectOption[];
+};
 export type TableColumn = {
 	dataIndex: string;
 	title: string;
@@ -23,7 +31,7 @@ export type TableColumn = {
 	dataType?: TableDataType;
 	dayjsFormat?: string;
 };
-export type TableOption = { rowKey: string; toolbarActions?: TableAction[]; rowActions?: TableAction[] };
+export type TableOption = { rowKey: string; toolbarActions?: TableAction[]; rowActions?: TableAction[]; queryFields?: TableQueryField[] };
 export type TableSelectOption = { value: string; text: string; color?: string; dataTypes?: string[] };
 export type TableResponse = {
 	option?: TableOption;

@@ -97,8 +97,8 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 			component: 'dropdown' as const,
 			actions: [{ key: '/sign', label: '退出登录', action: 'logout' as const, icon: 'logout' as const }],
 			pages: [
-				{ path: '/sign', title: '登录', description: '登录 Quick React', mode: 'sign' as const },
-				{ path: '/sign-up', title: '注册', description: '创建初始管理员', mode: 'sign-up' as const },
+				{ path: `/sign${siteConfig.pageSuffix}`, title: '登录', description: '登录 Quick React', mode: 'sign' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'POST' as const, redirectPath: `/panel/admin${siteConfig.pageSuffix}` },
+				{ path: `/sign-up${siteConfig.pageSuffix}`, title: '注册', description: '创建初始管理员', mode: 'sign-up' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'PUT' as const, redirectPath: `/sign${siteConfig.pageSuffix}` },
 			],
 		}
 		: {
@@ -108,8 +108,8 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 				{ key: '/sign-up', label: '注册', action: 'navigate' as const, icon: 'register' as const },
 			],
 			pages: [
-				{ path: '/sign', title: '登录', description: '登录 Quick React', mode: 'sign' as const },
-				{ path: '/sign-up', title: '注册', description: '创建初始管理员', mode: 'sign-up' as const },
+				{ path: `/sign${siteConfig.pageSuffix}`, title: '登录', description: '登录 Quick React', mode: 'sign' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'POST' as const, redirectPath: `/panel/admin${siteConfig.pageSuffix}` },
+				{ path: `/sign-up${siteConfig.pageSuffix}`, title: '注册', description: '创建初始管理员', mode: 'sign-up' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'PUT' as const, redirectPath: `/sign${siteConfig.pageSuffix}` },
 			],
 		};
 	const metadata = getPageMetadata(c.req.path, menuItems, siteConfig.pageSuffix);

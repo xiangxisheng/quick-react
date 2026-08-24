@@ -13,6 +13,9 @@ export type AuthPage = {
 	title: string;
 	description?: string;
 	mode: 'sign' | 'sign-up';
+	apiPath: string;
+	submitMethod: 'POST' | 'PUT';
+	redirectPath: string;
 };
 
 export type AuthState = {

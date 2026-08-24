@@ -18,6 +18,9 @@ export default function AuthActions({ auth, commonApi, apiSuffix, pageSuffix }: 
 	const navigate = useNavigate();
 	if (!auth) return null;
 	const pageUrl = (path: string) => path === '/' ? path : path + pageSuffix;
+	const identity = auth.currentUser
+		? <Space size={6}><Avatar size="small" icon={<UserOutlined />} />{auth.currentUser.username}</Space>
+		: null;
 	const execute = async (action: HeaderAction) => {
 		if (action.action === 'navigate') {
 			navigate(pageUrl(action.key));
@@ -28,9 +31,12 @@ export default function AuthActions({ auth, commonApi, apiSuffix, pageSuffix }: 
 		runAfterFeedback(result.feedback, () => window.location.reload());
 	};
 	if (auth.component === 'buttons') {
-		return <>{auth.actions.map((action) => (
-			<Button key={action.key} type="text" icon={action.icon ? icons[action.icon] : undefined} onClick={() => void execute(action)}>{action.label}</Button>
-		))}</>;
+		return <Space size={4}>
+			{identity}
+			{auth.actions.map((action) => (
+				<Button key={action.key} type="text" icon={action.icon ? icons[action.icon] : undefined} onClick={() => void execute(action)}>{action.label}</Button>
+			))}
+		</Space>;
 	}
 	if (auth.component === 'dropdown') {
 		return <Dropdown
@@ -44,7 +50,7 @@ export default function AuthActions({ auth, commonApi, apiSuffix, pageSuffix }: 
 			placement="bottomRight"
 		>
 			<Button type="text" style={{ height: 40, padding: '0 8px' }}>
-				<Space size={6}><Avatar size="small" icon={<UserOutlined />} />{auth.currentUser?.username}</Space>
+				{identity}
 			</Button>
 		</Dropdown>;
 	}
