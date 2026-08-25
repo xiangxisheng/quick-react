@@ -8,7 +8,7 @@ import type { CommonApi, ResJsonTableColumn } from '@/utils/common/api.js';
 import type { TableAction, TableQueryField } from '@shared/types/table.mjs';
 
 import { useRef, useState, useEffect } from 'react';
-import { Table, Button, Flex, Input, Space, Tag, Select } from 'antd';
+import { Table, Button, Flex, Input, Space, Tag, Select, Progress, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { PlusOutlined, DeleteOutlined, SearchOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useDrawer } from '@/utils/common/drawer.js';
@@ -18,6 +18,22 @@ import dayjs from 'dayjs';
 type TableCrudType = {
 	commonApi: CommonApi;
 	resourcePath: string;
+};
+
+type UploadState = {
+	fileName: string;
+	loaded: number;
+	total: number;
+	percent: number;
+	phase: 'signing' | 'uploading' | 'success' | 'error' | 'cancelled';
+	message?: string;
+};
+
+const formatBytes = (bytes: number): string => {
+	if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+	const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+	const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+	return `${(bytes / (1024 ** index)).toFixed(index === 0 ? 0 : 2)} ${units[index]}`;
 };
 
 
@@ -48,6 +64,8 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 
 	// 代码分类：API数据加载
 	const [loading, setLoading] = useState(false);
+	const [uploadState, setUploadState] = useState<UploadState>();
+	const uploadAbortController = useRef<AbortController | undefined>(undefined);
 	const [pagination, setPagination] = useState<TablePaginationConfig>({
 		current: 1,
 		pageSize: 10,
@@ -268,6 +286,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 	useEffect(() => {
 		fetchData();
 	}, [apiPath, JSON.stringify(appliedQueryValues), searchRequestKey, filters, pagination.pageSize, pagination.current]);
+	useEffect(() => () => uploadAbortController.current?.abort(), []);
 	const onChange: TableProps<DataType>['onChange'] = (_pagination: TablePaginationConfig, _filters, _sorter, _extra) => {
 		// console.log('onChange-params', { _pagination, _filters, _sorter, _extra });
 		setPagination((prev) => {
@@ -353,22 +372,43 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 	const toolbarActionHandlers: Record<string, (action: TableAction) => React.ReactNode> = {
 		create: (action) => <Button key={action.key} type="primary" onClick={() => onAddNew(resJsonColumns, action)} icon={<PlusOutlined />} disabled={loading || action.disabled}>{action.label}</Button>,
 		delete: (action) => <Button key={action.key} danger type="primary" disabled={selectedRowKeys.length === 0 || action.disabled} onClick={() => onDelete(action)} icon={<DeleteOutlined />}>{action.label}</Button>,
-		upload: (action) => <Button key={action.key} type="primary" icon={<UploadOutlined />} disabled={loading || action.disabled} onClick={() => {
+		upload: (action) => <Button key={action.key} type="primary" icon={<UploadOutlined />} disabled={loading || action.disabled || uploadState?.phase === 'signing' || uploadState?.phase === 'uploading'} onClick={() => {
 			const input = document.createElement('input');
 			input.type = 'file';
 			input.onchange = async () => {
 				const file = input.files?.[0];
 				if (!file) return;
+				const abortController = new AbortController();
+				uploadAbortController.current = abortController;
+				setUploadState({ fileName: file.name, loaded: 0, total: file.size, percent: 0, phase: 'signing' });
 				try {
 					setLoading(true);
 					const key = file.name;
-					const response = await commonApi.apiFetch(`${apiPath}${selectedQuerySuffix}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, content_type: file.type }) });
+					const response = await commonApi.apiFetch(`${apiPath}${selectedQuerySuffix}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, size: file.size }) });
 					const result = await response.json() as { uploadUrl?: string };
 					if (!result.uploadUrl) throw new Error('上传地址为空');
-					const upload = await fetch(result.uploadUrl, { method: 'PUT', body: file, headers: file.type ? { 'Content-Type': file.type } : undefined });
-					if (!upload.ok) throw new Error(`上传失败：${upload.status}`);
+					setUploadState((previous) => previous && { ...previous, phase: 'uploading' });
+					const uploadBody = file.slice(0, file.size, '');
+					await commonApi.uploadFile(result.uploadUrl, uploadBody, {
+						signal: abortController.signal,
+						onProgress: (loaded, total) => setUploadState((previous) => previous && {
+							...previous,
+							loaded,
+							total,
+							percent: total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0,
+							phase: 'uploading',
+						}),
+					});
+					setUploadState({ fileName: file.name, loaded: file.size, total: file.size, percent: 100, phase: 'success', message: '上传完成' });
 					await fetchData();
-				} catch (error) { console.error(error); } finally { setLoading(false); }
+				} catch (error) {
+					const cancelled = error instanceof DOMException && error.name === 'AbortError';
+					setUploadState((previous) => previous && { ...previous, phase: cancelled ? 'cancelled' : 'error', message: cancelled ? '上传已取消' : (error instanceof Error ? error.message : '上传失败') });
+					console.error(error);
+				} finally {
+					if (uploadAbortController.current === abortController) uploadAbortController.current = undefined;
+					setLoading(false);
+				}
 			};
 			input.click();
 		}}>{action.label}</Button>,
@@ -393,6 +433,19 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 		<Flex wrap gap="small">
 			{(resJsonTableOption.actions?.toolbar ?? []).map((action) => toolbarActionHandlers[action.key]?.(action) ?? null)}
 		</Flex>
+		{uploadState && <Flex gap="middle" align="center" style={{ padding: '12px 16px', border: '1px solid #f0f0f0', borderRadius: 8 }}>
+			<Flex vertical style={{ flex: 1, minWidth: 0 }}>
+				<Typography.Text ellipsis title={uploadState.fileName}>{uploadState.fileName}</Typography.Text>
+				<Progress
+					percent={uploadState.percent}
+					status={uploadState.phase === 'success' ? 'success' : uploadState.phase === 'error' || uploadState.phase === 'cancelled' ? 'exception' : 'active'}
+				/>
+				<Typography.Text type="secondary">
+					{uploadState.phase === 'signing' ? '正在创建上传签名…' : uploadState.message ?? `正在上传 ${formatBytes(uploadState.loaded)} / ${formatBytes(uploadState.total)}`}
+				</Typography.Text>
+			</Flex>
+			{(uploadState.phase === 'signing' || uploadState.phase === 'uploading') && <Button onClick={() => uploadAbortController.current?.abort()}>取消上传</Button>}
+		</Flex>}
 		<Table<DataType>
 			rowSelection={rowSelection}
 			pagination={pagination}

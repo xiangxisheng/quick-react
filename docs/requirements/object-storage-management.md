@@ -38,6 +38,7 @@
 - 凭据加密
 - 本地文件落盘
 - 服务端中转大文件
+- 分块上传（当前使用单次 PUT 直传，单文件上限为 5GB）
 - 自动创建云厂商 Bucket
 
 ## 3. 目录归属
@@ -148,10 +149,13 @@ Endpoint 属于 Bucket 接入配置，不属于凭据。已知 Provider 根据�
 
 ```text
 浏览器 -> Worker/Node 获取预签名 URL
-浏览器 -> 直接上传或下载外部对象存储
+浏览器 -> 使用 XMLHttpRequest 直接上传到外部对象存储并读取进度
+浏览器 -> 直接从外部对象存储下载
 ```
 
-Worker 不使用 `fs`，不依赖本地目录。MinIO 等私有服务必须提供 Worker 可访问的 HTTPS 地址，或通过 Cloudflare VPC/Tunnel 暴露。
+后端只接收对象 Key 和文件大小等签名参数，不接收或中转文件内容。当前兼容模式以空 MIME Blob 直传，不发送 `Content-Type`，用于兼容只允许无附加 Header 的 Bucket CORS 规则；对象可能因此按通用二进制类型保存。签名成功不作为上传成功提示；只有对象存储实际返回成功状态后，前端才显示上传完成。上传失败时显示对象存储的 HTTP 状态、错误码和 RequestId；网络或跨域失败时提示检查 Bucket CORS 配置。
+
+当前一期使用单次 `PUT Object`，单文件最大 5GB。超过 100MB 的文件后续优先使用分块上传，以支持断点续传、失败分片重试和更稳定的进度反馈；分块仍由浏览器直传，Worker/Node 只负责签名和完成分块请求。Worker 不使用 `fs`，不依赖本地目录。MinIO 等私有服务必须提供 Worker 可访问的 HTTPS 地址，或通过 Cloudflare VPC/Tunnel 暴露。
 
 ## 6. Redis
 
@@ -173,3 +177,4 @@ Worker 不使用 `fs`，不依赖本地目录。MinIO 等私有服务必须提�
 - 无 Redis 时核心管理功能可用。
 - API 类型检查和 Node/Worker 构建通过。
 - 对象列表能够通过绑定解析 Bucket 与凭据，并调用 ListObjectsV2 返回对象 Key、大小、修改时间和 ETag。
+- 对象上传由浏览器通过预签名 URL 直传，显示实时进度；只有对象存储实际响应成功后才显示完成。

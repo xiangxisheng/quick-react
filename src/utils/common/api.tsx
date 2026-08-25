@@ -19,12 +19,18 @@ export type ApiFeedback = SharedApiFeedback;
 export type ResJSON = ApiResponseBody;
 
 type ParsedResJSON = ResJSON & { parseError?: boolean };
+export type UploadFileOptions = {
+	headers?: Record<string, string>;
+	onProgress?: (loaded: number, total: number) => void;
+	signal?: AbortSignal;
+};
 /* 前端类型定义结束 */
 
 export interface CommonApi {
 	modalError: (aContentLine: string[], props?: ModalFuncProps) => Promise<void>,
 	modalConfirm: (aContentLine: string[], props?: ModalFuncProps) => Promise<boolean>
 	apiFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+	uploadFile: (input: string | URL, file: Blob, options?: UploadFileOptions) => Promise<void>;
 }
 
 export function useCommonApi(): [CommonApi, React.JSX.Element] {
@@ -137,10 +143,72 @@ export function useCommonApi(): [CommonApi, React.JSX.Element] {
 		}
 	};
 
+	const storageErrorMessage = (xhr: XMLHttpRequest): string => {
+		let code = '';
+		let message = '';
+		let requestId = '';
+		if (xhr.responseText) {
+			try {
+				const document = new DOMParser().parseFromString(xhr.responseText, 'application/xml');
+				code = document.querySelector('Code')?.textContent?.trim() ?? '';
+				message = document.querySelector('Message')?.textContent?.trim() ?? '';
+				requestId = document.querySelector('RequestId')?.textContent?.trim() ?? '';
+			} catch {
+				// 非 XML 错误响应由 HTTP 状态兜底。
+			}
+		}
+		return [
+			`对象存储上传失败：HTTP ${xhr.status}${xhr.statusText ? ` ${xhr.statusText}` : ''}`,
+			code && `错误码：${code}`,
+			message && `错误信息：${message}`,
+			requestId && `RequestId：${requestId}`,
+		].filter(Boolean).join('\n');
+	};
+
+	const uploadFile = (input: string | URL, file: Blob, options: UploadFileOptions = {}): Promise<void> => new Promise((resolve, reject) => {
+		const xhr = new XMLHttpRequest();
+		const abort = () => xhr.abort();
+		const cleanup = () => options.signal?.removeEventListener('abort', abort);
+		if (options.signal?.aborted) {
+			reject(new DOMException('上传已取消', 'AbortError'));
+			return;
+		}
+		xhr.open('PUT', input.toString());
+		for (const [name, value] of Object.entries(options.headers ?? {})) xhr.setRequestHeader(name, value);
+		xhr.upload.onprogress = (event) => {
+			const total = event.lengthComputable && event.total > 0 ? event.total : file.size;
+			options.onProgress?.(event.loaded, total);
+		};
+		xhr.onload = () => {
+			cleanup();
+			if (xhr.status >= 200 && xhr.status < 300) {
+				options.onProgress?.(file.size, file.size);
+				resolve();
+				return;
+			}
+			const error = new Error(storageErrorMessage(xhr));
+			void modalError(error.message.split('\n'), { title: '上传失败' });
+			reject(error);
+		};
+		xhr.onerror = () => {
+			cleanup();
+			const error = new Error('浏览器无法连接对象存储，请检查网络以及 Bucket 的 CORS 配置');
+			void modalError([error.message], { title: '上传失败' });
+			reject(error);
+		};
+		xhr.onabort = () => {
+			cleanup();
+			reject(new DOMException('上传已取消', 'AbortError'));
+		};
+		options.signal?.addEventListener('abort', abort, { once: true });
+		xhr.send(file);
+	});
+
 	const commonApi: CommonApi = {
 		modalError,
 		modalConfirm,
 		apiFetch,
+		uploadFile,
 	}
 
 	return [

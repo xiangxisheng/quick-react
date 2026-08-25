@@ -5,6 +5,7 @@ import { createCloudStorageAdapter, loadCloudStorageTarget } from '@server/cloud
 
 const parseBody = async (c: Parameters<ApiHandler>[0]): Promise<Record<string, unknown>> => c.req.json<Record<string, unknown>>().catch(() => ({}));
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : '';
+const MAX_SINGLE_UPLOAD_SIZE = 5 * 1024 ** 3;
 const safeRelativeKey = (value: unknown) => {
 	const key = text(value).replace(/^\/+/, '');
 	return key && !key.split('/').includes('..') ? key : '';
@@ -60,10 +61,12 @@ const handler: ApiHandler = async (c, next) => {
 	if (c.req.method === 'POST') {
 		const body = await parseBody(c);
 		const relativeKey = safeRelativeKey(body.key);
+		const size = Number(body.size);
 		const queryPrefix = safeRelativeKey(c.req.query('prefix'));
 		const key = `${target.key_prefix ?? ''}${queryPrefix ? `${queryPrefix.replace(/\/+$/, '')}/` : ''}${relativeKey}`;
 		if (!relativeKey) return apiMessage(c, 400, '对象 Key 不合法');
-		try { return apiMessageData(c, 200, '上传地址创建成功', { uploadUrl: await adapter.createUploadUrl(key, text(body.content_type) || undefined), key }); }
+		if (Number.isFinite(size) && size > MAX_SINGLE_UPLOAD_SIZE) return apiMessage(c, 400, '当前单次直传最大支持 5GB，更大的文件需要分块上传');
+		try { return apiResponse(c, 200, { uploadUrl: await adapter.createUploadUrl(key, text(body.content_type) || undefined), key }); }
 		catch (error) { return apiMessage(c, 502, error instanceof Error ? error.message : '上传地址创建失败'); }
 	}
 	if (c.req.method === 'DELETE') {

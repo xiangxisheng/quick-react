@@ -36,7 +36,7 @@ npm run typecheck
 
 ## API 请求与响应反馈规范
 
-前端业务代码必须通过 `useCommonApi()` 提供的 `commonApi.apiFetch()` 发起 API 请求。禁止在业务组件中直接使用原生 `fetch`，否则请求不会经过统一的加载状态、错误处理和响应反馈拦截器。登录、注册、表格 CRUD、配置表单等页面同样适用此规范。
+前端业务代码必须通过 `useCommonApi()` 提供的 `commonApi.apiFetch()` 发起 API 请求。禁止在业务组件中直接使用原生 `fetch`，否则请求不会经过统一的加载状态、错误处理和响应反馈拦截器。登录、注册、表格 CRUD、配置表单等页面同样适用此规范。浏览器向预签名对象存储地址直传文件时使用 `commonApi.uploadFile()`；该方法基于 `XMLHttpRequest` 提供上传进度、取消操作以及对象存储错误解析，文件内容不经过应用后端。
 
 `apiFetch` 会先解析 JSON 响应，再按 HTTP 状态码处理：
 
