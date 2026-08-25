@@ -38,9 +38,5 @@ export type TableResponse = {
 	columns?: TableColumn[];
 	dataSource?: TableData[];
 	totalRecords?: number;
-	databases?: TableSelectOption[];
-	tables?: TableSelectOption[];
-	database?: string;
-	table?: string;
 };
 export type TableRow = TableData & { key: string };

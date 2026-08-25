@@ -19,7 +19,8 @@ const handler: ApiHandler = async (c, next, params) => {
 	if (c.req.method === 'GET') {
 		const result = await readTable(database, 'rows', tableName, c.req.query('pageNum'), c.req.query('pageSize'));
 		const site = c.get('site');
-		return apiResponse(c, 200, { table: { ...result, option: { ...result.option, ...sqliteTableActions, queryFields: sqliteQueryFields(`${site.databaseTarget.kind === 'binding' ? 'D1' : 'SQLite'}（当前）`, result.tables ?? []) } } });
+		const { tables, ...table } = result;
+		return apiResponse(c, 200, { table: { ...table, option: { ...table.option, ...sqliteTableActions, queryFields: sqliteQueryFields(`${site.databaseTarget.kind === 'binding' ? 'D1' : 'SQLite'}（当前）`, tables) } } });
 	}
 	if (!tableName) return apiMessage(c, 400, '请选择数据表');
 	try { await assertTable(database, tableName); } catch { return apiMessage(c, 404, '数据表不存在'); }

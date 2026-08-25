@@ -1,5 +1,5 @@
 import type { DatabaseAdapter } from '@server/database/index.mjs';
-import type { TableAction, TableColumn, TableData, TableResponse } from '@shared/types/table.mjs';
+import type { TableAction, TableColumn, TableData, TableResponse, TableSelectOption } from '@shared/types/table.mjs';
 
 type SqliteTable = { name: string };
 type SqliteInfo = { name: string; type: string; notnull: number; pk: number };
@@ -33,8 +33,9 @@ export const sqliteTableActions: { toolbarActions: TableAction[]; queryActions: 
 		{ key: 'delete', label: '删除', action: 'delete', confirm: '确定删除这条记录吗？' },
 	],
 };
+export type SqliteTableResponse = TableResponse & { tables: TableSelectOption[] };
 const tableColumn = (column: SqliteInfo): TableColumn => ({ dataIndex: column.name, title: column.name, component: 'textbox', dataType: /INT/i.test(column.type) ? 'int' : /REAL|FLOA|DOUB/i.test(column.type) ? 'float' : 'string' });
-export const readTable = async (database: DatabaseAdapter, mode: 'columns' | 'rows', tableName: string | undefined, pageNumValue?: string, pageSizeValue?: string): Promise<TableResponse> => {
+export const readTable = async (database: DatabaseAdapter, mode: 'columns' | 'rows', tableName: string | undefined, pageNumValue?: string, pageSizeValue?: string): Promise<SqliteTableResponse> => {
 	const tables = await getTables(database);
 	const selectedTableName = tableName || tables[0]?.value;
 	if (!selectedTableName || !tables.some((item) => item.value === selectedTableName)) return { tables, dataSource: [], totalRecords: 0, option: { rowKey: 'rowid' } };
