@@ -19,6 +19,7 @@ export interface drawerType {
 export interface DrawerFuncProps {
 	title: string,
 	columns: ResJsonTableColumn[],
+	optionsPath?: string,
 }
 
 export function useDrawer(commonApi: CommonApi): [drawerType, React.JSX.Element] {
@@ -26,6 +27,7 @@ export function useDrawer(commonApi: CommonApi): [drawerType, React.JSX.Element]
 	const [columns, setColumns] = useState<ResJsonTableColumn[]>([]);
 	const [row, setRow] = useState<DataType>({});
 	const [title, setTitle] = useState<string>('');
+	const [optionsPath, setOptionsPath] = useState<string>();
 	const resolveRef = useRef<((value?: DataType) => void) | undefined>(undefined); // 使用 useRef 持久化 resolve
 	const [loading, setLoading] = useState<boolean>(false);
 	const [submitting‌, setSubmitting‌] = useState<boolean>(false);
@@ -37,6 +39,7 @@ export function useDrawer(commonApi: CommonApi): [drawerType, React.JSX.Element]
 		drawerForm: (props: DrawerFuncProps, callback?: (value?: DataType) => void): testType => {
 			setTitle(props.title);
 			setColumns(props.columns);
+			setOptionsPath(props.optionsPath);
 			setRow({});
 			setOpen(true);
 			if (callback) {
@@ -47,6 +50,9 @@ export function useDrawer(commonApi: CommonApi): [drawerType, React.JSX.Element]
 					// 外部调用设置新的row值时，刷新新值
 					const normalizedRow = { ..._row };
 					for (const column of props.columns) {
+						if (column.allowCustomValue && !column.multiple && normalizedRow[column.dataIndex] && !Array.isArray(normalizedRow[column.dataIndex])) {
+							normalizedRow[column.dataIndex] = [normalizedRow[column.dataIndex]];
+						}
 						if (column.component !== 'datepicker' || !normalizedRow[column.dataIndex]) {
 							continue;
 						}
@@ -87,6 +93,7 @@ export function useDrawer(commonApi: CommonApi): [drawerType, React.JSX.Element]
 			commonApi={commonApi}
 			title={title}
 			columns={columns}
+			optionsPath={optionsPath}
 			row={row}
 			open={open}
 			onFinish={onFinish}

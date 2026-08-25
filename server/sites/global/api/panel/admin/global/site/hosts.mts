@@ -28,7 +28,7 @@ const parseBody = async (c: Parameters<ApiHandler>[0]): Promise<Record<string, u
 const handler: ApiHandler = async (c, next, params) => {
 	const database = c.get('database');
 	if (!params.id && c.req.method === 'GET') {
-		const rows = await database.prepare('SELECT id, hostname, site_key, status, created_at FROM global_hosts ORDER BY id').all<Record<string, unknown>>();
+		const rows = await database.prepare('SELECT id, hostname, site_key, status, created_at FROM global_site_hosts ORDER BY id').all<Record<string, unknown>>();
 		const sites = await database.prepare(`SELECT site_key, name FROM global_sites
 			WHERE status = 'enabled' AND migration_status = 'ready' ORDER BY site_key`).all<{ site_key: string; name: string }>();
 		const siteOptions = sites.results.map((site) => ({ value: site.site_key, text: `${site.name} (${site.site_key})` }));
@@ -43,7 +43,7 @@ const handler: ApiHandler = async (c, next, params) => {
 		const site = await database.prepare(`SELECT site_key FROM global_sites WHERE site_key = ?1
 			AND status = 'enabled' AND migration_status = 'ready'`).bind(siteKey).first();
 		if (!site) return apiMessage(c, 400, '站点不存在或尚未就绪');
-		await database.prepare(`INSERT INTO global_hosts (hostname, site_key, status, created_at)
+		await database.prepare(`INSERT INTO global_site_hosts (hostname, site_key, status, created_at)
 			VALUES (?1, ?2, 'enabled', ?3)`).bind(hostname, siteKey, Date.now()).run();
 		await c.get('siteRouter').refresh();
 		return apiMessage(c, 201, '新增成功');
@@ -51,13 +51,13 @@ const handler: ApiHandler = async (c, next, params) => {
 	if (!params.id && c.req.method === 'DELETE') {
 		const ids = await c.req.json<unknown[]>().catch(() => []);
 		for (const id of Array.isArray(ids) ? ids : []) {
-			await database.prepare('DELETE FROM global_hosts WHERE id = ?1').bind(Number(id)).run();
+			await database.prepare('DELETE FROM global_site_hosts WHERE id = ?1').bind(Number(id)).run();
 		}
 		await c.get('siteRouter').refresh();
 		return apiMessage(c, 200, '删除成功');
 	}
 	if (params.id && c.req.method === 'GET') {
-		const row = await database.prepare('SELECT id, hostname, site_key, status, created_at FROM global_hosts WHERE id = ?1')
+		const row = await database.prepare('SELECT id, hostname, site_key, status, created_at FROM global_site_hosts WHERE id = ?1')
 			.bind(Number(params.id)).first();
 		return row ? apiResponse(c, 200, row) : apiMessage(c, 404, 'Host 不存在');
 	}
@@ -67,14 +67,14 @@ const handler: ApiHandler = async (c, next, params) => {
 		const hostname = changedFields.has('hostname') ? normalizeHostPattern(body.hostname) : null;
 		if (changedFields.has('hostname') && !hostname) return apiMessage(c, 400, 'Host 不合法');
 		const status = !changedFields.has('status') ? null : body.status === statusValues.disabled ? statusValues.disabled : body.status === statusValues.enabled ? statusValues.enabled : null;
-		await database.prepare(`UPDATE global_hosts SET hostname = COALESCE(?2, hostname),
+		await database.prepare(`UPDATE global_site_hosts SET hostname = COALESCE(?2, hostname),
 			site_key = COALESCE(?3, site_key), status = COALESCE(?4, status) WHERE id = ?1`)
 			.bind(Number(params.id), hostname, changedFields.has('site_key') && typeof body.site_key === 'string' ? body.site_key : null, status).run();
 		await c.get('siteRouter').refresh();
 		return apiMessage(c, 200, '保存成功');
 	}
 	if (params.id && c.req.method === 'DELETE') {
-		await database.prepare('DELETE FROM global_hosts WHERE id = ?1').bind(Number(params.id)).run();
+		await database.prepare('DELETE FROM global_site_hosts WHERE id = ?1').bind(Number(params.id)).run();
 		await c.get('siteRouter').refresh();
 		return apiMessage(c, 200, '删除成功');
 	}

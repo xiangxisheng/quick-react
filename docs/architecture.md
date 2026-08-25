@@ -70,6 +70,20 @@ return next();
 
 `shared/types/` 集中保存跨运行时协议，包括 API 反馈、FormPage、表格、Dashboard、导航、初始化数据和用户身份。Node、Worker 和浏览器端共同使用这些类型，减少接口漂移和重复 DTO。
 
+TableCRUD 的下拉字段支持通过 `dependsOn`、`parentValues` 和选项的 `parentValue` 描述本地联动，也支持通过 `remoteOptions` 声明依赖字段并从当前资源 API 延迟加载选项。远程请求在依赖变化后防抖执行，并通过 `clearFields` 清空下游旧值；选项的 `fieldValues` 可以回填同一表单中的派生值，`multiple` 和 `allowCustomValue` 分别支持多选与手工输入，`hideInTable` 允许字段只出现在抽屉。这些能力属于通用表单协议，不与云服务 API 耦合。
+
+TableCRUD 同时支持可选的游标分页响应 `nextCursor` 和 `hasMore`。前端请求统一提交 `cursor`，后端能力模块负责把它映射到实际协议的 continuation token；没有游标字段的普通表格继续使用 `totalRecords`，两种模式不会互相污染。
+
+### 云运行时能力
+
+全局控制面按“凭据优先、能力独立”组织云能力。所有能力先选择凭据，Provider 由凭据推导；不建立混合不同能力的通用服务表。对象存储直接使用 `global_cloud_object_storage_buckets`、`global_cloud_object_storage_bindings` 和用途关联表，邮件、短信等能力实现时使用各自的数据模型。完整约束见 `docs/requirements/cloud-capability-management.md`。
+
+云厂商、可用服务和内部适配器映射集中在 `server/cloud/catalog.mts`。协议实现位于 `server/cloud/providers/`，使用 `fetch` 和 Web Crypto，不引入厂商 SDK，也不依赖本地文件系统。当前首先实现对象存储，浏览器通过预签名 URL 直传和下载，Node 与 Cloudflare Worker 不中转大文件。
+
+云能力按模块创建，不使用混合所有字段的通用表单。对象存储的一条资源就是一个 Bucket 接入配置：创建时先选择凭据，再读取 Bucket，并由 Bucket 元数据自动回填 Region、Endpoint 和 Path Style；不填写人工名称，也不重复选择服务或 Provider。Endpoint 属于 Bucket 配置并允许覆盖，不属于凭据。凭据 Secret 只在服务端参与签名。站点只有存在启用的 Bucket 绑定且拥有对应用途关联时，才获得该对象存储能力。
+
+Provider 在后端代码中注册控制面 API 规则、Bucket Endpoint 推导规则、能力适配器和可选的凭据测试处理器。凭据管理统一提供测试 action：支持的 Provider 执行真实校验，不支持独立测试的 Provider 返回明确反馈。每个已配置 Bucket 始终可以使用完整连接参数执行 Bucket 测试。
+
 ### 统一反馈与动作调度
 
 所有接口消息都放在 `feedback` 中。反馈可以描述普通消息、Inline、Modal、倒计时和后续动作；前端通过 `runAfterFeedback` 统一处理登录跳转、退出刷新和表单刷新，业务页面不再重复实现倒计时和延迟逻辑。

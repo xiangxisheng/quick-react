@@ -23,24 +23,23 @@
 - 按钮顺序；
 - 是否禁用；
 - 是否需要确认；
-- 动作类型；
-- 动作参数。
+- 动作 key。
 
 前端不再硬编码具体业务按钮名称、业务按钮权限或业务按钮顺序。
 
 后端输出遵循最小数据原则：只输出前端无法根据已有上下文推导出的信息。默认行为不需要显式描述：
 
 - 能通过 `key`、当前页面资源和后缀生成的 URL，不返回 `url` 或 `href`；
-- 正常显示的按钮不返回 `visible: true`；
+- 正常显示的按钮不返回 `visible`；
 - 默认可用的按钮不返回 `disabled: false`；
-- 能由标准 `action` 推导的请求路径、资源 ID 和刷新行为，不重复返回；
+- 能由动作 `key` 推导的请求方法、路径、资源 ID 和刷新行为，不重复返回；
 - 页面和 API 的公共前缀、路径后缀不放进每个按钮配置。
 
-只有改变默认行为时才返回对应字段，例如 `visible: false`、`disabled: true`、确认配置或自定义参数。
+只有改变默认行为时才返回对应字段，例如 `disabled: true` 或确认配置。不使用 `visible` 表达静态显示状态：不适用的动作直接省略。
 
 ### 2.2 标准 CRUD 动作
 
-标准 CRUD 动作不由后端重复提供路径。前端根据当前页面的 `resourcePath`、行主键和动作类型生成 API 路径：
+标准 CRUD 动作不由后端重复提供路径或方法。前端根据当前页面的 `resourcePath`、行主键和动作 `key` 生成 API 请求：
 
 ```text
 create -> POST   /api/<resourcePath><apiSuffix>
@@ -55,18 +54,11 @@ refresh -> 重新加载当前资源
 {
 	key: 'delete',
 	label: '删除',
-	method: 'DELETE',
-  confirm: '确认删除吗？'
+	confirm: '确认删除吗？'
 }
 ```
 
-`key` 和 `method` 是两个不同概念：
-
-- `key` 表示前端要执行的表格交互动作，例如 `create`、`edit`、`delete`、`refresh` 或已注册的自定义动作；
-- `method` 只表示 HTTP 请求方法，例如 `GET`、`POST`、`PUT`、`DELETE`；
-- 不涉及 HTTP 请求的动作不提供 `method`；
-- `key` 不能用 `method` 代替，`method` 也不能表达按钮的交互语义；
-- 对标准 CRUD，前端可以根据 `key` 和当前资源上下文推导默认 `method`，只有覆盖默认方法时后端才需要提供 `method`。
+`key` 同时用于选择已注册的前端交互和默认请求规则，例如 `create`、`edit`、`delete`、`refresh`、`test` 或 `download`。当前协议不再重复提供含义相同的 `action`、`type` 或 `method`。如果未来某个动作无法由 key 推导，应先确认它能否注册成新的稳定 key，再决定是否扩展协议。
 
 API 路径相对于 `/api`，业务配置不重复写 `/api`，也不重复写 `.php` 等后缀。路径前缀和后缀仍由前端通用协议助手处理，这属于基础设施逻辑，不属于业务硬编码。
 

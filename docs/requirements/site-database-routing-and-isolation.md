@@ -103,10 +103,10 @@ Worker 文档渲染逻辑         # 根据请求路径生成页面元数据并�
 
 ```text
 base     提供登录、用户、会话、配置和默认后台功能，不作为独立站点路由
-global   继承 base，并额外管理 global_sites、global_hosts 和站点生命周期
+global   继承 base，并额外管理 global_sites、global_site_hosts 和站点生命周期
 ```
 
-`base` 不是可绑定 Host 的站点，不直接出现在 `global_hosts` 中。`global` 使用 `base` 提供的登录、用户和会话接口，再覆盖站点和 Host 管理接口。其 API 和导航继承关系为：
+`base` 不是可绑定 Host 的站点，不直接出现在 `global_site_hosts` 中。`global` 使用 `base` 提供的登录、用户和会话接口，再覆盖站点和 Host 管理接口。其 API 和导航继承关系为：
 
 ```text
 global 覆盖实现
@@ -177,7 +177,7 @@ site2 -> site1 -> base
 
 ```text
 Host
-  -> global_hosts
+  -> global_site_hosts
   -> site_key
   -> base_site_key 继承链（global/site1 -> base 基础层）
   -> 选择代码级 API
@@ -233,7 +233,7 @@ CREATE TABLE global_sites (
 CREATE UNIQUE INDEX global_sites_one_default
   ON global_sites(is_default) WHERE is_default = 1 AND status = 'enabled';
 
-CREATE TABLE global_hosts (
+CREATE TABLE global_site_hosts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   hostname TEXT NOT NULL UNIQUE,
   site_key TEXT NOT NULL,
@@ -265,7 +265,7 @@ INSERT INTO global_sites (
 ON CONFLICT(site_key) DO NOTHING;
 ```
 
-系统记录不可删除、不可禁用、不可修改 `site_key`，并且必须始终是唯一的启用默认站点。生产初始化任务必须在站点上线前为它写入至少一个明确的 `global_hosts` 控制面 Host；默认站点回退仍按本节匹配规则处理未绑定 Host，用于首次配置和明确允许的默认入口。
+系统记录不可删除、不可禁用、不可修改 `site_key`，并且必须始终是唯一的启用默认站点。生产初始化任务必须在站点上线前为它写入至少一个明确的 `global_site_hosts` 控制面 Host；默认站点回退仍按本节匹配规则处理未绑定 Host，用于首次配置和明确允许的默认入口。
 
 `hostname` 支持精确 Host 和通配符 Host：
 
@@ -377,7 +377,7 @@ database/default.sqlite
 默认部署模型是单数据库加表前缀：
 
 ```text
-global_sites / global_hosts
+global_sites / global_site_hosts
 base_system_users / base_system_sessions / base_system_configs
 site1_orders / site1_configs
 site2_orders / site2_configs
@@ -405,7 +405,7 @@ prisma/
 
 ```text
 global_sites
-global_hosts
+global_site_hosts
 ```
 
 `base.prisma` 定义所有继承站点共用的通行证基础表，模型名直接使用数据库表名，并且只在目标数据库中生成一份：
@@ -552,7 +552,7 @@ default.sqlite
 database/default.sqlite
 ```
 
-如果站点配置了自定义 DSN，则把 `base`、父站点和当前站点的继承链 migration 应用到该站点对应的数据库中。`global_sites` 和 `global_hosts` 仍保留在默认数据库中，用于 Host 解析和数据库路由。
+如果站点配置了自定义 DSN，则把 `base`、父站点和当前站点的继承链 migration 应用到该站点对应的数据库中。`global_sites` 和 `global_site_hosts` 仍保留在默认数据库中，用于 Host 解析和数据库路由。
 
 新增站点或切换到新的数据库时，必须先执行完整 migration，再允许站点接收请求。创建流程必须使用状态机：先创建 `migration_status = creating` 的站点，迁移任务将其更新为 `migrating`，成功后原子更新为 `ready` 并可启用 Host；失败则更新为 `failed`，请求一律不路由到该站点。
 

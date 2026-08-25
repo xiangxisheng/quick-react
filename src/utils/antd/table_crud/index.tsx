@@ -10,7 +10,7 @@ import type { TableAction, TableQueryField } from '@shared/types/table.mjs';
 import { useRef, useState, useEffect } from 'react';
 import { Table, Button, Flex, Input, Space, Tag, Select } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { PlusOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, SearchOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useDrawer } from '@/utils/common/drawer.js';
 import dayjs from 'dayjs';
 
@@ -63,6 +63,8 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 	const [queryValues, setQueryValues] = useState<Record<string, string>>({});
 	const [appliedQueryValues, setAppliedQueryValues] = useState<Record<string, string>>({});
 	const [searchRequestKey, setSearchRequestKey] = useState(0);
+	const initializedQueryDefaultsFor = useRef('');
+	const cursorsByPage = useRef<Record<number, string | undefined>>({ 1: undefined });
 	const selectedQuery = new URLSearchParams(appliedQueryValues).toString();
 	const selectedQuerySuffix = selectedQuery ? `?${selectedQuery}` : '';
 	const cacheResJsonTable = useRef<ResJsonTable>({
@@ -121,6 +123,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 		const drawerForm1 = drawer.drawerForm({
 			title: action.label,
 			columns: cacheResJsonTable.current.columns,
+			optionsPath: apiPath,
 		}, async (newRow) => {
 			if (!newRow) {
 				// 用户点了[取消]按钮
@@ -157,6 +160,9 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 				pageNum: pagination.current?.toString() || '0',
 				pageSize: pagination.pageSize?.toString() || '0',
 			};
+			const currentPage = pagination.current ?? 1;
+			const currentCursor = cursorsByPage.current[currentPage];
+			if (currentCursor) query.cursor = currentCursor;
 			Object.assign(query, appliedQueryValues);
 			const queryString = new URLSearchParams(query).toString();
 			const response: Response = await commonApi.apiFetch(`${apiPath}?${queryString}`);
@@ -173,6 +179,13 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 							field.dataIndex,
 							previous[field.dataIndex] ?? field.defaultValue ?? '',
 						])));
+						if (initializedQueryDefaultsFor.current !== apiPath) {
+							initializedQueryDefaultsFor.current = apiPath;
+							const defaults = Object.fromEntries(fields
+								.filter((field) => field.defaultValue !== undefined && field.defaultValue !== '')
+								.map((field) => [field.dataIndex, field.defaultValue as string]));
+							if (Object.keys(defaults).length) setAppliedQueryValues(defaults);
+						}
 					} else {
 						setQueryFields([]);
 						setQueryActions([]);
@@ -185,6 +198,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 					setResJsonColumns(resJSON.table.columns);
 					const tableColumns: TableColumnsType<DataType> = [];
 					for (const column of resJSON.table.columns) {
+						if (column.hideInTable) continue;
 						tableColumns.push({
 							...column,
 							render: (value) => {
@@ -197,12 +211,10 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 									return dayjs(value).format(column.dayjsFormat);
 								}
 								if (column.options) {
-									for (const option of column.options) {
-										if (option.value !== value) {
-											continue;
-										}
-										return <Tag color={option.color} key={option.value}>{option.text}</Tag>;
-									}
+									const values = Array.isArray(value) ? value : [value];
+									const tags = column.options.filter((option) => values.includes(option.value))
+										.map((option) => <Tag color={option.color} key={option.value}>{option.text}</Tag>);
+									if (tags.length) return <Space size={[0, 4]} wrap>{tags}</Space>;
 								}
 								if (column.component === 'switch') {
 									return <Tag color={value ? 'green' : 'default'}>{value ? '是' : '否'}</Tag>;
@@ -225,10 +237,25 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 				if (resJSON.table.dataSource) {
 					setDataSource(resJSON.table.dataSource);
 				}
+				if (resJSON.table.hasMore !== undefined) {
+					if (resJSON.table.nextCursor) cursorsByPage.current[currentPage + 1] = resJSON.table.nextCursor;
+					else delete cursorsByPage.current[currentPage + 1];
+					for (const page of Object.keys(cursorsByPage.current).map(Number)) {
+						if (page > currentPage + 1) delete cursorsByPage.current[page];
+					}
+				}
 			}
 
 			//setDrawerRow({ name: 'asdf' });
-			setPagination((prev) => ({ ...prev, total: resJSON.table?.totalRecords, }));
+			setPagination((prev) => {
+				const current = prev.current ?? 1;
+				const pageSize = prev.pageSize ?? 10;
+				const currentCount = resJSON.table?.dataSource?.length ?? 0;
+				const cursorTotal = resJSON.table?.hasMore === undefined
+					? undefined
+					: (current - 1) * pageSize + currentCount + (resJSON.table.hasMore ? 1 : 0);
+				return { ...prev, total: cursorTotal ?? resJSON.table?.totalRecords };
+			});
 
 		} catch (ex) {
 			console.error(ex);
@@ -243,7 +270,13 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 	}, [apiPath, JSON.stringify(appliedQueryValues), searchRequestKey, filters, pagination.pageSize, pagination.current]);
 	const onChange: TableProps<DataType>['onChange'] = (_pagination: TablePaginationConfig, _filters, _sorter, _extra) => {
 		// console.log('onChange-params', { _pagination, _filters, _sorter, _extra });
-		setPagination((prev) => ({ ...prev, pageSize: _pagination.pageSize, current: _pagination.current }));
+		setPagination((prev) => {
+			if (prev.pageSize !== _pagination.pageSize) {
+				cursorsByPage.current = { 1: undefined };
+				return { ...prev, pageSize: _pagination.pageSize, current: 1 };
+			}
+			return { ...prev, pageSize: _pagination.pageSize, current: _pagination.current };
+		});
 		for (const k in _filters) {
 			const v = filters[k] ?? null;
 			if (JSON.stringify(_filters[k]) !== JSON.stringify(v)) {
@@ -260,6 +293,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 		const drawerForm = drawer.drawerForm({
 			title: action.label,
 			columns,
+			optionsPath: apiPath,
 		}, async (newRow) => {
 			if (!newRow) {
 				// 用户点了[取消]按钮
@@ -302,13 +336,45 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 	const rowActionHandlers: Record<string, (action: TableAction, value: any, record: DataType, index: number) => React.ReactNode> = {
 		edit: (action, value, record, index) => <a key={action.key} aria-disabled={action.disabled} onClick={() => !action.disabled && onOpenEdit(value, record, index, action)}>{action.label}</a>,
 		delete: (action, value, record, index) => <a key={action.key} aria-disabled={action.disabled} onClick={() => !action.disabled && onDeleteOne(value, record, index, action)}>{action.label}</a>,
+		test: (action, _value, record) => <a key={action.key} aria-disabled={action.disabled} onClick={async () => {
+			if (action.disabled) return;
+			await commonApi.apiFetch(`${apiPath}/${encodeURIComponent(String(record[resJsonTableOption.rowKey] ?? ''))}?action=test`, { method: 'POST' });
+		}}>{action.label}</a>,
+		download: (action, _value, record) => <a key={action.key} aria-disabled={action.disabled} onClick={async () => {
+			if (action.disabled) return;
+			const key = String(record[resJsonTableOption.rowKey] ?? '');
+			const query = new URLSearchParams(appliedQueryValues);
+			query.set('key', key);
+			const response = await commonApi.apiFetch(`${apiPath}?${query}`, { method: 'PUT' });
+			const result = await response.json() as { downloadUrl?: string };
+			if (result.downloadUrl) window.open(result.downloadUrl, '_blank', 'noopener,noreferrer');
+		}}>{action.label}</a>,
 	};
 	const toolbarActionHandlers: Record<string, (action: TableAction) => React.ReactNode> = {
 		create: (action) => <Button key={action.key} type="primary" onClick={() => onAddNew(resJsonColumns, action)} icon={<PlusOutlined />} disabled={loading || action.disabled}>{action.label}</Button>,
 		delete: (action) => <Button key={action.key} danger type="primary" disabled={selectedRowKeys.length === 0 || action.disabled} onClick={() => onDelete(action)} icon={<DeleteOutlined />}>{action.label}</Button>,
+		upload: (action) => <Button key={action.key} type="primary" icon={<UploadOutlined />} disabled={loading || action.disabled} onClick={() => {
+			const input = document.createElement('input');
+			input.type = 'file';
+			input.onchange = async () => {
+				const file = input.files?.[0];
+				if (!file) return;
+				try {
+					setLoading(true);
+					const key = file.name;
+					const response = await commonApi.apiFetch(`${apiPath}${selectedQuerySuffix}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, content_type: file.type }) });
+					const result = await response.json() as { uploadUrl?: string };
+					if (!result.uploadUrl) throw new Error('上传地址为空');
+					const upload = await fetch(result.uploadUrl, { method: 'PUT', body: file, headers: file.type ? { 'Content-Type': file.type } : undefined });
+					if (!upload.ok) throw new Error(`上传失败：${upload.status}`);
+					await fetchData();
+				} catch (error) { console.error(error); } finally { setLoading(false); }
+			};
+			input.click();
+		}}>{action.label}</Button>,
 	};
 	const queryActionHandlers: Record<string, (action: TableAction) => React.ReactNode> = {
-		search: (action) => <Button key={action.key} onClick={() => { setAppliedQueryValues(queryValues); setSearchRequestKey((previous) => previous + 1); setPagination((prev) => ({ ...prev, current: 1 })); }} icon={<SearchOutlined />} disabled={loading || action.disabled}>{action.label}</Button>,
+		search: (action) => <Button key={action.key} onClick={() => { cursorsByPage.current = { 1: undefined }; setAppliedQueryValues(queryValues); setSearchRequestKey((previous) => previous + 1); setPagination((prev) => ({ ...prev, current: 1 })); }} icon={<SearchOutlined />} disabled={loading || action.disabled}>{action.label}</Button>,
 	};
 
 	return (<Flex vertical gap="small">

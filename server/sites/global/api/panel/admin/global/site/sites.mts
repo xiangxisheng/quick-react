@@ -87,7 +87,7 @@ const handler: ApiHandler = async (c, next, params) => {
 		for (const siteKey of siteKeys) {
 			const current = await database.prepare('SELECT is_system FROM global_sites WHERE site_key = ?1').bind(siteKey).first<{ is_system: number }>();
 			if (!current || current.is_system) continue;
-			await database.prepare('DELETE FROM global_hosts WHERE site_key = ?1').bind(siteKey).run();
+			await database.prepare('DELETE FROM global_site_hosts WHERE site_key = ?1').bind(siteKey).run();
 			await database.prepare('DELETE FROM global_sites WHERE site_key = ?1').bind(siteKey).run();
 		}
 		await c.get('siteRouter').refresh();
@@ -143,7 +143,7 @@ const handler: ApiHandler = async (c, next, params) => {
 		const current = await database.prepare('SELECT is_system FROM global_sites WHERE site_key = ?1').bind(params.id).first<{ is_system: number }>();
 		if (!current) return apiMessage(c, 404, '站点不存在');
 		if (current.is_system) return apiMessage(c, 400, '系统站点不可删除');
-		await database.prepare('DELETE FROM global_hosts WHERE site_key = ?1').bind(params.id).run();
+		await database.prepare('DELETE FROM global_site_hosts WHERE site_key = ?1').bind(params.id).run();
 		await database.prepare('DELETE FROM global_sites WHERE site_key = ?1').bind(params.id).run();
 		await c.get('siteRouter').refresh();
 		return apiMessage(c, 200, '删除成功');

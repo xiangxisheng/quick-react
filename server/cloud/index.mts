@@ -1,0 +1,52 @@
+export type CloudCredential = {
+	id: number;
+	name: string;
+	provider: string;
+	account_id: string;
+	access_key_id: string;
+	access_key_secret: string;
+	status?: string;
+};
+
+export type CloudStorageTarget = {
+	id: number;
+	provider: string;
+	cloud_credential_id: number;
+	endpoint: string;
+	region: string;
+	bucket: string;
+	path_style: number;
+	public_base_url: string;
+	extra_config: string;
+	access_key_id: string;
+	access_key_secret: string;
+	key_prefix?: string;
+};
+
+export type CloudBucket = {
+	name: string;
+	region?: string;
+};
+
+export type CloudObject = {
+	key: string;
+	size: number;
+	lastModified?: string;
+	etag?: string;
+	isPrefix?: boolean;
+};
+
+export type CloudObjectPage = {
+	objects: CloudObject[];
+	nextToken?: string;
+	hasMore: boolean;
+};
+
+export type CloudStorageAdapter = {
+	listBuckets: () => Promise<CloudBucket[]>;
+	list: (prefix: string, continuationToken?: string, limit?: number) => Promise<CloudObjectPage>;
+	createUploadUrl: (key: string, contentType?: string) => Promise<string>;
+	createDownloadUrl: (key: string) => Promise<string>;
+	deleteObject: (key: string) => Promise<void>;
+	test: () => Promise<void>;
+};

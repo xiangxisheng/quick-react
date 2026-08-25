@@ -1,18 +1,20 @@
 import type { DataType, ResJsonTableColumn } from '@/utils/common/api.js';
 import type { CommonApi } from '@/utils/common/api.js';
 import type { UploadProps } from 'antd';
+import type { TableSelectOption } from '@shared/types/table.mjs';
 import { changedFieldsKey, type ChangedFieldsPayload } from '@shared/types/changed-fields.mjs';
 
 import { ClearOutlined, InboxOutlined, RollbackOutlined } from '@ant-design/icons';
 import { Button, Col, DatePicker, Drawer, Form, Input, Row, Select, Space, Switch } from 'antd';
 import { Upload } from 'antd';
 import { InputNumber } from 'antd';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // 定义TableCRUD的传参
 type TableCrudType = {
 	title: string;
 	columns: ResJsonTableColumn[];
+	optionsPath?: string;
 	row: DataType;
 	open: boolean;
 	onClose: () => void;
@@ -29,7 +31,7 @@ function getFullFileExtension(filename: string): string {
 	return index !== -1 ? filename.slice(index) : '';
 }
 
-function getFormItemComponent(item: ResJsonTableColumn, row: DataType) {
+function getFormItemComponent(item: ResJsonTableColumn, row: DataType, parentValue?: unknown, remoteOptions?: TableSelectOption[], optionsLoading?: boolean, onOptionChange?: (value: unknown) => void) {
 	switch (item.component) {
 		case ('textbox'):
 			return (
@@ -51,10 +53,16 @@ function getFormItemComponent(item: ResJsonTableColumn, row: DataType) {
 				<Select
 					showSearch
 					allowClear
+					mode={item.multiple ? 'multiple' : item.allowCustomValue ? 'tags' : undefined}
+					maxCount={!item.multiple && item.allowCustomValue ? 1 : undefined}
+					loading={optionsLoading}
 					placeholder={item.placeholder}
 					optionFilterProp="label"
 					filterOption={(input, option) => String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
-					options={item.options?.map((option) => ({ value: option.value, label: option.text }))}
+					onChange={onOptionChange}
+					options={(remoteOptions ?? item.options)
+						?.filter((option) => !item.dependsOn || option.parentValue === parentValue)
+						.map((option) => ({ value: option.value, label: option.text }))}
 				/>
 			);
 		case ('switch'):
@@ -148,6 +156,7 @@ export default ({
 	commonApi,
 	title,
 	columns,
+	optionsPath,
 	row,
 	open,
 	onClose,
@@ -159,9 +168,23 @@ export default ({
 }: TableCrudType) => {
 
 	const [form] = Form.useForm();
+	const formValues = Form.useWatch([], form);
 	const changedFields = useRef(new Set<string>());
+	const [remoteOptions, setRemoteOptions] = useState<Record<string, TableSelectOption[]>>({});
+	const [loadingOptions, setLoadingOptions] = useState<Record<string, boolean>>({});
+	const remoteRequestKey = JSON.stringify(columns.filter((item) => item.remoteOptions).map((item) => [
+		item.dataIndex,
+		item.remoteOptions?.dependencies.map((field) => formValues?.[field] ?? null),
+	]));
 	const handleSubmit = () => {
 		form.submit();
+	};
+	const applyOptionFieldValues = (column: ResJsonTableColumn, value: unknown, options?: TableSelectOption[]) => {
+		const selectedValue = Array.isArray(value) ? value[0] : value;
+		const option = options?.find((item) => item.value === selectedValue);
+		if (!option?.fieldValues) return;
+		form.setFieldsValue(option.fieldValues);
+		for (const field of Object.keys(option.fieldValues)) changedFields.current.add(field);
 	};
 
 	useEffect(() => {
@@ -178,6 +201,43 @@ export default ({
 		form.resetFields();
 		form.setFieldsValue(row);
 	}, [row]);
+
+	useEffect(() => {
+		if (!open || !optionsPath) return;
+		const controller = new AbortController();
+		const timer = window.setTimeout(async () => {
+			for (const column of columns.filter((item) => item.remoteOptions)) {
+				const request = column.remoteOptions!;
+				const dependencies = Object.fromEntries(request.dependencies.map((field) => [field, form.getFieldValue(field)]));
+				if (Object.values(dependencies).some((value) => value === undefined || value === null || value === '')) {
+					setRemoteOptions((previous) => ({ ...previous, [column.dataIndex]: [] }));
+					continue;
+				}
+				setRemoteOptions((previous) => ({ ...previous, [column.dataIndex]: [] }));
+				setLoadingOptions((previous) => ({ ...previous, [column.dataIndex]: true }));
+				try {
+					const query = new URLSearchParams({ action: request.action, field: column.dataIndex });
+					for (const [field, value] of Object.entries(dependencies)) query.set(field, String(value));
+					const response = await commonApi.apiFetch(`${optionsPath}?${query}`, { signal: controller.signal });
+					if (!response.ok) continue;
+					const result = await response.json() as { options?: TableSelectOption[] };
+					const options = result.options ?? [];
+					setRemoteOptions((previous) => ({ ...previous, [column.dataIndex]: options }));
+					if (options.length === 1 && !form.getFieldValue(column.dataIndex)) {
+						const value = column.allowCustomValue ? [options[0].value] : options[0].value;
+						form.setFieldValue(column.dataIndex, value);
+						changedFields.current.add(column.dataIndex);
+						applyOptionFieldValues(column, value, options);
+					}
+				} catch (error) {
+					if (!(error instanceof DOMException && error.name === 'AbortError')) console.error('加载远程选项失败', error);
+				} finally {
+					setLoadingOptions((previous) => ({ ...previous, [column.dataIndex]: false }));
+				}
+			}
+		}, 300);
+		return () => { window.clearTimeout(timer); controller.abort(); };
+	}, [open, optionsPath, remoteRequestKey]);
 
 	const _onClose = async () => {
 		if (form.isFieldsTouched()) {
@@ -226,8 +286,38 @@ export default ({
 				form={form}
 				onValuesChange={(values) => {
 					for (const field of Object.keys(values)) changedFields.current.add(field);
+					for (const changedField of Object.keys(values)) {
+						for (const column of columns.filter((item) => item.remoteOptions?.dependencies.includes(changedField))) {
+							for (const field of [column.dataIndex, ...(column.remoteOptions?.clearFields ?? [])]) {
+								if (form.getFieldValue(field) !== undefined) {
+									form.setFieldValue(field, undefined);
+									changedFields.current.add(field);
+								}
+							}
+						}
+						for (const column of columns.filter((item) => item.dependsOn === changedField)) {
+							if (column.parentValues && !column.parentValues.includes(values[changedField] as string | number | boolean)) {
+								if (form.getFieldValue(column.dataIndex) !== undefined) {
+									form.setFieldValue(column.dataIndex, undefined);
+									changedFields.current.add(column.dataIndex);
+								}
+								continue;
+							}
+							const selectedValue = form.getFieldValue(column.dataIndex);
+							const selectedOption = column.options?.find((option) => option.value === selectedValue);
+							if (selectedValue && selectedOption?.parentValue !== values[changedField]) {
+								form.setFieldValue(column.dataIndex, undefined);
+								changedFields.current.add(column.dataIndex);
+							}
+						}
+					}
 				}}
-				onFinish={(values) => onFinish({ ...values, [changedFieldsKey]: [...changedFields.current] } satisfies ChangedFieldsPayload & Record<string, unknown>)}
+				onFinish={(values) => {
+					for (const column of columns) {
+						if (!column.multiple && column.allowCustomValue && Array.isArray(values[column.dataIndex])) values[column.dataIndex] = values[column.dataIndex][0];
+					}
+					return onFinish({ ...values, [changedFieldsKey]: [...changedFields.current] } satisfies ChangedFieldsPayload & Record<string, unknown>);
+				}}
 				initialValues={row}
 				disabled={submitting‌}
 			>
@@ -236,12 +326,15 @@ export default ({
 						if (!item.component) {
 							return;
 						}
-						const component = getFormItemComponent(item, row);
+						if (item.dependsOn && item.parentValues && !item.parentValues.includes(formValues?.[item.dependsOn] as string | number | boolean)) return;
+						const options = remoteOptions[item.dataIndex] ?? item.options;
+						const component = getFormItemComponent(item, row, item.dependsOn ? formValues?.[item.dependsOn] : undefined, remoteOptions[item.dataIndex], loadingOptions[item.dataIndex],
+							(value) => applyOptionFieldValues(item, value, options));
 						if (!component) {
 							return;
 						}
 						return (
-							<Col span={24}>
+							<Col key={item.dataIndex} span={24}>
 								<Form.Item
 									name={item.dataIndex}
 									valuePropName={item.component === 'switch' ? 'checked' : undefined}

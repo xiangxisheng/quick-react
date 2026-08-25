@@ -17,10 +17,60 @@ model global_sites {
   is_system        Int     @default(0)
 }
 
-model global_hosts {
+model global_site_hosts {
   id         Int    @id @default(autoincrement())
   hostname   String @unique
   site_key   String
   status     String @default("enabled")
   created_at Int
+}
+
+model global_cloud_credentials {
+  id                Int    @id @default(autoincrement())
+  name              String @unique
+  provider          String
+  account_id        String @default("")
+  access_key_id     String @default("")
+  access_key_secret String @default("")
+  status            String @default("enabled")
+  created_at        Int
+  updated_at        Int
+}
+
+model global_cloud_object_storage_buckets {
+  id                  Int    @id @default(autoincrement())
+  cloud_credential_id Int
+  endpoint            String
+  region              String @default("")
+  bucket              String
+  path_style          Int    @default(0)
+  public_base_url     String @default("")
+  extra_config        String @default("{}")
+  status              String @default("enabled")
+  created_at          Int
+  updated_at          Int
+
+  @@unique([cloud_credential_id, endpoint, bucket])
+}
+
+model global_cloud_object_storage_bindings {
+  id         Int    @id @default(autoincrement())
+  site_key   String
+  bucket_id  Int
+  key_prefix String @default("")
+  status     String @default("enabled")
+  created_at Int
+  updated_at Int
+
+  @@unique([id, site_key])
+  @@unique([site_key, bucket_id, key_prefix])
+}
+
+model global_cloud_object_storage_binding_purposes {
+  binding_id Int
+  site_key   String
+  purpose    String
+  is_default Int @default(0)
+
+  @@id([binding_id, purpose])
 }

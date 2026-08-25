@@ -104,7 +104,7 @@ export class SiteRouter {
 		const sites = new Map(siteRows.results.filter((row) => siteKeyPattern.test(row.site_key)).map((row) => [row.site_key, createSiteRecord(row)]));
 		for (const site of sites.values()) buildSiteChain(site, sites);
 
-		const hostRows = await this.database.prepare(`SELECT hostname, site_key FROM global_hosts WHERE status = 'enabled'`).all<HostRow>();
+		const hostRows = await this.database.prepare(`SELECT hostname, site_key FROM global_site_hosts WHERE status = 'enabled'`).all<HostRow>();
 		const exactHosts = new Map<string, string>();
 		const wildcardHosts: Array<{ suffix: string; siteKey: string }> = [];
 		for (const row of hostRows.results) {
