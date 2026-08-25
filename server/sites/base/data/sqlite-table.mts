@@ -1,5 +1,5 @@
 import type { DatabaseAdapter } from '@server/database/index.mjs';
-import type { TableAction, TableColumn, TableData, TableResponse, TableSelectOption } from '@shared/types/table.mjs';
+import type { TableAction, TableActions, TableColumn, TableData, TableResponse, TableSelectOption } from '@shared/types/table.mjs';
 
 type SqliteTable = { name: string };
 type SqliteInfo = { name: string; type: string; notnull: number; pk: number };
@@ -22,13 +22,13 @@ export const sqliteTypeOptions = [
 	{ value: 'NUMERIC', text: 'NUMERIC' },
 	{ value: 'BLOB', text: 'BLOB' },
 ];
-export const sqliteTableActions: { toolbarActions: TableAction[]; queryActions: TableAction[]; rowActions: TableAction[] } = {
-	toolbarActions: [
+export const sqliteTableActions: TableActions = {
+	toolbar: [
 		{ key: 'create', label: '新增', action: 'create' },
 		{ key: 'delete', label: '删除', action: 'delete', confirm: '确定删除所选记录吗？' },
 	],
-	queryActions: [{ key: 'search', label: '搜索', action: 'search' }],
-	rowActions: [
+	query: [{ key: 'search', label: '搜索', action: 'search' }],
+	row: [
 		{ key: 'edit', label: '编辑', action: 'edit' },
 		{ key: 'delete', label: '删除', action: 'delete', confirm: '确定删除这条记录吗？' },
 	],

@@ -65,7 +65,7 @@ const handler: ApiHandler = async (c, next, params) => {
 	}
 	const result = await readTable(c.get('database'), 'columns', c.req.query('table'), c.req.query('pageNum'), c.req.query('pageSize'));
 	const { tables, ...table } = result;
-	return apiResponse(c, 200, { table: { ...table, option: { rowKey: 'key', ...sqliteTableActions, queryFields: sqliteQueryFields(`${site.databaseTarget.kind === 'binding' ? 'D1' : 'SQLite'}（当前）`, tables) }, columns: [
+	return apiResponse(c, 200, { table: { ...table, option: { rowKey: 'key', actions: sqliteTableActions, queryFields: sqliteQueryFields(`${site.databaseTarget.kind === 'binding' ? 'D1' : 'SQLite'}（当前）`, tables) }, columns: [
 		{ dataIndex: 'name', title: '字段名', component: 'textbox' },
 		{ dataIndex: 'type', title: '类型', component: 'select', options: sqliteTypeOptions },
 		{ dataIndex: 'notnull', title: '必填', component: 'switch' },

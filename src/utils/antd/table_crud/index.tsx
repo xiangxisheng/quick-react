@@ -166,7 +166,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 					Object.assign(resJsonTableOption, resJSON.table.option);
 					setResJsonTableOption((prev) => ({ ...prev, ...resJSON.table?.option }));
 					const fields = resJSON.table.option.queryFields;
-					setQueryActions(resJSON.table.option.queryActions ?? []);
+					setQueryActions(resJSON.table.option.actions?.query ?? []);
 					if (fields) {
 						setQueryFields(fields);
 						setQueryValues((previous) => Object.fromEntries(fields.map((field) => [
@@ -217,7 +217,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 						fixed: 'right',
 						width: 100,
 						render: (value: any, record: DataType, index: number) => <Space>
-							{(resJsonTableOption.rowActions ?? []).map((action) => rowActionHandlers[action.action]?.(action, value, record, index) ?? null)}
+							{(resJsonTableOption.actions?.row ?? []).map((action) => rowActionHandlers[action.action]?.(action, value, record, index) ?? null)}
 						</Space>,
 					});
 					setTableColumns(tableColumns);
@@ -325,7 +325,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 			{queryActions.map((action) => queryActionHandlers[action.action]?.(action) ?? null)}
 		</Flex>
 		<Flex wrap gap="small">
-			{(resJsonTableOption.toolbarActions ?? []).map((action) => toolbarActionHandlers[action.action]?.(action) ?? null)}
+			{(resJsonTableOption.actions?.toolbar ?? []).map((action) => toolbarActionHandlers[action.action]?.(action) ?? null)}
 		</Flex>
 		<Table<DataType>
 			rowSelection={rowSelection}
