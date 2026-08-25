@@ -62,6 +62,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 	const [queryActions, setQueryActions] = useState<TableAction[]>([]);
 	const [queryValues, setQueryValues] = useState<Record<string, string>>({});
 	const [appliedQueryValues, setAppliedQueryValues] = useState<Record<string, string>>({});
+	const [searchRequestKey, setSearchRequestKey] = useState(0);
 	const selectedQuery = new URLSearchParams(appliedQueryValues).toString();
 	const selectedQuerySuffix = selectedQuery ? `?${selectedQuery}` : '';
 	const cacheResJsonTable = useRef<ResJsonTable>({
@@ -239,7 +240,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 
 	useEffect(() => {
 		fetchData();
-	}, [apiPath, JSON.stringify(appliedQueryValues), filters, pagination.pageSize, pagination.current]);
+	}, [apiPath, JSON.stringify(appliedQueryValues), searchRequestKey, filters, pagination.pageSize, pagination.current]);
 	const onChange: TableProps<DataType>['onChange'] = (_pagination: TablePaginationConfig, _filters, _sorter, _extra) => {
 		// console.log('onChange-params', { _pagination, _filters, _sorter, _extra });
 		setPagination((prev) => ({ ...prev, pageSize: _pagination.pageSize, current: _pagination.current }));
@@ -307,7 +308,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 		delete: (action) => <Button key={action.key} danger type="primary" disabled={selectedRowKeys.length === 0 || action.disabled} onClick={() => onDelete(action)} icon={<DeleteOutlined />}>{action.label}</Button>,
 	};
 	const queryActionHandlers: Record<string, (action: TableAction) => React.ReactNode> = {
-		search: (action) => <Button key={action.key} onClick={() => { setAppliedQueryValues(queryValues); setPagination((prev) => ({ ...prev, current: 1 })); }} icon={<SearchOutlined />} disabled={loading || action.disabled}>{action.label}</Button>,
+		search: (action) => <Button key={action.key} onClick={() => { setAppliedQueryValues(queryValues); setSearchRequestKey((previous) => previous + 1); setPagination((prev) => ({ ...prev, current: 1 })); }} icon={<SearchOutlined />} disabled={loading || action.disabled}>{action.label}</Button>,
 	};
 
 	return (<Flex vertical gap="small">

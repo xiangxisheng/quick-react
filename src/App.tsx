@@ -90,7 +90,8 @@ const App = ({ commonApi }: AppType) => {
 	const routes = [...pages, ...authPages].flatMap((page) => {
 		const render = pageRenderers[page.component];
 		if (!render) return [];
-		return [{ path: pageUrl(page.path), element: render(page) }];
+		const routePath = page.component === 'sign' ? page.path : pageUrl(page.path);
+		return [{ path: routePath, element: render(page) }];
 	});
 
 	const location = useLocation(); // 获取当前 URL 路径
