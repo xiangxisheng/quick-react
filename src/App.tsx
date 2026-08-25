@@ -64,7 +64,7 @@ const App = ({ commonApi }: AppType) => {
 	const pageRenderers: Record<string, (page: PageDefinition) => React.ReactNode> = {
 		home: () => <Home />,
 		about: () => <About />,
-		personalCenter: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><PersonalCenter user={initialData.auth?.currentUser} title={page.title} path={page.path} /></Panel>,
+		personalCenter: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><PersonalCenter commonApi={commonApi} user={initialData.auth?.currentUser} title={page.title} path={page.path} /></Panel>,
 		sign: (page) => {
 			return <FormPage
 				commonApi={commonApi}
