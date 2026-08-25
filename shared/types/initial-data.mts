@@ -5,7 +5,7 @@ export type HeaderAction = {
 	key: string;
 	label: string;
 	action: 'navigate' | 'logout';
-	icon?: 'login' | 'register' | 'logout';
+	icon?: 'login' | 'register' | 'logout' | 'user';
 };
 
 export type AuthPage = {

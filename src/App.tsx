@@ -15,6 +15,7 @@ import Dashboard from './components/panel/Dashboard.js';
 import TableCRUD from '@/utils/antd/table_crud/index.js';
 import FormPage from './components/panel/FormPage.js';
 import AuthActions from './components/AuthActions.js';
+import PersonalCenter from './components/panel/PersonalCenter.js';
 const { Content } = Layout;
 
 // 定义路由对应的页面组件
@@ -63,6 +64,7 @@ const App = ({ commonApi }: AppType) => {
 	const pageRenderers: Record<string, (page: PageDefinition) => React.ReactNode> = {
 		home: () => <Home />,
 		about: () => <About />,
+		personalCenter: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><PersonalCenter user={initialData.auth?.currentUser} title={page.title} path={page.path} /></Panel>,
 		sign: (page) => {
 			return <FormPage
 				commonApi={commonApi}

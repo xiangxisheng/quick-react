@@ -24,5 +24,15 @@
 				"shared/*",
 			],
 		},
-	}
+		},
+	"include": [
+		"src",
+		"server",
+		"shared"
+	],
+	"exclude": [
+		"docs",
+		"dist",
+		"node_modules"
+	]
 }

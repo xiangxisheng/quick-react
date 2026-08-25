@@ -27,7 +27,7 @@ const iconComponents = {
 	mail: <MailOutlined />,
 	appstore: <AppstoreOutlined />,
 };
-const toMenuItems = (menu: InitialMenuItem[]): MenuItem[] => menu.map((item) => ({
+const toMenuItems = (menu: InitialMenuItem[]): MenuItem[] => menu.filter((item) => !item.hidden).map((item) => ({
 	label: item.label,
 	key: item.key,
 	icon: iconComponents[item.icon as keyof typeof iconComponents],

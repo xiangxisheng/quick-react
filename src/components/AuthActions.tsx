@@ -2,7 +2,7 @@ import type { CommonApi } from '@/utils/common/api.js';
 import type { AuthState, HeaderAction } from '@shared/types/initial-data.mjs';
 import { Avatar, Button, Dropdown, Space } from 'antd';
 import { LoginOutlined, LogoutOutlined, UserAddOutlined, UserOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { runAfterFeedback } from '@/utils/common/feedback.js';
 
 type AuthActionsProps = {
@@ -12,10 +12,15 @@ type AuthActionsProps = {
 	pageSuffix: string;
 };
 
-const icons = { login: <LoginOutlined />, register: <UserAddOutlined />, logout: <LogoutOutlined /> };
+const icons = { login: <LoginOutlined />, register: <UserAddOutlined />, logout: <LogoutOutlined />, user: <UserOutlined /> };
 
 export default function AuthActions({ auth, commonApi, apiSuffix, pageSuffix }: AuthActionsProps) {
 	const navigate = useNavigate();
+	const location = useLocation();
+	const logicalPath = pageSuffix && location.pathname.endsWith(pageSuffix)
+		? location.pathname.slice(0, -pageSuffix.length)
+		: location.pathname;
+	const isPersonalCenter = logicalPath === '/panel/me' || logicalPath.startsWith('/panel/me/');
 	if (!auth) return null;
 	const pageUrl = (path: string) => path === '/' ? path : path + pageSuffix;
 	const identity = auth.currentUser
@@ -49,7 +54,7 @@ export default function AuthActions({ auth, commonApi, apiSuffix, pageSuffix }: 
 			}}
 			placement="bottomRight"
 		>
-			<Button type="text" style={{ height: 40, padding: '0 8px' }}>
+			<Button type="text" style={{ height: 40, padding: '0 8px', background: isPersonalCenter ? '#e6f4ff' : undefined }}>
 				{identity}
 			</Button>
 		</Dropdown>;

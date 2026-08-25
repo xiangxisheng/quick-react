@@ -60,9 +60,8 @@ export const collectPageDefinitions = (
 	dashboardPath?: string,
 ): NavigationPageDefinition[] => items.flatMap((item) => {
 	const pageNavigation = item.navigationGroup || item.component === 'panel' ? item.children ?? [] : navigation;
-	const pageDashboardPath = item.component === 'panel'
-		? item.children?.find((child) => child.component === 'dashboard')?.key
-		: dashboardPath;
+	const pageDashboardPath = item.dashboardPath
+		?? (item.component === 'panel' ? item.children?.find((child) => child.component === 'dashboard')?.key : dashboardPath);
 	const pages = typeof item.component === 'string' && typeof item.title === 'string'
 		? [{ path: String(item.key), component: item.component, title: item.title, description: String(item.description ?? ''), navigation: pageNavigation, dashboardPath: pageDashboardPath }]
 		: [];

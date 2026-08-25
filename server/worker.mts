@@ -95,7 +95,10 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 	const auth = c.get('currentUser')
 		? {
 			component: 'dropdown' as const,
-			actions: [{ key: '/sign', label: '退出登录', action: 'logout' as const, icon: 'logout' as const }],
+			actions: [
+				{ key: '/panel/me', label: '个人中心', action: 'navigate' as const, icon: 'user' as const },
+				{ key: '/sign', label: '退出登录', action: 'logout' as const, icon: 'logout' as const },
+			],
 			pages: [
 				{ path: `/sign${siteConfig.pageSuffix}`, title: '登录', description: '登录 Quick React', mode: 'sign' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'POST' as const, redirectPath: `/panel/admin${siteConfig.pageSuffix}` },
 				{ path: `/sign-up${siteConfig.pageSuffix}`, title: '注册', description: '创建初始管理员', mode: 'sign-up' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'PUT' as const, redirectPath: `/sign${siteConfig.pageSuffix}` },
