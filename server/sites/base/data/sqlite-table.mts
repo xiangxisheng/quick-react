@@ -24,13 +24,13 @@ export const sqliteTypeOptions = [
 ];
 export const sqliteTableActions: TableActions = {
 	toolbar: [
-		{ key: 'create', label: '新增', action: 'create' },
-		{ key: 'delete', label: '删除', action: 'delete', confirm: '确定删除所选记录吗？' },
+		{ key: 'create', label: '新增' },
+		{ key: 'delete', label: '删除', confirm: '确定删除所选记录吗？' },
 	],
-	query: [{ key: 'search', label: '搜索', action: 'search' }],
+	query: [{ key: 'search', label: '搜索' }],
 	row: [
-		{ key: 'edit', label: '编辑', action: 'edit' },
-		{ key: 'delete', label: '删除', action: 'delete', confirm: '确定删除这条记录吗？' },
+		{ key: 'edit', label: '编辑' },
+		{ key: 'delete', label: '删除', confirm: '确定删除这条记录吗？' },
 	],
 };
 export type SqliteTableResponse = TableResponse & { tables: TableSelectOption[] };

@@ -5,7 +5,6 @@ export type TableColumnRule = { required: boolean; message: string };
 export type TableAction = {
 	key: string;
 	label: string;
-	action: string;
 	disabled?: boolean;
 	confirm?: string;
 };

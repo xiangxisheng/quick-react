@@ -217,7 +217,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 						fixed: 'right',
 						width: 100,
 						render: (value: any, record: DataType, index: number) => <Space>
-							{(resJsonTableOption.actions?.row ?? []).map((action) => rowActionHandlers[action.action]?.(action, value, record, index) ?? null)}
+							{(resJsonTableOption.actions?.row ?? []).map((action) => rowActionHandlers[action.key]?.(action, value, record, index) ?? null)}
 						</Space>,
 					});
 					setTableColumns(tableColumns);
@@ -322,10 +322,10 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 						: <Input value={queryValues[field.dataIndex] ?? ''} onChange={(event) => setQueryValues((previous) => ({ ...previous, [field.dataIndex]: event.target.value }))} placeholder={field.placeholder} />}
 				</Space>
 			))}
-			{queryActions.map((action) => queryActionHandlers[action.action]?.(action) ?? null)}
+			{queryActions.map((action) => queryActionHandlers[action.key]?.(action) ?? null)}
 		</Flex>
 		<Flex wrap gap="small">
-			{(resJsonTableOption.actions?.toolbar ?? []).map((action) => toolbarActionHandlers[action.action]?.(action) ?? null)}
+			{(resJsonTableOption.actions?.toolbar ?? []).map((action) => toolbarActionHandlers[action.key]?.(action) ?? null)}
 		</Flex>
 		<Table<DataType>
 			rowSelection={rowSelection}

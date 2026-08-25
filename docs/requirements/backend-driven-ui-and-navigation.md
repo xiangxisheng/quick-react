@@ -53,21 +53,20 @@ refresh -> 重新加载当前资源
 
 ```ts
 {
-  key: 'delete',
-  label: '删除',
-  action: 'delete',
-  method: 'DELETE',
+	key: 'delete',
+	label: '删除',
+	method: 'DELETE',
   confirm: '确认删除吗？'
 }
 ```
 
-`action` 和 `method` 是两个不同概念：
+`key` 和 `method` 是两个不同概念：
 
-- `action` 表示前端要执行的业务交互动作，例如 `create`、`edit`、`delete`、`refresh`、`navigate` 或已注册的自定义动作；
+- `key` 表示前端要执行的表格交互动作，例如 `create`、`edit`、`delete`、`refresh` 或已注册的自定义动作；
 - `method` 只表示 HTTP 请求方法，例如 `GET`、`POST`、`PUT`、`DELETE`；
 - 不涉及 HTTP 请求的动作不提供 `method`；
-- `action` 不能用 `method` 代替，`method` 也不能表达按钮的交互语义；
-- 对标准 CRUD，前端可以根据 `action` 和当前资源上下文推导默认 `method`，只有覆盖默认方法时后端才需要提供 `method`。
+- `key` 不能用 `method` 代替，`method` 也不能表达按钮的交互语义；
+- 对标准 CRUD，前端可以根据 `key` 和当前资源上下文推导默认 `method`，只有覆盖默认方法时后端才需要提供 `method`。
 
 API 路径相对于 `/api`，业务配置不重复写 `/api`，也不重复写 `.php` 等后缀。路径前缀和后缀仍由前端通用协议助手处理，这属于基础设施逻辑，不属于业务硬编码。
 
@@ -77,9 +76,8 @@ API 路径相对于 `/api`，业务配置不重复写 `/api`，也不重复写 `
 
 ```ts
 {
-  key: 'migrate',
-  label: '执行迁移',
-  action: 'migrate'
+	key: 'migrate',
+	label: '执行迁移',
 }
 ```
 

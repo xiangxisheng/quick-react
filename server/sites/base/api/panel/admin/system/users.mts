@@ -28,7 +28,7 @@ const handler: ApiHandler = async (c, next, params) => {
 	const database = c.get('database');
 	if (c.req.method === 'GET' && !params.id) {
 		const rows = await database.prepare('SELECT id, username, roles, status, password, created_at, updated_at FROM base_system_users ORDER BY id DESC').all<Record<string, unknown>>();
-		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { query: [{ key: 'search', label: '搜索', action: 'search' }], toolbar: [{ key: 'create', label: '新增', action: 'create' }, { key: 'delete', label: '删除', action: 'delete' }], row: [{ key: 'edit', label: '编辑', action: 'edit' }, { key: 'delete', label: '删除', action: 'delete' }] } }, columns, dataSource: rows.results.map(publicUser), totalRecords: rows.results.length } });
+		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { query: [{ key: 'search', label: '搜索' }], toolbar: [{ key: 'create', label: '新增' }, { key: 'delete', label: '删除' }], row: [{ key: 'edit', label: '编辑' }, { key: 'delete', label: '删除' }] } }, columns, dataSource: rows.results.map(publicUser), totalRecords: rows.results.length } });
 	}
 	if (params.id && c.req.method === 'GET') {
 		const row = await database.prepare('SELECT id, username, roles, status, password, created_at, updated_at FROM base_system_users WHERE id = ?1').bind(params.id).first<Record<string, unknown>>();
