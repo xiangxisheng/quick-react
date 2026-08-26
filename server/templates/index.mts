@@ -15,7 +15,7 @@ export const renderIndexHtml = (data: IndexData) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${data.title} | Quick React</title>
+  <title>${data.title}</title>
   <meta name="description" content="${data.description}">
   ${data.canonical ? html`<link rel="canonical" href="${data.canonical}">` : ''}
   <meta property="og:title" content="${data.title}">

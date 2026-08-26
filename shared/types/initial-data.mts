@@ -28,6 +28,7 @@ export type AuthState = {
 export type InitialData = {
 	apiSuffix: string;
 	pageSuffix: string;
+	siteName: string;
 	siteNavigation: NavigationItem[];
 	footer?: string;
 	auth?: AuthState;

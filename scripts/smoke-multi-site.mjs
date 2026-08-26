@@ -172,6 +172,7 @@ try {
 	assert.equal(hostsResult.table.columns[0]?.dataIndex, 'id');
 	const localSiteSign = await (await request('site1.test', '/api/sign.php')).json();
 	assert.equal(localSiteSign.formPage.fields[0].name, 'username');
+	assert.match(await (await request('site1.test', '/')).text(), /<title>首页 \| site1<\/title>/);
 	assert.equal((await request('passport.test', '/api/passport/sso/start?target_hostname=site1.test')).status, 400);
 	assert.equal((await request('localhost', '/api/panel/admin/global/site/sites.php/site1', {
 		method: 'PUT', cookie, body: { passport_sso_enabled: true, __changedFields: ['passport_sso_enabled'] },

@@ -132,15 +132,18 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 			],
 		};
 	const metadata = getPageMetadata(c.req.path, menuItems, siteConfig.pageSuffix);
+	const title = metadata.title === 'Quick React' ? site.name : `${metadata.title} | ${site.name}`;
 	const publicOrigin = systemConfig.publicOrigin || undefined;
 	const canonical = publicOrigin ? new URL(c.req.path, publicOrigin).toString() : undefined;
 	c.header('Cache-Control', 'no-cache');
 	return c.html(renderIndexHtml({
 		...metadata,
+		title,
 		canonical,
 		initialData: {
 			apiSuffix: siteConfig.apiSuffix,
 			pageSuffix: siteConfig.pageSuffix,
+			siteName: site.name,
 			siteNavigation: menuItems,
 			auth: { ...auth, currentUser: c.get('currentUser') },
 			footer: `Ant Design ©${new Date().getFullYear()} Created by Ant UED`,

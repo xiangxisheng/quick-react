@@ -15,7 +15,7 @@ const columns = [
 	{ dataIndex: 'base_site_key', title: '父站点', component: 'select', placeholder: '搜索并选择父站点', rules: [{ required: true, message: '请选择父站点' }] },
 	{ dataIndex: 'dsn', title: 'Node DSN', component: 'textbox' },
 	{ dataIndex: 'status', title: '状态', component: 'switch', checkedValue: statusValues.enabled, uncheckedValue: statusValues.disabled, options: enabledDisabledOptions },
-	{ dataIndex: 'passport_sso_enabled', title: 'Passport SSO 登录', component: 'switch' },
+	{ dataIndex: 'passport_sso_enabled', title: '业务站点 Passport SSO', component: 'switch' },
 	{ dataIndex: 'migration_status', title: '迁移状态' },
 	{ dataIndex: 'database_binding', title: 'D1 Binding', component: 'textbox' },
 ];

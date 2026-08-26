@@ -25,7 +25,7 @@ const About = () => <h1 style={{ padding: 10, margin: 0, height: '100%' }}>About
 type MenuItem = Required<MenuProps>['items'][number];
 
 const serverData = (window as Window & { __INITIAL_DATA__?: InitialData }).__INITIAL_DATA__;
-	const initialData = serverData ?? { apiSuffix: '', pageSuffix: '', siteNavigation: [] };
+const initialData = serverData ?? { apiSuffix: '', pageSuffix: '', siteName: 'Quick React', siteNavigation: [] };
 const siteNavigation = initialData.siteNavigation;
 const pageUrl = (path: string) => path === '/' ? path : `${path}${initialData.pageSuffix}`;
 
@@ -123,10 +123,8 @@ const App = ({ commonApi }: AppType) => {
 				setCurrent(item.key);
 			}
 		}
-		const page = pages.find((item) => item.path === logicalPath);
-		if (page) {
-			document.title = `${page.title} | Quick React`;
-		}
+		const page = [...pages, ...authPages].find((item) => item.path === logicalPath);
+		document.title = page ? `${page.title} | ${initialData.siteName}` : initialData.siteName;
 	}, [location.pathname]);
 
 	const onClick: MenuProps['onClick'] = (e) => {
