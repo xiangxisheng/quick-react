@@ -39,7 +39,8 @@ export type TableColumn = {
 	uncheckedValue?: string | boolean;
 	dataType?: TableDataType;
 	dayjsFormat?: string;
-	tableDisplay?: 'multiline';
+	tableDisplay?: 'multiline' | 'reference';
+	tableDisplayTextField?: string;
 };
 export type TableActions = { toolbar?: TableAction[]; query?: TableAction[]; row?: TableAction[] };
 export type TableOption = { rowKey: string; actions?: TableActions; queryFields?: TableQueryField[] };

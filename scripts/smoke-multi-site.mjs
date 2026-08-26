@@ -425,6 +425,9 @@ try {
 		method: 'POST', cookie, body: { site_key: 'passport', channel_id: emailChannel.id, template_id: emailTemplate.id, is_default: true },
 	})).status, 201);
 	const emailBindings = await (await request('localhost', emailBindingsPath, { cookie })).json();
+	assert.deepEqual(emailBindings.table.columns.find((column) => column.dataIndex === 'channel_id')?.tableDisplay, 'reference');
+	assert.equal(emailBindings.table.columns.find((column) => column.dataIndex === 'channel_id')?.tableDisplayTextField, 'account_name');
+	assert.equal(emailBindings.table.columns.find((column) => column.dataIndex === 'template_id')?.tableDisplayTextField, 'template_name');
 	const emailBinding = emailBindings.table.dataSource[0];
 	assert.equal(emailBinding.is_default, 1);
 	assert.equal((await request('localhost', `${emailBindingsPath}/${emailBinding.id}`, { method: 'DELETE', cookie })).status, 409);

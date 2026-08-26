@@ -8,8 +8,8 @@ import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 
 const columns = [
 	{ dataIndex: 'site_key', title: '站点', component: 'select', rules: [{ required: true, message: '请选择站点' }] },
-	{ dataIndex: 'channel_id', title: '邮件通道', component: 'select', rules: [{ required: true, message: '请选择邮件通道' }] },
-	{ dataIndex: 'template_id', title: '邮件模板', component: 'select', rules: [{ required: true, message: '请选择邮件模板' }] },
+	{ dataIndex: 'channel_id', title: '邮件通道', component: 'select', tableDisplay: 'reference', tableDisplayTextField: 'account_name', rules: [{ required: true, message: '请选择邮件通道' }] },
+	{ dataIndex: 'template_id', title: '邮件模板', component: 'select', tableDisplay: 'reference', tableDisplayTextField: 'template_name', rules: [{ required: true, message: '请选择邮件模板' }] },
 	{ dataIndex: 'purpose', title: '类型', options: cloudEmailPurposeOptions },
 	{ dataIndex: 'is_default', title: '默认通道', component: 'switch' },
 	{ dataIndex: 'status', title: '状态', component: 'switch', checkedValue: statusValues.enabled, uncheckedValue: statusValues.disabled, options: enabledDisabledOptions },

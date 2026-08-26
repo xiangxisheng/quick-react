@@ -217,10 +217,10 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 					const tableColumns: TableColumnsType<DataType> = [];
 					for (const column of resJSON.table.columns) {
 						if (column.hideInTable) continue;
-						const { tableDisplay, ...tableColumn } = column;
+						const { tableDisplay, tableDisplayTextField, ...tableColumn } = column;
 						tableColumns.push({
 							...tableColumn,
-							render: (value) => {
+							render: (value, record) => {
 								if (column.dayjsFormat) {
 									if (!value) {
 										return <span style={{ color: '#CCCCCC' }}>(空)</span>;
@@ -228,6 +228,10 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 								}
 								if (column.dataType === 'js_timestamp') {
 									return dayjs(value).format(column.dayjsFormat);
+								}
+								if (tableDisplay === 'reference') {
+									const display = tableDisplayTextField ? record[tableDisplayTextField] : value;
+									return <span>{String(display ?? value ?? '')}<Typography.Text type="secondary"> (id:{String(value ?? '')})</Typography.Text></span>;
 								}
 								if (column.options) {
 									const values = Array.isArray(value) ? value : [value];
