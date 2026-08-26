@@ -5,6 +5,7 @@ import { testCloudCredential } from '@server/cloud/credential-test.mjs';
 import type { CloudCredential } from '@server/cloud/index.mjs';
 import { getChangedFields } from '@server/changed-fields.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
+import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 
 const columns = [
@@ -23,23 +24,24 @@ const publicRow = (row: Record<string, unknown>) => {
 	const { access_key_secret: _secret, ...safe } = row;
 	return safe;
 };
+const credentialInUse = async (database: DatabaseAdapter, id: number) => (await Promise.all([
+	firstSql(database, sql(database).select({ table: 'global_cloud_object_storage_buckets', columns: { id: 'id' }, where: [{ column: 'cloud_credential_id', value: id }], limit: 1 })),
+	firstSql(database, sql(database).select({ table: 'global_cloud_email_channels', columns: { id: 'id' }, where: [{ column: 'cloud_credential_id', value: id }], limit: 1 })),
+	firstSql(database, sql(database).select({ table: 'global_cloud_email_template_publications', columns: { template_id: 'template_id' }, where: [{ column: 'cloud_credential_id', value: id }], limit: 1 })),
+])).some(Boolean);
 const deleteCredential = async (database: DatabaseAdapter, id: number) => {
-	const credential = await database.prepare('SELECT id, status FROM global_cloud_credentials WHERE id = ?1').bind(id).first<{ id: number; status: string }>();
+	const credential = await firstSql<{ id: number; status: string }>(database, sql(database).select({ table: 'global_cloud_credentials', columns: { id: 'id', status: 'status' }, where: [{ column: 'id', value: id }] }));
 	if (!credential) return '云凭据不存在';
 	if (credential.status !== statusValues.disabled) return '云凭据必须先停用才能删除';
-	const association = await database.prepare(`SELECT cloud_credential_id FROM global_cloud_object_storage_buckets WHERE cloud_credential_id = ?1
-		UNION ALL SELECT cloud_credential_id FROM global_cloud_email_channels WHERE cloud_credential_id = ?1
-		UNION ALL SELECT cloud_credential_id FROM global_cloud_email_template_publications WHERE cloud_credential_id = ?1 LIMIT 1`).bind(id).first();
-	if (association) return '云凭据仍被 Bucket、邮件通道或云端模板使用，不能删除';
-	await database.prepare('DELETE FROM global_cloud_credentials WHERE id = ?1').bind(id).run();
+	if (await credentialInUse(database, id)) return '云凭据仍被 Bucket、邮件通道或云端模板使用，不能删除';
+	await runSql(database, sql(database).delete('global_cloud_credentials', { id }));
 };
 
 const handler: ApiHandler = async (c, next, params) => {
 	const database = c.get('database');
 	if (!params.id && c.req.method === 'GET') {
-		const rows = await database.prepare(`SELECT id, name, provider, account_id, access_key_id, status, created_at, updated_at
-			FROM global_cloud_credentials ORDER BY id DESC`).all<Record<string, unknown>>();
-		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { query: [{ key: 'search', label: '搜索' }], toolbar: [{ key: 'create', label: '新增' }, { key: 'delete', label: '删除' }], row: [{ key: 'test', label: '测试' }, { key: 'edit', label: '编辑' }, { key: 'delete', label: '删除' }] } }, columns, dataSource: rows.results.map(publicRow), totalRecords: rows.results.length } });
+		const rows = await allSql<Record<string, unknown>>(database, sql(database).select({ table: 'global_cloud_credentials', columns: { id: 'id', name: 'name', provider: 'provider', account_id: 'account_id', access_key_id: 'access_key_id', status: 'status', created_at: 'created_at', updated_at: 'updated_at' }, orderBy: [{ column: 'id', direction: 'DESC' }] }));
+		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { query: [{ key: 'search', label: '搜索' }], toolbar: [{ key: 'create', label: '新增' }, { key: 'delete', label: '删除' }], row: [{ key: 'test', label: '测试' }, { key: 'edit', label: '编辑' }, { key: 'delete', label: '删除' }] } }, columns, dataSource: rows.map(publicRow), totalRecords: rows.length } });
 	}
 	if (!params.id && c.req.method === 'POST') {
 		const body = await parseBody(c);
@@ -49,10 +51,8 @@ const handler: ApiHandler = async (c, next, params) => {
 		if (!name || !cloudProviderKeys.has(provider) || !accessKeyId || !accessKeySecret) return apiMessage(c, 400, '名称、供应商和访问密钥必填');
 		if (!isCredentialContextValid(provider, accountId)) return apiMessage(c, 400, 'Cloudflare Account ID 必须是 32 位十六进制字符串');
 		try {
-			await database.prepare(`INSERT INTO global_cloud_credentials
-				(name, provider, account_id, access_key_id, access_key_secret, status, created_at, updated_at)
-				VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)`)
-				.bind(name, provider, accountId, accessKeyId, accessKeySecret, body.status === statusValues.disabled ? statusValues.disabled : statusValues.enabled, Date.now()).run();
+			const now = Date.now();
+			await runSql(database, sql(database).insert('global_cloud_credentials', { name, provider, account_id: accountId, access_key_id: accessKeyId, access_key_secret: accessKeySecret, status: body.status === statusValues.disabled ? statusValues.disabled : statusValues.enabled, created_at: now, updated_at: now }));
 		} catch { return apiMessage(c, 409, '凭据名称已经存在'); }
 		return apiMessageData(c, 201, '云凭据创建成功', {});
 	}
@@ -65,13 +65,11 @@ const handler: ApiHandler = async (c, next, params) => {
 		return apiMessage(c, 200, '删除成功');
 	}
 	if (params.id && c.req.method === 'GET') {
-		const row = await database.prepare(`SELECT id, name, provider, account_id, access_key_id, status, created_at, updated_at
-			FROM global_cloud_credentials WHERE id = ?1`).bind(Number(params.id)).first<Record<string, unknown>>();
+		const row = await firstSql<Record<string, unknown>>(database, sql(database).select({ table: 'global_cloud_credentials', columns: { id: 'id', name: 'name', provider: 'provider', account_id: 'account_id', access_key_id: 'access_key_id', status: 'status', created_at: 'created_at', updated_at: 'updated_at' }, where: [{ column: 'id', value: Number(params.id) }] }));
 		return row ? apiResponse(c, 200, publicRow(row)) : apiMessage(c, 404, '云凭据不存在');
 	}
 	if (params.id && c.req.method === 'POST' && c.req.query('action') === 'test') {
-		const credential = await database.prepare(`SELECT id, name, provider, account_id, access_key_id, access_key_secret, status
-			FROM global_cloud_credentials WHERE id = ?1 AND status = 'enabled'`).bind(Number(params.id)).first<CloudCredential>();
+		const credential = await firstSql<CloudCredential>(database, sql(database).select({ table: 'global_cloud_credentials', columns: { id: 'id', name: 'name', provider: 'provider', account_id: 'account_id', access_key_id: 'access_key_id', access_key_secret: 'access_key_secret', status: 'status' }, where: [{ column: 'id', value: Number(params.id) }, { column: 'status', value: 'enabled' }] }));
 		if (!credential) return apiMessage(c, 404, '云凭据不存在或已停用');
 		try {
 			const result = await testCloudCredential(credential);
@@ -89,8 +87,7 @@ const handler: ApiHandler = async (c, next, params) => {
 		} catch (error) { return apiMessage(c, 502, error instanceof Error ? error.message : '凭据测试失败'); }
 	}
 	if (params.id && c.req.method === 'PUT') {
-		const current = await database.prepare(`SELECT id, name, provider, account_id, access_key_id, access_key_secret, status
-			FROM global_cloud_credentials WHERE id = ?1`).bind(Number(params.id)).first<Record<string, unknown>>();
+		const current = await firstSql<Record<string, unknown>>(database, sql(database).select({ table: 'global_cloud_credentials', columns: { id: 'id', name: 'name', provider: 'provider', account_id: 'account_id', access_key_id: 'access_key_id', access_key_secret: 'access_key_secret', status: 'status' }, where: [{ column: 'id', value: Number(params.id) }] }));
 		if (!current) return apiMessage(c, 404, '云凭据不存在');
 		const body = await parseBody(c);
 		const changed = getChangedFields(body, ['name', 'provider', 'account_id', 'access_key_id', 'access_key_secret', 'status']);
@@ -102,17 +99,12 @@ const handler: ApiHandler = async (c, next, params) => {
 		const accessKeyId = changed.has('access_key_id') ? text(body.access_key_id) : String(current.access_key_id);
 		if (!name || !cloudProviderKeys.has(provider) || !accessKeyId || !isCredentialContextValid(provider, accountId)) return apiMessage(c, 400, '名称、供应商、账号上下文或访问密钥不合法');
 		if (changed.has('provider') && provider !== current.provider) {
-			const inUse = await database.prepare(`SELECT cloud_credential_id FROM global_cloud_object_storage_buckets WHERE cloud_credential_id = ?1
-				UNION ALL SELECT cloud_credential_id FROM global_cloud_email_channels WHERE cloud_credential_id = ?1
-				UNION ALL SELECT cloud_credential_id FROM global_cloud_email_template_publications WHERE cloud_credential_id = ?1 LIMIT 1`).bind(Number(params.id)).first();
+			const inUse = await credentialInUse(database, Number(params.id));
 			if (inUse) return apiMessage(c, 409, '凭据已被 Bucket、邮件通道或云端模板使用，不能修改供应商');
 		}
 		const secret = changed.has('access_key_secret') && text(body.access_key_secret) ? text(body.access_key_secret) : String(current.access_key_secret ?? '');
 		try {
-			await database.prepare(`UPDATE global_cloud_credentials SET name = ?2, provider = ?3, account_id = ?4, access_key_id = ?5,
-				access_key_secret = ?6, status = ?7, updated_at = ?8 WHERE id = ?1`)
-				.bind(Number(params.id), name, provider, accountId, accessKeyId, secret,
-					changed.has('status') && body.status === statusValues.disabled ? statusValues.disabled : changed.has('status') ? statusValues.enabled : current.status, Date.now()).run();
+			await runSql(database, sql(database).update('global_cloud_credentials', { name, provider, account_id: accountId, access_key_id: accessKeyId, access_key_secret: secret, status: changed.has('status') && body.status === statusValues.disabled ? statusValues.disabled : changed.has('status') ? statusValues.enabled : current.status, updated_at: Date.now() }, { id: Number(params.id) }));
 		} catch { return apiMessage(c, 409, '凭据名称已经存在'); }
 		return apiMessage(c, 200, '保存成功');
 	}

@@ -2,6 +2,7 @@ import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
 import { getCloudStorageProduct } from '@server/cloud/catalog.mjs';
 import { createCloudStorageAdapter, loadCloudStorageTarget } from '@server/cloud/resolve.mjs';
+import { allSql, sql } from '@server/database/sql.mjs';
 
 const parseBody = async (c: Parameters<ApiHandler>[0]): Promise<Record<string, unknown>> => c.req.json<Record<string, unknown>>().catch(() => ({}));
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : '';
@@ -15,15 +16,9 @@ const safeRelativePrefix = (value: unknown) => {
 	return !valueText.split('/').includes('..') ? valueText : '';
 };
 const bindingOptions = async (database: Parameters<typeof loadCloudStorageTarget>[0]) => {
-	const rows = await database.prepare(`SELECT b.id, b.site_key, s.name AS site_name, bkt.bucket, c.name AS credential_name, c.provider, p.purpose
-		FROM global_cloud_object_storage_bindings b JOIN global_sites s ON s.site_key = b.site_key
-		JOIN global_cloud_object_storage_buckets bkt ON bkt.id = b.bucket_id
-		JOIN global_cloud_credentials c ON c.id = bkt.cloud_credential_id
-		JOIN global_cloud_object_storage_binding_purposes p ON p.binding_id = b.id
-		WHERE b.status = 'enabled' AND bkt.status = 'enabled' AND c.status = 'enabled'
-		ORDER BY s.site_key, p.purpose, b.id`).all<{ id: number; site_key: string; site_name: string; bucket: string; credential_name: string; provider: string; purpose: string }>();
+	const rows = await allSql<{ id: number; site_key: string; site_name: string; bucket: string; credential_name: string; provider: string; purpose: string }>(database, sql(database).select({ table: 'global_cloud_object_storage_bindings', alias: 'b', columns: { id: 'b.id', site_key: 'b.site_key', site_name: 's.name', bucket: 'bkt.bucket', credential_name: 'c.name', provider: 'c.provider', purpose: 'p.purpose' }, joins: [{ table: 'global_sites', alias: 's', left: 's.site_key', right: 'b.site_key' }, { table: 'global_cloud_object_storage_buckets', alias: 'bkt', left: 'bkt.id', right: 'b.bucket_id' }, { table: 'global_cloud_credentials', alias: 'c', left: 'c.id', right: 'bkt.cloud_credential_id' }, { table: 'global_cloud_object_storage_binding_purposes', alias: 'p', left: 'p.binding_id', right: 'b.id' }], where: [{ column: 'b.status', value: 'enabled' }, { column: 'bkt.status', value: 'enabled' }, { column: 'c.status', value: 'enabled' }], orderBy: [{ column: 's.site_key' }, { column: 'p.purpose' }, { column: 'b.id' }] }));
 	const bindings = new Map<number, { site_key: string; site_name: string; bucket: string; credential_name: string; provider: string; purposes: string[] }>();
-	for (const row of rows.results) {
+	for (const row of rows) {
 		const binding = bindings.get(row.id) ?? { site_key: row.site_key, site_name: row.site_name, bucket: row.bucket, credential_name: row.credential_name, provider: row.provider, purposes: [] };
 		binding.purposes.push(row.purpose);
 		bindings.set(row.id, binding);
