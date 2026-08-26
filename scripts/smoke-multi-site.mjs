@@ -268,8 +268,9 @@ try {
 	assert.equal((await request('localhost', `${emailChannelsPath}/${emailChannel.id}?action=test`, {
 		method: 'POST', cookie, body: { to: 'recipient@example.com', template_id: emailTemplate.id, code: '654321' },
 	})).status, 200);
-	const testedTemplate = JSON.parse(directMailActions.at(-1)?.parameters.get('Template'));
-	assert.deepEqual(testedTemplate, { TemplateId: '5001', TemplateData: { code: '654321', email: 'recipient@example.com', expires_minutes: '10' } });
+	assert.equal(directMailActions.at(-1)?.parameters.has('Template'), false);
+	assert.equal(directMailActions.at(-1)?.parameters.get('Subject'), '验证码 654321');
+	assert.equal(directMailActions.at(-1)?.parameters.get('HtmlBody'), '<p>验证码：654321</p>');
 	const syncResponse = await request('localhost', `${emailTemplatesPath}?action=sync`, {
 		method: 'POST', cookie, body: { channel_id: emailChannel.id, template_type: 'email_verification' },
 	});

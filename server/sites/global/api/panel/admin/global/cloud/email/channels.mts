@@ -100,10 +100,11 @@ const handler: ApiHandler = async (c, next, params) => {
 	}
 	if (params.id && c.req.method === 'GET' && c.req.query('action') === 'templates') {
 		if (text(c.req.query('field')) !== 'template_id') return apiMessage(c, 400, '不支持的发现字段');
-		const templates = await database.prepare(`SELECT t.id, t.template_key, t.name FROM global_cloud_email_templates t
-			JOIN global_cloud_email_template_publications p ON p.template_id = t.id
-			WHERE p.channel_id = ?1 AND p.status = 'ready' AND t.status = 'enabled' AND t.template_type = 'email_verification'
-			ORDER BY t.name, t.template_key`).bind(Number(params.id)).all<{ id: number; template_key: string; name: string }>();
+		const channel = await loadCloudEmailTarget(database, Number(params.id));
+		if (!channel) return apiMessage(c, 404, '邮件通道不存在或已停用');
+		const templates = await database.prepare(`SELECT id, template_key, name FROM global_cloud_email_templates
+			WHERE status = 'enabled' AND template_type = 'email_verification' ORDER BY name, template_key`)
+			.all<{ id: number; template_key: string; name: string }>();
 		return apiResponse(c, 200, { options: templates.results.map((item) => ({ value: String(item.id), text: `${item.name} (${item.template_key})` })) });
 	}
 	if (params.id && c.req.method === 'GET') {
@@ -116,16 +117,15 @@ const handler: ApiHandler = async (c, next, params) => {
 		if (!emailPattern.test(to) || !Number.isInteger(templateId) || !/^\d{6}$/.test(code)) return apiMessage(c, 400, '收件人、验证码模板或 6 位数字验证码不合法');
 		const [target, template] = await Promise.all([
 			loadCloudEmailTarget(database, Number(params.id)),
-			database.prepare(`SELECT t.id, t.template_key, t.template_type, t.name, t.subject, t.body_text, t.body_html, t.status,
-				p.provider_template_id FROM global_cloud_email_templates t JOIN global_cloud_email_template_publications p ON p.template_id = t.id
-				WHERE t.id = ?1 AND p.channel_id = ?2 AND t.template_type = 'email_verification' AND t.status = 'enabled' AND p.status = 'ready'`)
-				.bind(templateId, Number(params.id)).first<CloudEmailTemplate & { provider_template_id: string }>(),
+			database.prepare(`SELECT id, template_key, template_type, name, subject, body_text, body_html, status
+				FROM global_cloud_email_templates WHERE id = ?1 AND template_type = 'email_verification' AND status = 'enabled'`)
+				.bind(templateId).first<CloudEmailTemplate>(),
 		]);
-		if (!target || !template) return apiMessage(c, 404, '邮件通道或已审核验证码模板不存在');
+		if (!target || !template) return apiMessage(c, 404, '邮件通道或启用的验证码模板不存在');
 		const variables = { code, email: to, expires_minutes: '10' };
 		try {
 			const rendered = renderCloudEmailTemplate(template, variables);
-			const result = await createCloudEmailAdapter(target).send({ to, ...rendered, template: { providerTemplateId: template.provider_template_id, variables } });
+			const result = await createCloudEmailAdapter(target).send({ to, ...rendered });
 			return apiMessageData(c, 200, '测试邮件已提交', { requestId: result.requestId, messageId: result.messageId }, { component: 'modal', title: '测试发件成功' });
 		} catch (error) { return apiMessage(c, 502, error instanceof Error ? error.message : '测试邮件发送失败'); }
 	}
