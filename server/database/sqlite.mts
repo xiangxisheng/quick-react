@@ -44,7 +44,7 @@ export const createSqliteAdapter = (filename: string): SqliteDatabaseAdapter => 
 	mkdirSync(dirname(filename), { recursive: true });
 	const database = new DatabaseSync(filename);
 	database.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
-	return {
+	const adapter: SqliteDatabaseAdapter = {
 		dialect: 'sqlite',
 		prepare: (query) => new SqliteStatement(database.prepare(query)),
 		batch: async (statements) => {
@@ -62,6 +62,12 @@ export const createSqliteAdapter = (filename: string): SqliteDatabaseAdapter => 
 			}
 		},
 		exec: async (query) => { database.exec(query); },
+		transaction: async (callback) => {
+			database.exec('BEGIN IMMEDIATE');
+			try { const result = await callback(adapter); database.exec('COMMIT'); return result; }
+			catch (error) { database.exec('ROLLBACK'); throw error; }
+		},
 		close: () => database.close(),
 	};
+	return adapter;
 };

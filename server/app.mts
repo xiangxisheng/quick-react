@@ -12,6 +12,9 @@ import { etag } from 'hono/etag';
 import { getClientIp } from './client-ip.mjs';
 import worker from './worker.mjs';
 import { createSqliteAdapter } from './database/sqlite.mjs';
+import { createMysqlAdapter } from './database/mysql.mjs';
+import { createPostgresqlAdapter } from './database/postgresql.mjs';
+import type { DatabaseAdapter } from './database/index.mjs';
 import { initializeCodeSites, migrateDatabase, migrateDefaultDatabase } from './database/migrate.mjs';
 import { createDatabaseConfigStore } from './config-store.mjs';
 import { configureSystemConfig, loadSystemConfig } from './system-config.mjs';
@@ -23,16 +26,23 @@ import { workerCodeSites, workerSiteNavigations } from './.generated/worker-api-
 const env = process.env;
 const projectDirectory = fileURLToPath(new URL('../', import.meta.url));
 const defaultDatabase = createSqliteAdapter(env.DEFAULT_DATABASE_FILE || resolve(projectDirectory, 'database/default.sqlite'));
-const siteDatabases = new Map<string, ReturnType<typeof createSqliteAdapter>>();
+const siteDatabases = new Map<string, DatabaseAdapter>();
 await migrateDefaultDatabase(defaultDatabase, resolve(projectDirectory, 'migrations'));
-const resolveSqliteDsn = (dsn: string) => {
-	if (!dsn.startsWith('sqlite://')) throw new Error('Only sqlite:// custom DSNs are supported by the Node runtime');
-	const dsnPath = dsn.slice('sqlite://'.length);
-	const filename = dsnPath.startsWith('/') ? dsnPath : resolve(projectDirectory, dsnPath);
-	let database = siteDatabases.get(filename);
+const resolveSiteDsn = (dsn: string) => {
+	let key = dsn, factory: () => DatabaseAdapter;
+	if (dsn.startsWith('sqlite://')) {
+		const dsnPath = dsn.slice('sqlite://'.length), filename = dsnPath.startsWith('/') ? dsnPath : resolve(projectDirectory, dsnPath);
+		key = `sqlite://${filename}`;
+		factory = () => createSqliteAdapter(filename);
+	} else if (dsn.startsWith('mysql://') || dsn.startsWith('mysql2://')) {
+		factory = () => createMysqlAdapter(dsn.replace(/^mysql2:/, 'mysql:'));
+	} else if (dsn.startsWith('postgresql://') || dsn.startsWith('postgres://')) {
+		factory = () => createPostgresqlAdapter(dsn);
+	} else throw new Error('Database DSN must use sqlite://, mysql://, or postgresql://');
+	let database = siteDatabases.get(key);
 	if (!database) {
-		database = createSqliteAdapter(filename);
-		siteDatabases.set(filename, database);
+		database = factory();
+		siteDatabases.set(key, database);
 	}
 	return database;
 };
@@ -59,7 +69,7 @@ const migrateSite = async (siteKey: string) => {
 	chain.unshift('base');
 	await defaultDatabase.prepare(`UPDATE global_sites SET migration_status = 'migrating' WHERE site_key = ?1`).bind(siteKey).run();
 	try {
-		const target = site.dsn ? resolveSqliteDsn(site.dsn) : defaultDatabase;
+		const target = site.dsn ? resolveSiteDsn(site.dsn) : defaultDatabase;
 		await migrateDatabase(target, resolve(projectDirectory, 'migrations'), chain);
 		await defaultDatabase.prepare(`UPDATE global_sites SET migration_status = 'ready' WHERE site_key = ?1`).bind(siteKey).run();
 	} catch (error) {
@@ -124,10 +134,10 @@ nodeApp.all('*', (c) => worker.fetch(c.req.raw, {
 	SNOWFLAKE_WORKER_ID: env.SNOWFLAKE_WORKER_ID || '0',
 	DATABASE_RESOLVER: async (site) => {
 		if (site.databaseTarget.kind === 'default') return defaultDatabase;
-		if (site.databaseTarget.kind !== 'dsn' || !site.databaseTarget.value.startsWith('sqlite://')) {
+		if (site.databaseTarget.kind !== 'dsn') {
 			throw new Error(`Node database target is not supported: ${site.databaseTarget.kind}`);
 		}
-		return resolveSqliteDsn(site.databaseTarget.value);
+		return resolveSiteDsn(site.databaseTarget.value);
 	},
 	MIGRATE_SITE: migrateSite,
 	OIDC_FETCH: fetch,

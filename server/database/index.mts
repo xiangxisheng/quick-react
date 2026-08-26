@@ -20,6 +20,8 @@ export type DatabaseAdapter = {
 	prepare: (query: string) => DatabaseStatement;
 	batch?: (statements: DatabaseBatchStatement[]) => Promise<DatabaseRunResult[]>;
 	exec?: (query: string) => Promise<void>;
+	transaction?: <T>(callback: (database: DatabaseAdapter) => Promise<T>) => Promise<T>;
+	close?: () => void | Promise<void>;
 };
 
 export type DatabaseTarget = {
