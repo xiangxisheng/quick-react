@@ -13,6 +13,7 @@ export type TableColumnFormProperties = {
 	parentValues?: Array<string | number | boolean>;
 	multiple?: boolean;
 	allowCustomValue?: boolean;
+	readOnlyWhen?: { field: string; values?: string[]; notValues?: string[] };
 	remoteOptions?: TableColumnRemoteOptions;
 	checkedValue?: string | boolean;
 	uncheckedValue?: string | boolean;

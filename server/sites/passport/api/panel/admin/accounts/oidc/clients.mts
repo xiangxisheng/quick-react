@@ -10,14 +10,15 @@ const defaultBackchannelLogoutPath = '/api/accounts/oidc/backchannel-logout';
 const columns = [
 	{ dataIndex: 'id', title: '客户端 ID' },
 	{ dataIndex: 'name', title: '名称', component: 'textbox', rules: [{ required: true, message: '请输入客户端名称' }] },
-	{ dataIndex: 'redirect_uris', title: '回调地址', component: 'select', multiple: true, allowCustomValue: true, placeholder: '选择业务站点域名，或输入完整 HTTPS 回调地址后回车', tableDisplay: 'multiline' as const, rules: [{ required: true, message: '请选择或输入至少一个回调地址' }] },
-	{ dataIndex: 'backchannel_logout_path', title: '后端注销路径', component: 'textbox', placeholder: defaultBackchannelLogoutPath, rules: [{ required: true, message: '请输入注销路径' }] },
+	{ dataIndex: 'redirect_uri_source', title: '业务站点域名', component: 'select', hideInTable: true, placeholder: '选择业务站点域名或自定义' },
+	{ dataIndex: 'redirect_uris', title: '回调地址', component: 'textarea', readOnlyWhen: { field: 'redirect_uri_source', notValues: ['__custom__'] }, tableDisplay: 'multiline' as const, placeholder: '每行一个完整 HTTPS 回调地址', rules: [{ required: true, message: '请输入至少一个回调地址' }] },
+	{ dataIndex: 'backchannel_logout_path', title: '后端注销路径', component: 'textbox', readOnlyWhen: { field: 'redirect_uri_source', notValues: ['__custom__'] }, placeholder: defaultBackchannelLogoutPath, rules: [{ required: true, message: '请输入注销路径' }] },
 	{ dataIndex: 'allowed_scopes', title: '允许 Scope', component: 'textbox' },
 	{ dataIndex: 'require_pkce', title: '要求 PKCE', component: 'switch' },
 	{ dataIndex: 'status', title: '状态', component: 'switch', checkedValue: statusValues.enabled, uncheckedValue: statusValues.disabled, options: enabledDisabledOptions },
 ];
 
-const loadRedirectUriOptions = async (c: Parameters<ApiHandler>[0]) => {
+const loadRedirectUriOptions = async (c: Parameters<ApiHandler>[0]): Promise<Array<{ value: string; text: string; fieldValues: Record<string, unknown> }>> => {
 	const database = c.get('globalDatabase');
 	const rows = await allSql<{ hostname: string; site_key: string; site_name: string }>(database, sql(database).select({
 		table: 'global_site_hosts', alias: 'h',
@@ -30,7 +31,7 @@ const loadRedirectUriOptions = async (c: Parameters<ApiHandler>[0]) => {
 		.filter((row) => row.site_key !== 'global' && row.site_key !== 'passport' && !row.hostname.startsWith('*.'))
 		.map((row) => {
 			const origin = `https://${row.hostname}`;
-			return { value: `${origin}/api/accounts/oidc/callback`, text: `${row.site_name} (${row.hostname})`, fieldValues: { backchannel_logout_path: defaultBackchannelLogoutPath } };
+			return { value: `${origin}/api/accounts/oidc/callback`, text: `${row.site_name} (${row.hostname})`, fieldValues: { redirect_uris: [`${origin}/api/accounts/oidc/callback`], backchannel_logout_path: defaultBackchannelLogoutPath } };
 		});
 };
 
@@ -55,13 +56,15 @@ const handler: ApiHandler = async (c, next, params) => {
 	if (!database || c.get('site').siteKey !== 'passport') return apiMessage(c, 404);
 	if (!params.id && c.req.method === 'GET') {
 		const rows: Array<Record<string, unknown>> = await oidcClients(database);
+		const redirectUriOptions = await loadRedirectUriOptions(c);
 		for (const row of rows) {
 			row.redirect_uris = JSON.parse(String(row.redirect_uris || '[]'));
 			row.backchannel_logout_path = pathFromUri(row.backchannel_logout_uri);
+			row.redirect_uri_source = redirectUriOptions.some((option) => option.value === (row.redirect_uris as string[])[0]) ? (row.redirect_uris as string[])[0] : '__custom__';
 			delete row.backchannel_logout_uri;
 		}
-		const redirectUriOptions = await loadRedirectUriOptions(c);
-		const tableColumns = columns.map((column) => column.dataIndex === 'redirect_uris' ? { ...column, options: redirectUriOptions } : column);
+		redirectUriOptions.push({ value: '__custom__', text: '自定义回调地址', fieldValues: {} });
+		const tableColumns = columns.map((column) => column.dataIndex === 'redirect_uri_source' ? { ...column, options: redirectUriOptions } : column);
 		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { toolbar: [{ key: 'create', label: '新增客户端' }], row: [{ key: 'edit', label: '编辑' }, { key: 'reset-secret', label: '重置密钥', confirm: '重置后旧密钥立即失效，确定继续吗？' }, { key: 'delete', label: '删除' }] } }, columns: tableColumns, dataSource: rows, totalRecords: rows.length } });
 	}
 	if (!params.id && c.req.method === 'POST') {

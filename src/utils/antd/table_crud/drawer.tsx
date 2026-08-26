@@ -32,12 +32,13 @@ function getFullFileExtension(filename: string): string {
 }
 
 function getFormItemComponent(item: ResJsonTableColumn, row: DataType, parentValue?: unknown, remoteOptions?: TableSelectOption[], optionsLoading?: boolean, onOptionChange?: (value: unknown) => void) {
+	const readOnly = item.readOnlyWhen ? (item.readOnlyWhen.values ? item.readOnlyWhen.values.includes(String(row[item.readOnlyWhen.field] ?? '')) : !item.readOnlyWhen.notValues?.includes(String(row[item.readOnlyWhen.field] ?? ''))) : false;
 	switch (item.component) {
 		case ('textbox'):
 			return (
 				item.inputType === 'password'
-					? <Input.Password placeholder={item.placeholder} />
-					: <Input placeholder={item.placeholder} />
+					? <Input.Password placeholder={item.placeholder} readOnly={readOnly} />
+					: <Input placeholder={item.placeholder} readOnly={readOnly} />
 			);
 		case ('url'):
 			return (
@@ -69,7 +70,7 @@ function getFormItemComponent(item: ResJsonTableColumn, row: DataType, parentVal
 			return <Switch checkedChildren="启用" unCheckedChildren="禁用" />;
 		case ('textarea'):
 			return (
-				<Input.TextArea rows={4} placeholder={item.placeholder} />
+				<Input.TextArea rows={4} placeholder={item.placeholder} readOnly={readOnly} />
 			);
 		case ('datepicker'):
 			return (
@@ -328,7 +329,7 @@ export default ({
 						}
 						if (item.dependsOn && item.parentValues && !item.parentValues.includes(formValues?.[item.dependsOn] as string | number | boolean)) return;
 						const options = remoteOptions[item.dataIndex] ?? item.options;
-						const component = getFormItemComponent(item, row, item.dependsOn ? formValues?.[item.dependsOn] : undefined, remoteOptions[item.dataIndex], loadingOptions[item.dataIndex],
+						const component = getFormItemComponent(item, { ...row, ...formValues }, item.dependsOn ? formValues?.[item.dependsOn] : undefined, remoteOptions[item.dataIndex], loadingOptions[item.dataIndex],
 							(value) => applyOptionFieldValues(item, value, options));
 						if (!component) {
 							return;
