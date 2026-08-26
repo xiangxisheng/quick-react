@@ -285,25 +285,31 @@ try {
 	assert.equal((await request('localhost', emailTemplatesPath, {
 		method: 'POST', cookie, body: { template_key: 'invalid_verification', template_type: 'email_verification', name: '无变量验证码', subject: '验证码', body_text: '验证码', body_html: '<p>验证码</p>' },
 	})).status, 400);
+	const directMailActionsBeforeTemplateCreate = directMailActions.length;
 	assert.equal((await request('localhost', emailTemplatesPath, {
 		method: 'POST', cookie, body: { template_key: 'email_verification', template_type: 'email_verification', name: '邮箱验证码', subject: '验证码 {{code}}', body_text: '验证码：{{code}}', body_html: '<p>验证码：{{code}}</p>' },
 	})).status, 201);
-	assert.equal(directMailActions.at(-1)?.action, 'CreateTemplate');
-	assert.equal(directMailActions.at(-1)?.parameters.get('TemplateSubject'), '验证码 {code}');
+	assert.equal(directMailActions.length, directMailActionsBeforeTemplateCreate);
 	const emailTemplates = await (await request('localhost', emailTemplatesPath, { cookie })).json();
 	const syncTemplatesAction = emailTemplates.table.option.actions.toolbar.find((action) => action.key === 'sync');
 	assert.equal(syncTemplatesAction?.label, '同步模板');
 	assert.deepEqual(syncTemplatesAction.form.columns.map((column) => column.dataIndex), ['cloud_credential_id', 'region', 'template_type']);
+	const publishTemplateAction = emailTemplates.table.option.actions.row.find((action) => action.key === 'publish');
+	assert.deepEqual(publishTemplateAction.form.columns.map((column) => column.dataIndex), ['cloud_credential_id', 'region']);
 	const emailTemplate = emailTemplates.table.dataSource.find((item) => item.template_key === 'email_verification');
 	assert.ok(emailTemplate?.id);
 	assert.equal((await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}`, {
 		method: 'PUT', cookie, body: { body_html: '<p>验证码</p>', __changedFields: ['body_html'] },
 	})).status, 400);
 	assert.equal((await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=restore`, { method: 'POST', cookie })).status, 200);
-	assert.equal(directMailActions.at(-1)?.action, 'ModifyTemplate');
-	assert.equal(directMailActions.at(-1)?.parameters.get('TemplateSubject'), '您的邮箱验证码是 {code}');
+	assert.equal(directMailActions.length, directMailActionsBeforeTemplateCreate);
 	const restoredEmailTemplate = await (await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}`, { cookie })).json();
 	assert.equal(restoredEmailTemplate.body_text, '您正在验证邮箱 {{email}}。\n验证码：{{code}}\n验证码将在 {{expires_minutes}} 分钟后失效，请勿向他人泄露。');
+	assert.equal((await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=publish`, {
+		method: 'POST', cookie, body: { cloud_credential_id: emailCredential.id, region: 'cn-hangzhou' },
+	})).status, 200);
+	assert.equal(directMailActions.at(-1)?.action, 'CreateTemplate');
+	assert.equal(directMailActions.at(-1)?.parameters.get('TemplateSubject'), '您的邮箱验证码是 {code}');
 	const emailBindingsPath = '/api/panel/admin/global/cloud/email/bindings.php';
 	assert.equal((await request('localhost', emailBindingsPath, {
 		method: 'POST', cookie, body: { site_key: 'passport', channel_id: emailChannel.id, template_id: emailTemplate.id, is_default: true },
@@ -330,7 +336,9 @@ try {
 		WHERE template_id = ?1 AND cloud_credential_id = ?2 AND region = 'cn-hangzhou'`).run(emailTemplate.id, emailCredential.id);
 	staleReviewDatabase.close();
 	const actionsBeforeStaleReviewPublish = directMailActions.length;
-	const staleReviewPublish = await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=publish`, { method: 'POST', cookie });
+	const staleReviewPublish = await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=publish`, {
+		method: 'POST', cookie, body: { cloud_credential_id: emailCredential.id, region: 'cn-hangzhou' },
+	});
 	assert.equal(staleReviewPublish.status, 200);
 	assert.equal((await staleReviewPublish.json()).feedback.message, '模板内容未改动，无需重新提交审核');
 	assert.equal(directMailActions.length, actionsBeforeStaleReviewPublish + 1);
@@ -341,7 +349,9 @@ try {
 	) WHERE template_id = ?1 AND cloud_credential_id = ?2 AND region = 'cn-hangzhou'`).run(emailTemplate.id, emailCredential.id);
 	legacyPublicationDatabase.close();
 	const actionsBeforeUnchangedPublish = directMailActions.length;
-	const unchangedPublish = await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=publish`, { method: 'POST', cookie });
+	const unchangedPublish = await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=publish`, {
+		method: 'POST', cookie, body: { cloud_credential_id: emailCredential.id, region: 'cn-hangzhou' },
+	});
 	assert.equal(unchangedPublish.status, 200);
 	assert.equal((await unchangedPublish.json()).feedback.message, '模板内容未改动，无需重新提交审核');
 	assert.equal(directMailActions.length, actionsBeforeUnchangedPublish);
@@ -349,7 +359,9 @@ try {
 	assert.match(normalizedPublicationDatabase.prepare(`SELECT content_hash FROM global_cloud_email_template_publications
 		WHERE template_id = ?1 AND cloud_credential_id = ?2 AND region = 'cn-hangzhou'`).get(emailTemplate.id, emailCredential.id).content_hash, /^[0-9a-f]{64}$/);
 	normalizedPublicationDatabase.close();
-	assert.equal((await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=publish`, { method: 'POST', cookie })).status, 200);
+	assert.equal((await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=publish`, {
+		method: 'POST', cookie, body: { cloud_credential_id: emailCredential.id, region: 'cn-hangzhou' },
+	})).status, 200);
 	assert.equal(directMailActions.length, actionsBeforeUnchangedPublish);
 	const syncedTemplates = await (await request('localhost', emailTemplatesPath, { cookie })).json();
 	const importedTemplate = syncedTemplates.table.dataSource.find((item) => item.template_key === `aliyun_${emailCredential.id}_cn_hangzhou_6002`);
@@ -376,7 +388,9 @@ try {
 		method: 'POST', cookie, body: { cloud_credential_id: tencentCredential.id, region: 'ap-hongkong', account_name: 'notice2@example.net', from_alias: 'Tencent Passport 2' },
 	})).status, 201);
 	const createsBeforeTencentPublish = tencentSesActions.filter((item) => item.action === 'CreateEmailTemplate').length;
-	assert.equal((await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=publish`, { method: 'POST', cookie })).status, 200);
+	assert.equal((await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=publish`, {
+		method: 'POST', cookie, body: { cloud_credential_id: tencentCredential.id, region: 'ap-hongkong' },
+	})).status, 200);
 	assert.equal(tencentSesActions.at(-1)?.action, 'CreateEmailTemplate');
 	assert.equal(tencentSesActions.filter((item) => item.action === 'CreateEmailTemplate').length, createsBeforeTencentPublish + 1);
 	assert.equal(tencentSesActions.at(-1)?.body.TemplateContent.Html, Buffer.from('<p>验证码：{{code}}</p>').toString('base64'));

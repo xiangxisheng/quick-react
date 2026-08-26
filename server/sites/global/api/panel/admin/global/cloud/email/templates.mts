@@ -8,7 +8,7 @@ import type { CloudEmailScope, CloudEmailTemplate } from '@server/cloud/index.mj
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { getChangedFields } from '@server/changed-fields.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
-import { cloudProviderOptions, getCloudEmailRegionOptions, getCloudEmailRegions, providerSupportsEmailPush } from '@server/cloud/catalog.mjs';
+import { cloudProviderOptions, getCloudEmailRegionLabel, getCloudEmailRegionOptions, getCloudEmailRegions, providerSupportsEmailPush } from '@server/cloud/catalog.mjs';
 
 const columns = [
 	{ dataIndex: 'template_key', title: '模板 Key', component: 'textbox', placeholder: 'email_verification', rules: [{ required: true, message: '请输入模板 Key' }] },
@@ -70,27 +70,6 @@ const savePublication = async (database: DatabaseAdapter, template: CloudEmailTe
 		VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)`)
 		.bind(template.id, target.cloud_credential_id, target.region, publication.providerTemplateId, contentHash, publication.status, now).run();
 	return 'submitted' as const;
-};
-const publishToEnabledScopes = async (database: DatabaseAdapter, template: CloudEmailTemplate) => {
-	const scopes = await database.prepare(`SELECT DISTINCT c.provider, c.id AS cloud_credential_id, ch.region, c.access_key_id, c.access_key_secret
-		FROM global_cloud_email_channels ch JOIN global_cloud_credentials c ON c.id = ch.cloud_credential_id
-		WHERE ch.status = 'enabled' AND c.status = 'enabled'
-		UNION
-		SELECT c.provider, c.id AS cloud_credential_id, p.region, c.access_key_id, c.access_key_secret
-		FROM global_cloud_email_template_publications p JOIN global_cloud_credentials c ON c.id = p.cloud_credential_id
-		WHERE p.template_id = ?1 AND c.status = 'enabled'
-		ORDER BY cloud_credential_id, region`).bind(template.id).all<CloudEmailScope>();
-	const failures: string[] = [];
-	let submitted = 0, skipped = 0;
-	for (const scope of scopes.results) {
-		try {
-			const result = await savePublication(database, template, scope);
-			if (result === 'submitted') submitted += 1;
-			else skipped += 1;
-		}
-		catch (error) { failures.push(error instanceof Error ? error.message : `${scope.provider}/${scope.region} 模板发布失败`); }
-	}
-	return { failures, submitted, skipped };
 };
 const syncCloudTemplates = async (database: DatabaseAdapter, credentialId: number, region: string, templateType: string) => {
 	const target = await loadCloudEmailScope(database, credentialId, region);
@@ -185,12 +164,15 @@ const handler: ApiHandler = async (c, next, params) => {
 				GROUP BY t.id, t.template_key, t.template_type, t.name, t.subject, t.body_text, t.body_html, t.status, t.created_at, t.updated_at ORDER BY t.id DESC`).all<Record<string, unknown>>(),
 			loadSyncOptions(database),
 		]);
-		const syncColumns = [
+		const scopeColumns = [
 			{ dataIndex: 'cloud_credential_id', title: '云凭据', component: 'select', options: syncOptions.credentials, rules: [{ required: true, message: '请选择云凭据' }] },
 			{ dataIndex: 'region', title: 'Region', component: 'select', dependsOn: 'cloud_credential_id', options: syncOptions.regions, rules: [{ required: true, message: '请选择 Region' }] },
+		];
+		const syncColumns = [
+			...scopeColumns,
 			{ dataIndex: 'template_type', title: '导入为模板类型', component: 'select', options: cloudEmailPurposeOptions, rules: [{ required: true, message: '请选择模板类型' }] },
 		];
-		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { query: [{ key: 'search', label: '搜索' }], toolbar: [{ key: 'create', label: '新增' }, { key: 'sync', label: '同步模板', form: { columns: syncColumns } }, { key: 'delete', label: '删除' }], row: [{ key: 'restore', label: '还原默认', confirm: '确认用后端默认模板覆盖当前名称、主题和正文吗？' }, { key: 'publish', label: '发布/更新' }, { key: 'refresh', label: '刷新状态' }, { key: 'edit', label: '编辑' }, { key: 'delete', label: '删除' }] } }, columns, dataSource: rows.results, totalRecords: rows.results.length } });
+		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { query: [{ key: 'search', label: '搜索' }], toolbar: [{ key: 'create', label: '新增' }, { key: 'sync', label: '同步模板', form: { columns: syncColumns } }, { key: 'delete', label: '删除' }], row: [{ key: 'restore', label: '还原默认', confirm: '确认用后端默认模板覆盖当前名称、主题和正文吗？' }, { key: 'publish', label: '发布/更新', form: { columns: scopeColumns } }, { key: 'refresh', label: '刷新状态' }, { key: 'edit', label: '编辑' }, { key: 'delete', label: '删除' }] } }, columns, dataSource: rows.results, totalRecords: rows.results.length } });
 	}
 	if (!params.id && c.req.method === 'POST' && c.req.query('action') === 'sync') {
 		const body = await parseBody(c), credentialId = Number(body.cloud_credential_id), region = text(body.region), templateType = text(body.template_type);
@@ -213,8 +195,7 @@ const handler: ApiHandler = async (c, next, params) => {
 		} catch { return apiMessage(c, 409, '模板 Key 已经存在'); }
 		const template = await database.prepare(`SELECT id, template_key, template_type, name, subject, body_text, body_html, status FROM global_cloud_email_templates WHERE template_key = ?1`).bind(templateKey).first<CloudEmailTemplate>();
 		if (!template) return apiMessage(c, 500, '模板创建后无法读取');
-		const result = template.status === statusValues.enabled ? await publishToEnabledScopes(database, template) : { failures: [], submitted: 0, skipped: 0 };
-		return apiMessageData(c, 201, result.failures.length ? `模板已创建，但有 ${result.failures.length} 个云端区域发布失败：${result.failures.join('；')}` : '邮件模板创建并提交云端审核成功', { id: template.id });
+		return apiMessageData(c, 201, '邮件模板创建成功，请选择云凭据和 Region 发布', { id: template.id });
 	}
 	if (!params.id && c.req.method === 'DELETE') {
 		const ids = await c.req.json<unknown>().catch(() => []);
@@ -232,12 +213,16 @@ const handler: ApiHandler = async (c, next, params) => {
 	if (params.id && c.req.method === 'POST' && c.req.query('action') === 'publish') {
 		const template = await loadTemplate(database, Number(params.id));
 		if (!template || template.status !== statusValues.enabled) return apiMessage(c, 404, '邮件模板不存在或已停用');
-		const result = await publishToEnabledScopes(database, template);
-		if (result.failures.length) return apiMessage(c, 502, result.failures.join('；'));
-		if (!result.submitted && result.skipped) return apiMessage(c, 200, '模板内容未改动，无需重新提交审核');
-		return apiMessage(c, 200, result.skipped
-			? `模板已提交 ${result.submitted} 个云端区域审核，跳过 ${result.skipped} 个未改动区域`
-			: '模板已提交全部启用云端区域审核');
+		const body = await parseBody(c), credentialId = Number(body.cloud_credential_id), region = text(body.region);
+		if (!Number.isInteger(credentialId) || !region) return apiMessage(c, 400, '请选择云凭据和 Region');
+		const target = await loadCloudEmailScope(database, credentialId, region);
+		if (!target || !providerSupportsEmailPush(target.provider) || !getCloudEmailRegions(target.provider).includes(region)) return apiMessage(c, 400, '云凭据或 Region 不合法');
+		try {
+			const result = await savePublication(database, template, target);
+			const providerName = cloudProviderOptions.find((item) => item.value === target.provider)?.text ?? target.provider;
+			return apiMessage(c, 200, result === 'skipped' ? '模板内容未改动，无需重新提交审核'
+				: `模板已提交到 ${providerName} / ${getCloudEmailRegionLabel(target.provider, target.region)}（${target.region}）审核`);
+		} catch (error) { return apiMessage(c, 502, error instanceof Error ? error.message : '模板发布失败'); }
 	}
 	if (params.id && c.req.method === 'POST' && c.req.query('action') === 'refresh') {
 		const publications = await database.prepare(`SELECT cloud_credential_id, region, provider_template_id FROM global_cloud_email_template_publications WHERE template_id = ?1`)
@@ -265,11 +250,7 @@ const handler: ApiHandler = async (c, next, params) => {
 		if (variableError) return apiMessage(c, 500, `后端默认模板配置错误：${variableError}`);
 		await database.prepare(`UPDATE global_cloud_email_templates SET name = ?2, subject = ?3, body_text = ?4,
 			body_html = ?5, updated_at = ?6 WHERE id = ?1`).bind(current.id, defaults.name, defaults.subject, defaults.body_text, defaults.body_html, Date.now()).run();
-		const restored = { ...current, ...defaults };
-		const result = current.status === statusValues.enabled ? await publishToEnabledScopes(database, restored) : { failures: [], submitted: 0, skipped: 0 };
-		return result.failures.length
-			? apiMessage(c, 502, `本地模板已还原，但云端更新失败：${result.failures.join('；')}`)
-			: apiMessage(c, 200, current.status === statusValues.enabled ? '模板已还原默认并提交云端审核' : '模板已还原默认');
+		return apiMessage(c, 200, '模板已还原默认，请选择云凭据和 Region 发布更新');
 	}
 	if (params.id && c.req.method === 'PUT') {
 		const current = await loadTemplate(database, Number(params.id));
@@ -291,12 +272,7 @@ const handler: ApiHandler = async (c, next, params) => {
 			await database.prepare(`UPDATE global_cloud_email_templates SET template_key = ?2, template_type = ?3, name = ?4, subject = ?5, body_text = ?6,
 				body_html = ?7, status = ?8, updated_at = ?9 WHERE id = ?1`).bind(current.id, templateKey, templateType, name, subject, bodyText, bodyHtml, status, Date.now()).run();
 		} catch { return apiMessage(c, 409, '模板 Key 已经存在'); }
-		const updated = { ...current, template_key: templateKey, template_type: templateType, name, subject, body_text: bodyText, body_html: bodyHtml, status };
-		const contentChanged = ['template_key', 'template_type', 'name', 'subject', 'body_text', 'body_html'].some((field) => changed.has(field));
-		const result = status === statusValues.enabled && (contentChanged || current.status !== status)
-			? await publishToEnabledScopes(database, updated)
-			: { failures: [], submitted: 0, skipped: 0 };
-		return result.failures.length ? apiMessage(c, 502, `本地模板已保存，但云端更新失败：${result.failures.join('；')}`) : apiMessage(c, 200, '保存成功');
+		return apiMessage(c, 200, '保存成功，请按需选择云凭据和 Region 发布更新');
 	}
 	if (params.id && c.req.method === 'DELETE') {
 		const error = await deleteTemplate(database, Number(params.id));
