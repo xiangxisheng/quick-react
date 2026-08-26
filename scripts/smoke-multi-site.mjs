@@ -311,9 +311,11 @@ try {
 	assert.equal(directMailActions.at(-1)?.action, 'CreateTemplate');
 	assert.equal(directMailActions.at(-1)?.parameters.get('TemplateSubject'), '您的邮箱验证码是 {code}');
 	const emailBindingsPath = '/api/panel/admin/global/cloud/email/bindings.php';
-	assert.equal((await request('localhost', emailBindingsPath, {
+	const reviewingBinding = await request('localhost', emailBindingsPath, {
 		method: 'POST', cookie, body: { site_key: 'passport', channel_id: emailChannel.id, template_id: emailTemplate.id, is_default: true },
-	})).status, 400);
+	});
+	assert.equal(reviewingBinding.status, 400);
+	assert.equal((await reviewingBinding.json()).feedback.message, '所选模板在该邮件通道使用的云凭据和 Region 审核中，审核通过后才能启用绑定');
 	assert.equal((await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=refresh`, { method: 'POST', cookie })).status, 200);
 	assert.equal(directMailActions.at(-1)?.action, 'DescTemplate');
 	const testTemplateOptions = await (await request('localhost', `${emailChannelsPath}/${emailChannel.id}?action=templates&field=template_id`, { cookie })).json();

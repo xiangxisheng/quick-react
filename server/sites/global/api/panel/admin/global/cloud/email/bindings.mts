@@ -32,17 +32,29 @@ const listOptions = async (database: DatabaseAdapter) => {
 		templates: templates.results.map((item) => ({ value: String(item.id), text: `${cloudEmailPurposeOptions.find((purpose) => purpose.value === item.template_type)?.text ?? item.template_type} / ${item.name} (${item.template_key})` })),
 	};
 };
-const validateTarget = async (database: DatabaseAdapter, siteKey: string, channelId: number, templateId: number, enabled: boolean) => {
+type TargetValidation = { purpose: string } | { error: string };
+
+const validateTarget = async (database: DatabaseAdapter, siteKey: string, channelId: number, templateId: number, enabled: boolean): Promise<TargetValidation> => {
+	if (!siteKey) return { error: '请选择站点' };
 	const [site, channel, template, publication] = await Promise.all([
 		database.prepare(`SELECT site_key FROM global_sites WHERE site_key = ?1 AND status = 'enabled' AND migration_status = 'ready'`).bind(siteKey).first(),
 		database.prepare(`SELECT ch.id FROM global_cloud_email_channels ch JOIN global_cloud_credentials c ON c.id = ch.cloud_credential_id
 			WHERE ch.id = ?1 AND ch.status = 'enabled' AND c.status = 'enabled'`).bind(channelId).first(),
 		database.prepare(`SELECT id, template_type FROM global_cloud_email_templates WHERE id = ?1 AND status = 'enabled'`).bind(templateId).first<{ id: number; template_type: string }>(),
-		database.prepare(`SELECT p.template_id FROM global_cloud_email_template_publications p
+		database.prepare(`SELECT p.status FROM global_cloud_email_template_publications p
 			JOIN global_cloud_email_channels ch ON ch.cloud_credential_id = p.cloud_credential_id AND ch.region = p.region
-			WHERE p.template_id = ?1 AND ch.id = ?2 AND p.status = 'ready'`).bind(templateId, channelId).first(),
+			WHERE p.template_id = ?1 AND ch.id = ?2`).bind(templateId, channelId).first<{ status: string }>(),
 	]);
-	return site && channel && template && (!enabled || publication) ? template.template_type : null;
+	if (!site) return { error: '所选站点不可用：站点必须已启用且迁移完成' };
+	if (!channel) return { error: '所选邮件通道不可用：通道及其云凭据必须均已启用' };
+	if (!template) return { error: '所选邮件模板不可用：模板必须已启用' };
+	if (!enabled) return { purpose: template.template_type };
+	if (!publication) return { error: '所选模板尚未发布到该邮件通道使用的云凭据和 Region，请先在模板管理中发布/更新' };
+	if (publication.status !== 'ready') {
+		const statusText = publication.status === 'reviewing' ? '审核中' : publication.status === 'failed' ? '审核未通过' : `状态为 ${publication.status}`;
+		return { error: `所选模板在该邮件通道使用的云凭据和 Region ${statusText}，审核通过后才能启用绑定` };
+	}
+	return { purpose: template.template_type };
 };
 const clearOtherDefaults = (database: DatabaseAdapter, id: number, siteKey: string, purpose: string) => database.prepare(`UPDATE global_cloud_email_bindings
 	SET is_default = 0, updated_at = ?4 WHERE site_key = ?1 AND purpose = ?2 AND id != ?3 AND is_default = 1`).bind(siteKey, purpose, id, Date.now()).run();
@@ -74,9 +86,11 @@ const handler: ApiHandler = async (c, next, params) => {
 		const body = await parseBody(c), siteKey = text(body.site_key), channelId = Number(body.channel_id), templateId = Number(body.template_id);
 		const status = body.status === statusValues.disabled ? statusValues.disabled : statusValues.enabled;
 		const isDefault = booleanValue(body.is_default) && status === statusValues.enabled ? 1 : 0;
-		if (!Number.isInteger(channelId) || !Number.isInteger(templateId)) return apiMessage(c, 400, '站点、邮件通道或模板不合法');
-		const purpose = await validateTarget(database, siteKey, channelId, templateId, status === statusValues.enabled);
-		if (!purpose) return apiMessage(c, 400, '站点、邮件通道、模板或云端审核状态不合法');
+		if (!Number.isInteger(channelId) || channelId <= 0) return apiMessage(c, 400, '请选择有效的邮件通道');
+		if (!Number.isInteger(templateId) || templateId <= 0) return apiMessage(c, 400, '请选择有效的邮件模板');
+		const target = await validateTarget(database, siteKey, channelId, templateId, status === statusValues.enabled);
+		if ('error' in target) return apiMessage(c, 400, target.error);
+		const { purpose } = target;
 		try {
 			const now = Date.now();
 			const insert = `INSERT INTO global_cloud_email_bindings
@@ -115,9 +129,11 @@ const handler: ApiHandler = async (c, next, params) => {
 		const templateId = changed.has('template_id') ? Number(body.template_id) : Number(current.template_id);
 		const status = changed.has('status') && body.status === statusValues.disabled ? statusValues.disabled : changed.has('status') ? statusValues.enabled : String(current.status);
 		const isDefault = status === statusValues.enabled && (changed.has('is_default') ? booleanValue(body.is_default) : Boolean(current.is_default)) ? 1 : 0;
-		if (!Number.isInteger(channelId) || !Number.isInteger(templateId)) return apiMessage(c, 400, '站点、邮件通道或模板不合法');
-		const purpose = await validateTarget(database, siteKey, channelId, templateId, status === statusValues.enabled);
-		if (!purpose) return apiMessage(c, 400, '站点、邮件通道、模板或云端审核状态不合法');
+		if (!Number.isInteger(channelId) || channelId <= 0) return apiMessage(c, 400, '请选择有效的邮件通道');
+		if (!Number.isInteger(templateId) || templateId <= 0) return apiMessage(c, 400, '请选择有效的邮件模板');
+		const target = await validateTarget(database, siteKey, channelId, templateId, status === statusValues.enabled);
+		if ('error' in target) return apiMessage(c, 400, target.error);
+		const { purpose } = target;
 		try {
 			const now = Date.now();
 			const update = `UPDATE global_cloud_email_bindings SET site_key = ?2, channel_id = ?3, template_id = ?4,
