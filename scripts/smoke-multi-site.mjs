@@ -263,6 +263,11 @@ try {
 	assert.equal((await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}`, {
 		method: 'PUT', cookie, body: { body_html: '<p>验证码</p>', __changedFields: ['body_html'] },
 	})).status, 400);
+	assert.equal((await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=restore`, { method: 'POST', cookie })).status, 200);
+	assert.equal(directMailActions.at(-1)?.action, 'ModifyTemplate');
+	assert.equal(directMailActions.at(-1)?.parameters.get('TemplateSubject'), '您的邮箱验证码是 {code}');
+	const restoredEmailTemplate = await (await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}`, { cookie })).json();
+	assert.equal(restoredEmailTemplate.body_text, '您正在验证邮箱 {{email}}。\n验证码：{{code}}\n验证码将在 {{expires_minutes}} 分钟后失效，请勿向他人泄露。');
 	const emailBindingsPath = '/api/panel/admin/global/cloud/email/bindings.php';
 	assert.equal((await request('localhost', emailBindingsPath, {
 		method: 'POST', cookie, body: { site_key: 'passport', channel_id: emailChannel.id, template_id: emailTemplate.id, is_default: true },
@@ -275,8 +280,8 @@ try {
 		method: 'POST', cookie, body: { to: 'recipient@example.com', template_id: emailTemplate.id, code: '654321' },
 	})).status, 200);
 	assert.equal(directMailActions.at(-1)?.parameters.has('Template'), false);
-	assert.equal(directMailActions.at(-1)?.parameters.get('Subject'), '验证码 654321');
-	assert.equal(directMailActions.at(-1)?.parameters.get('HtmlBody'), '<p>验证码：654321</p>');
+	assert.equal(directMailActions.at(-1)?.parameters.get('Subject'), '您的邮箱验证码是 654321');
+	assert.equal(directMailActions.at(-1)?.parameters.get('HtmlBody'), '<p>您正在验证邮箱 recipient@example.com。</p><p>验证码：<strong>654321</strong></p><p>验证码将在 10 分钟后失效，请勿向他人泄露。</p>');
 	const syncResponse = await request('localhost', `${emailTemplatesPath}?action=sync`, {
 		method: 'POST', cookie, body: { channel_id: emailChannel.id, template_type: 'email_verification' },
 	});

@@ -4,6 +4,15 @@ export const cloudEmailPurposeOptions = [
 
 export const cloudEmailPurposeKeys = new Set<string>(cloudEmailPurposeOptions.map((item) => item.value));
 
+export const cloudEmailTemplateDefaults: Record<string, { name: string; subject: string; body_text: string; body_html: string }> = {
+	email_verification: {
+		name: '邮箱验证码',
+		subject: '您的邮箱验证码是 {{code}}',
+		body_text: '您正在验证邮箱 {{email}}。\n验证码：{{code}}\n验证码将在 {{expires_minutes}} 分钟后失效，请勿向他人泄露。',
+		body_html: '<p>您正在验证邮箱 {{email}}。</p><p>验证码：<strong>{{code}}</strong></p><p>验证码将在 {{expires_minutes}} 分钟后失效，请勿向他人泄露。</p>',
+	},
+};
+
 type EmailTemplateContent = {
 	subject: string;
 	body_text: string;

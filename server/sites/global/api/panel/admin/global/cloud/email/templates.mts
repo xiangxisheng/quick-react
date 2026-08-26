@@ -1,7 +1,7 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
 import { loadCloudEmailTarget, publishCloudEmailTemplate, refreshCloudEmailTemplate } from '@server/cloud/email.mjs';
-import { cloudEmailPurposeKeys, cloudEmailPurposeOptions, validateCloudEmailTemplateVariables } from '@server/cloud/email-purposes.mjs';
+import { cloudEmailPurposeKeys, cloudEmailPurposeOptions, cloudEmailTemplateDefaults, validateCloudEmailTemplateVariables } from '@server/cloud/email-purposes.mjs';
 import { getAliyunDirectMailTemplate, listAliyunDirectMailTemplates } from '@server/cloud/providers/aliyun-direct-mail.mjs';
 import type { CloudEmailTemplate } from '@server/cloud/index.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
@@ -124,7 +124,7 @@ const handler: ApiHandler = async (c, next, params) => {
 			{ dataIndex: 'channel_id', title: '阿里云邮件通道', component: 'select', options: channels.results.map((item) => ({ value: String(item.id), text: `${item.credential_name} / ${item.account_name} (${item.region})` })), rules: [{ required: true, message: '请选择阿里云邮件通道' }] },
 			{ dataIndex: 'template_type', title: '导入为模板类型', component: 'select', options: cloudEmailPurposeOptions, rules: [{ required: true, message: '请选择模板类型' }] },
 		];
-		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { query: [{ key: 'search', label: '搜索' }], toolbar: [{ key: 'create', label: '新增' }, { key: 'sync', label: '同步阿里云模板', form: { columns: syncColumns } }, { key: 'delete', label: '删除' }], row: [{ key: 'publish', label: '发布/更新' }, { key: 'refresh', label: '刷新状态' }, { key: 'edit', label: '编辑' }, { key: 'delete', label: '删除' }] } }, columns, dataSource: rows.results, totalRecords: rows.results.length } });
+		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { query: [{ key: 'search', label: '搜索' }], toolbar: [{ key: 'create', label: '新增' }, { key: 'sync', label: '同步阿里云模板', form: { columns: syncColumns } }, { key: 'delete', label: '删除' }], row: [{ key: 'restore', label: '还原默认', confirm: '确认用后端默认模板覆盖当前名称、主题和正文吗？' }, { key: 'publish', label: '发布/更新' }, { key: 'refresh', label: '刷新状态' }, { key: 'edit', label: '编辑' }, { key: 'delete', label: '删除' }] } }, columns, dataSource: rows.results, totalRecords: rows.results.length } });
 	}
 	if (!params.id && c.req.method === 'POST' && c.req.query('action') === 'sync') {
 		const body = await parseBody(c), channelId = Number(body.channel_id), templateType = text(body.template_type);
@@ -184,6 +184,21 @@ const handler: ApiHandler = async (c, next, params) => {
 			} catch (error) { failures.push(error instanceof Error ? error.message : `邮件通道 ${row.channel_id} 状态刷新失败`); }
 		}
 		return failures.length ? apiMessage(c, 502, failures.join('；')) : apiMessage(c, 200, '云端模板状态已刷新');
+	}
+	if (params.id && c.req.method === 'POST' && c.req.query('action') === 'restore') {
+		const current = await loadTemplate(database, Number(params.id));
+		if (!current) return apiMessage(c, 404, '邮件模板不存在');
+		const defaults = cloudEmailTemplateDefaults[current.template_type];
+		if (!defaults) return apiMessage(c, 400, '该模板类型没有后端默认值');
+		const variableError = validateCloudEmailTemplateVariables(current.template_type, defaults);
+		if (variableError) return apiMessage(c, 500, `后端默认模板配置错误：${variableError}`);
+		await database.prepare(`UPDATE global_cloud_email_templates SET name = ?2, subject = ?3, body_text = ?4,
+			body_html = ?5, updated_at = ?6 WHERE id = ?1`).bind(current.id, defaults.name, defaults.subject, defaults.body_text, defaults.body_html, Date.now()).run();
+		const restored = { ...current, ...defaults };
+		const failures = current.status === statusValues.enabled ? await publishToEnabledChannels(database, restored) : [];
+		return failures.length
+			? apiMessage(c, 502, `本地模板已还原，但云端更新失败：${failures.join('；')}`)
+			: apiMessage(c, 200, current.status === statusValues.enabled ? '模板已还原默认并提交云端审核' : '模板已还原默认');
 	}
 	if (params.id && c.req.method === 'PUT') {
 		const current = await loadTemplate(database, Number(params.id));
