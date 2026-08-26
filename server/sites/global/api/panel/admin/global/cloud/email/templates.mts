@@ -45,9 +45,15 @@ const savePublication = async (database: DatabaseAdapter, template: CloudEmailTe
 	const current = await database.prepare(`SELECT provider_template_id, content_hash, status
 		FROM global_cloud_email_template_publications WHERE template_id = ?1 AND channel_id = ?2`)
 		.bind(template.id, channelId).first<{ provider_template_id: string; content_hash: string; status: string }>();
-	const unchanged = current?.status === 'ready' && (current.content_hash === contentHash
-		|| current.content_hash === `legacy:${cloudContentSnapshot(template)}`);
-	if (unchanged) {
+	const contentUnchanged = current && (current.content_hash === contentHash || current.content_hash === `legacy:${cloudContentSnapshot(template)}`);
+	let publicationStatus = current?.status;
+	if (current && contentUnchanged && publicationStatus === 'reviewing') {
+		const refreshed = await refreshCloudEmailTemplate(target, current.provider_template_id);
+		publicationStatus = refreshed.status;
+		await database.prepare(`UPDATE global_cloud_email_template_publications SET status = ?3, updated_at = ?4
+			WHERE template_id = ?1 AND channel_id = ?2`).bind(template.id, channelId, publicationStatus, Date.now()).run();
+	}
+	if (current && contentUnchanged && (publicationStatus === 'ready' || publicationStatus === 'reviewing')) {
 		if (current.content_hash !== contentHash) await database.prepare(`UPDATE global_cloud_email_template_publications SET content_hash = ?3
 			WHERE template_id = ?1 AND channel_id = ?2`).bind(template.id, channelId, contentHash).run();
 		return 'skipped' as const;

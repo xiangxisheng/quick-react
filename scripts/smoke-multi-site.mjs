@@ -296,6 +296,16 @@ try {
 	const syncResult = await syncResponse.json();
 	assert.equal(syncResult.updated, 1);
 	assert.equal(syncResult.imported, 1);
+	const staleReviewDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
+	staleReviewDatabase.prepare(`UPDATE global_cloud_email_template_publications SET status = 'reviewing'
+		WHERE template_id = ?1 AND channel_id = ?2`).run(emailTemplate.id, emailChannel.id);
+	staleReviewDatabase.close();
+	const actionsBeforeStaleReviewPublish = directMailActions.length;
+	const staleReviewPublish = await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=publish`, { method: 'POST', cookie });
+	assert.equal(staleReviewPublish.status, 200);
+	assert.equal((await staleReviewPublish.json()).feedback.message, '模板内容未改动，无需重新提交审核');
+	assert.equal(directMailActions.length, actionsBeforeStaleReviewPublish + 1);
+	assert.equal(directMailActions.at(-1)?.action, 'DescTemplate');
 	const legacyPublicationDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
 	legacyPublicationDatabase.prepare(`UPDATE global_cloud_email_template_publications SET content_hash = 'legacy:' || (
 		SELECT json_array(template_key, name, subject, body_html) FROM global_cloud_email_templates WHERE id = ?1
