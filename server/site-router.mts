@@ -96,6 +96,7 @@ const buildSiteChain = (site: SiteRecord, sites: Map<string, SiteRecord>) => {
 
 const buildEffectiveSiteChain = (site: SiteRecord, sites: Map<string, SiteRecord>) => {
 	const chain = buildSiteChain(site, sites);
+	if (site.siteKey === 'passport') chain.splice(Math.max(0, chain.lastIndexOf('base')), 0, 'accounts_oidc');
 	if (site.siteKey === 'passport' || site.passportSsoEnabled) {
 		const baseIndex = chain.lastIndexOf('base');
 		chain.splice(baseIndex < 0 ? chain.length : baseIndex, 0, 'passport_sso');

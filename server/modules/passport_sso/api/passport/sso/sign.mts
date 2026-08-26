@@ -4,6 +4,7 @@ import type { DatabaseAdapter, DatabaseBatchStatement } from '@server/database/i
 import { normalizePassportEmail } from '@server/passport/identity.mjs';
 import { clearPassportSessionCookie, createPassportSessionCookie, loadPassportSession, readPassportSessionId } from '@server/passport/session.mjs';
 import { clearSsoRequestCookie, issuePassportLoginTicket, passportSsoRequestCookieName, readNamedCookie } from '@server/passport/sso.mjs';
+import { clearOidcRequestCookie, oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
 import { sendTelegramMessage, type TelegramInlineKeyboard } from '@server/telegram/api.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 
@@ -154,11 +155,13 @@ const handler: ApiHandler = async (c, next) => {
 		const secure = new URL(c.req.url).protocol === 'https:';
 		c.header('Set-Cookie', createPassportSessionCookie(sessionId, secure, maxAge));
 		const ssoRequestId = readNamedCookie(c.req.raw, passportSsoRequestCookieName);
+		const oidcRequestId = readCookie(c.req.raw, oidcRequestCookieName);
 		const ticket = ssoRequestId ? await issuePassportLoginTicket(database, ssoRequestId, challenge.user_id) : undefined;
 		if (ssoRequestId) c.header('Set-Cookie', clearSsoRequestCookie(secure), { append: true });
+		if (oidcRequestId) c.header('Set-Cookie', clearOidcRequestCookie(secure), { append: true });
 		return apiMessageData(c, 200, 'Passport 登录成功', {
 			user: { id: challenge.user_id },
-			...(ticket ? { redirectTo: ticket.redirectUrl } : {}),
+			...(ticket ? { redirectTo: ticket.redirectUrl } : oidcRequestId ? { redirectTo: `/api/oidc/authorize?request_id=${encodeURIComponent(oidcRequestId)}` } : {}),
 		}, { redirectAfter: 0 });
 	}
 	return apiMessage(c, 400, '不支持的登录步骤');

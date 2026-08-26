@@ -7,6 +7,7 @@ import { getPageMetadata, getSiteNavigation } from './navigation.mjs';
 import { createDatabaseConfigStore } from './config-store.mjs';
 import { createD1Adapter, type D1DatabaseLike } from './database/d1.mjs';
 import { apiMessage } from './api-response.mjs';
+import { oidcDiscovery } from './accounts/provider.mjs';
 import type { DatabaseAdapter } from './database/index.mjs';
 import { SiteRouter } from './site-router.mjs';
 import { loadCurrentUser } from './auth.mjs';
@@ -176,6 +177,7 @@ const apiGateway = createApiGateway((c) => c.get('techStackConfig').apiSuffix, {
 });
 app.all('/api', apiGateway);
 app.all('/api/*', (c, next) => apiGateway(c, next));
+app.get('/.well-known/openid-configuration', oidcDiscovery);
 app.get('/', renderDocument);
 
 app.get('*', async (c, next) => {

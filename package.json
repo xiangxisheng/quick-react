@@ -17,6 +17,7 @@
 		"test:passport-identity": "node scripts/test-passport-identity.mjs",
 		"test:passport-login": "node scripts/test-passport-login.mjs",
 		"test:passport-migration": "node scripts/test-passport-migration.mjs",
+		"test:accounts-oidc": "node scripts/test-accounts-oidc.mjs",
 		"import:legacy-passport": "node scripts/import-legacy-passport.mjs",
 		"test": "node esbuild.cjs"
 	},
