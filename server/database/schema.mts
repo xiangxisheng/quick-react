@@ -21,7 +21,9 @@ export const listColumns = async (database: DatabaseAdapter, tableName: string):
 	if (!safeName(tableName)) throw new Error('数据表名称无效');
 	const dialect = dialectOf(database);
 	if (dialect === 'sqlite') {
-		return (await allSql<DatabaseColumn>(database, { query: `PRAGMA table_info(${quoteIdentifier(tableName, dialect)})`, values: [] })).filter((column) => safeName(column.name));
+		return (await allSql<DatabaseColumn>(database, { query: `PRAGMA table_info(${quoteIdentifier(tableName, dialect)})`, values: [] }))
+			.filter((column) => safeName(column.name))
+			.map((column) => ({ ...column, notnull: Number(column.notnull), pk: Number(column.pk) }));
 	}
 	if (dialect === 'mysql') {
 		const rows = await allSql<{ name: string; type: string; is_nullable: string; pk: number }>(database, {
@@ -94,4 +96,15 @@ export const renameColumn = (database: DatabaseAdapter, table: string, oldName: 
 export const dropColumn = (database: DatabaseAdapter, table: string, name: string): SqlQuery => ({
 	query: `ALTER TABLE ${quoteIdentifier(table, dialectOf(database))} DROP COLUMN ${quoteIdentifier(name, dialectOf(database))}`,
 	values: [],
+});
+
+export const synchronizePostgresqlIdentity = (table: string, column: string): SqlQuery => ({
+	query: `SELECT setval(sequence_name, GREATEST(max_id + 1, 1), false)
+		FROM (
+			SELECT pg_get_serial_sequence($1, $2) AS sequence_name,
+				COALESCE(MAX(${quoteIdentifier(column, 'postgresql')}), 0) AS max_id
+			FROM ${quoteIdentifier(table, 'postgresql')}
+		) AS identity_state
+		WHERE sequence_name IS NOT NULL`,
+	values: [table, column],
 });

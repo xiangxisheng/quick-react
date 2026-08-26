@@ -40,18 +40,24 @@ class SqliteStatement implements DatabaseStatement {
 
 export type SqliteDatabaseAdapter = DatabaseAdapter & { close: () => void };
 
-export const createSqliteAdapter = (filename: string): SqliteDatabaseAdapter => {
+export const createSqliteAdapter = (filename: string, options: { readBigInts?: boolean } = {}): SqliteDatabaseAdapter => {
 	mkdirSync(dirname(filename), { recursive: true });
 	const database = new DatabaseSync(filename);
 	database.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
 	const adapter: SqliteDatabaseAdapter = {
 		dialect: 'sqlite',
-		prepare: (query) => new SqliteStatement(database.prepare(query)),
+		prepare: (query) => {
+			const statement = database.prepare(query);
+			if (options.readBigInts) statement.setReadBigInts(true);
+			return new SqliteStatement(statement);
+		},
 		batch: async (statements) => {
 			database.exec('BEGIN IMMEDIATE');
 			try {
 				const results = statements.map(({ query, values = [] }) => {
-					const result = database.prepare(query).run(...sqliteValues(values));
+					const statement = database.prepare(query);
+					if (options.readBigInts) statement.setReadBigInts(true);
+					const result = statement.run(...sqliteValues(values));
 					return { success: true, meta: { changes: Number(result.changes), lastRowId: result.lastInsertRowid.toString() } };
 				});
 				database.exec('COMMIT');

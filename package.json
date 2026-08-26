@@ -20,7 +20,10 @@
 		"test:accounts-oidc": "node scripts/test-accounts-oidc.mjs",
 		"test:accounts-external": "node scripts/test-accounts-external.mjs",
 		"test:sql-builder": "node scripts/test-sql-builder.mjs",
+		"test:database-migrations": "node scripts/test-database-migrations.mjs",
+		"test:database-transfer": "node scripts/test-database-transfer.mjs",
 		"import:legacy-passport": "node scripts/import-legacy-passport.mjs",
+		"migrate:sqlite": "node scripts/migrate-sqlite.mjs",
 		"test": "node esbuild.cjs"
 	},
 	"repository": {

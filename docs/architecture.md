@@ -56,7 +56,7 @@ return next();
 
 ### 多运行时数据库适配
 
-同一套业务 API 同时支持 Node.js + SQLite 和 Cloudflare Worker + D1。数据库访问通过统一适配器完成；Worker 只访问默认 Binding 或预声明的站点 Binding，Node 运行时才支持 SQLite DSN。
+同一套业务 API 同时支持 Node.js 的 SQLite、MySQL、PostgreSQL 和 Cloudflare Worker 的 D1。数据库访问通过统一适配器与参数化 SQL 构造器完成；Worker 只访问默认 Binding 或预声明的站点 Binding，Node 运行时才支持 `sqlite://`、`mysql://`、`postgresql://` DSN。
 
 ### 站点继承与表归属分离
 

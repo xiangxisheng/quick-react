@@ -7,9 +7,9 @@ import { pathToFileURL } from 'node:url';
 
 const directory = await mkdtemp(join(tmpdir(), 'quick-react-sql-builder-'));
 try {
-	const result = await build({ stdin: { contents: "export * from './server/database/sql.mts'; export * from './server/database/schema.mts';", resolveDir: resolve(import.meta.dirname, '..'), sourcefile: 'sql-test-entry.mts' }, bundle: true, format: 'esm', platform: 'node', write: false });
+	const result = await build({ stdin: { contents: "export * from './server/database/sql.mts'; export * from './server/database/schema.mts'; export * from './server/database/sqlite.mts';", resolveDir: resolve(import.meta.dirname, '..'), sourcefile: 'sql-test-entry.mts' }, bundle: true, format: 'esm', platform: 'node', write: false });
 	const file = join(directory, 'sql.mjs'); await writeFile(file, result.outputFiles[0].contents);
-	const { SqliteSqlBuilder, MysqlSqlBuilder, PostgresqlSqlBuilder, addColumn, renameColumn, compileSqlPlaceholders } = await import(pathToFileURL(file));
+	const { SqliteSqlBuilder, MysqlSqlBuilder, PostgresqlSqlBuilder, addColumn, renameColumn, compileSqlPlaceholders, createSqliteAdapter, synchronizePostgresqlIdentity } = await import(pathToFileURL(file));
 	const sqlite = new SqliteSqlBuilder(), mysql = new MysqlSqlBuilder(), postgres = new PostgresqlSqlBuilder();
 	assert.deepEqual(sqlite.insert('users', { name: 'Alice', status: 'enabled' }), { query: 'INSERT INTO "users" ("name", "status") VALUES (?, ?)', values: ['Alice', 'enabled'] });
 	assert.match(sqlite.upsert('sessions', ['issuer', 'sid'], { issuer: 'i', sid: 's', session_id: 'x' }, ['session_id']).query, /ON CONFLICT \("issuer", "sid"\) DO UPDATE/);
@@ -36,5 +36,11 @@ try {
 	const postgresLegacy = compileSqlPlaceholders('SELECT ?2 AS second, ?1 AS first, ?2 AS repeated', 'postgresql');
 	assert.equal(postgresLegacy.query, 'SELECT $2 AS second, $1 AS first, $2 AS repeated');
 	assert.deepEqual(postgresLegacy.values(['one', 'two']), ['one', 'two']);
+	assert.match(synchronizePostgresqlIdentity('users', 'id').query, /pg_get_serial_sequence\(\$1, \$2\)/);
+	const bigintDatabase = createSqliteAdapter(join(directory, 'bigint.sqlite'), { readBigInts: true });
+	await bigintDatabase.exec('CREATE TABLE values_test (id INTEGER PRIMARY KEY)');
+	await bigintDatabase.prepare('INSERT INTO values_test (id) VALUES (?)').bind(9007199254740993n).run();
+	assert.equal((await bigintDatabase.prepare('SELECT id FROM values_test').first()).id, 9007199254740993n);
+	bigintDatabase.close();
 	console.log('sql builder test passed');
 } finally { await rm(directory, { recursive: true, force: true }); }
