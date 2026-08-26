@@ -2,6 +2,7 @@ import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { getCloudEmailAdapter } from './catalog.mjs';
 import type { CloudEmailAdapter, CloudEmailMessage, CloudEmailScope, CloudEmailTarget, CloudEmailTemplate, CloudEmailTemplatePublication } from './index.mjs';
 import { createAliyunDirectMailAdapter, createAliyunDirectMailTemplate, describeAliyunDirectMailTemplate, updateAliyunDirectMailTemplate } from './providers/aliyun-direct-mail.mjs';
+import { createTencentSesAdapter, createTencentSesTemplate, describeTencentSesTemplate, updateTencentSesTemplate } from './providers/tencent-ses.mjs';
 
 type DefaultEmailConfiguration = CloudEmailTarget & CloudEmailTemplate & {
 	provider_template_id: string;
@@ -32,6 +33,7 @@ export const loadCloudEmailScope = async (database: DatabaseAdapter, credentialI
 export const createCloudEmailAdapter = (target: CloudEmailTarget): CloudEmailAdapter => {
 	const adapter = getCloudEmailAdapter(target.provider);
 	if (adapter === 'aliyun-direct-mail') return createAliyunDirectMailAdapter(target);
+	if (adapter === 'tencent-ses') return createTencentSesAdapter(target);
 	throw new Error(`该 Provider 不支持邮件推送：${target.provider}`);
 };
 
@@ -40,12 +42,16 @@ export const publishCloudEmailTemplate = async (target: CloudEmailScope, templat
 	if (adapter === 'aliyun-direct-mail') return providerTemplateId
 		? updateAliyunDirectMailTemplate(target, template, providerTemplateId)
 		: createAliyunDirectMailTemplate(target, template);
+	if (adapter === 'tencent-ses') return providerTemplateId
+		? updateTencentSesTemplate(target, template, providerTemplateId)
+		: createTencentSesTemplate(target, template);
 	throw new Error(`该 Provider 不支持云端邮件模板：${target.provider}`);
 };
 
 export const refreshCloudEmailTemplate = async (target: CloudEmailScope, providerTemplateId: string): Promise<CloudEmailTemplatePublication> => {
 	const adapter = getCloudEmailAdapter(target.provider);
 	if (adapter === 'aliyun-direct-mail') return describeAliyunDirectMailTemplate(target, providerTemplateId);
+	if (adapter === 'tencent-ses') return describeTencentSesTemplate(target, providerTemplateId);
 	throw new Error(`该 Provider 不支持云端邮件模板：${target.provider}`);
 };
 

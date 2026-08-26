@@ -2,6 +2,7 @@ import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
 import { cloudProviderOptions, getCloudEmailProduct, getCloudEmailRegionOptions, getCloudEmailRegions, providerSupportsEmailPush } from '@server/cloud/catalog.mjs';
 import { listAliyunDirectMailAddresses } from '@server/cloud/providers/aliyun-direct-mail.mjs';
+import { listTencentSesAddresses } from '@server/cloud/providers/tencent-ses.mjs';
 import { createCloudEmailAdapter, loadCloudEmailTarget, renderCloudEmailTemplate } from '@server/cloud/email.mjs';
 import { validateCloudEmailTemplateVariables } from '@server/cloud/email-purposes.mjs';
 import type { CloudCredential, CloudEmailTemplate } from '@server/cloud/index.mjs';
@@ -11,7 +12,7 @@ import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 
 const columns = [
 	{ dataIndex: 'cloud_credential_id', title: '云凭据', component: 'select', rules: [{ required: true, message: '请选择云凭据' }] },
-	{ dataIndex: 'region', title: 'Region', component: 'select', options: getCloudEmailRegionOptions('aliyun').map((item) => ({ ...item, text: `${item.text}（${item.value}）` })), rules: [{ required: true, message: '请选择 Region' }] },
+	{ dataIndex: 'region', title: 'Region', component: 'select', dependsOn: 'cloud_credential_id', rules: [{ required: true, message: '请选择 Region' }] },
 	{ dataIndex: 'account_name', title: '发信地址', component: 'select', remoteOptions: { action: 'discover', dependencies: ['cloud_credential_id', 'region'], clearFields: ['reply_to_address'] }, rules: [{ required: true, message: '请选择发信地址' }] },
 	{ dataIndex: 'from_alias', title: '发信人名称', component: 'textbox', rules: [{ required: true, message: '请输入发信人名称' }] },
 	{ dataIndex: 'reply_to_address', title: '启用回信地址', component: 'switch' },
@@ -19,7 +20,7 @@ const columns = [
 ];
 const testColumns = [
 	{ dataIndex: 'to', title: '收件人', component: 'textbox', placeholder: 'recipient@example.com', rules: [{ required: true, message: '请输入收件人邮箱' }] },
-	{ dataIndex: 'template_id', title: '邮箱验证码模板', component: 'select', remoteOptions: { action: 'templates', dependencies: [] }, rules: [{ required: true, message: '请选择已审核通过的模板' }] },
+	{ dataIndex: 'template_id', title: '邮箱验证码模板', component: 'select', remoteOptions: { action: 'templates', dependencies: [] }, rules: [{ required: true, message: '请选择验证码模板' }] },
 	{ dataIndex: 'code', title: '验证码内容', component: 'textbox', placeholder: '123456', rules: [{ required: true, message: '请输入 6 位数字验证码' }] },
 ];
 
@@ -31,8 +32,13 @@ const credentialOptions = async (database: DatabaseAdapter) => {
 	const rows = await database.prepare(`SELECT id, name, provider FROM global_cloud_credentials WHERE status = 'enabled' ORDER BY provider, name`)
 		.all<{ id: number; name: string; provider: string }>();
 	const names = new Map<string, string>(cloudProviderOptions.map((item) => [item.value, item.text]));
-	return rows.results.filter((item) => providerSupportsEmailPush(item.provider))
-		.map((item) => ({ value: String(item.id), text: `${item.name} (${names.get(item.provider) ?? item.provider})` }));
+	const enabled = rows.results.filter((item) => providerSupportsEmailPush(item.provider));
+	return {
+		credentials: enabled.map((item) => ({ value: String(item.id), text: `${item.name} (${names.get(item.provider) ?? item.provider})` })),
+		regions: enabled.flatMap((credential) => getCloudEmailRegionOptions(credential.provider).map((region) => ({
+			value: region.value, text: `${region.text}（${region.value}）`, parentValue: String(credential.id),
+		}))),
+	};
 };
 const validCredential = async (database: DatabaseAdapter, id: number, region: string) => {
 	const credential = await database.prepare(`SELECT id, provider FROM global_cloud_credentials WHERE id = ?1 AND status = 'enabled'`)
@@ -57,15 +63,18 @@ const handler: ApiHandler = async (c, next, params) => {
 		const credentialId = Number(c.req.query('cloud_credential_id'));
 		const region = text(c.req.query('region'));
 		const credential = Number.isInteger(credentialId) ? await loadCredential(database, credentialId) : null;
-		if (!credential || credential.provider !== 'aliyun' || !getCloudEmailRegions(credential.provider).includes(region)) return apiMessage(c, 400, '阿里云凭据或 Region 不合法');
+		if (!credential || !providerSupportsEmailPush(credential.provider) || !getCloudEmailRegions(credential.provider).includes(region)) return apiMessage(c, 400, '云凭据或 Region 不合法');
 		try {
-			const addresses = await listAliyunDirectMailAddresses({ region, access_key_id: credential.access_key_id, access_key_secret: credential.access_key_secret });
+			const scope = { provider: credential.provider, cloud_credential_id: credential.id, region, access_key_id: credential.access_key_id, access_key_secret: credential.access_key_secret };
+			const addresses = credential.provider === 'aliyun'
+				? (await listAliyunDirectMailAddresses(scope)).map((item) => ({ ...item, senderName: '', replyEnabled: item.replyEnabled }))
+				: (await listTencentSesAddresses(scope)).map((item) => ({ ...item, replyEnabled: false }));
 			return apiResponse(c, 200, { options: addresses.map((item) => ({
 				value: item.accountName,
 				text: item.accountName,
-				fieldValues: { reply_to_address: item.replyEnabled },
+				fieldValues: { ...(item.senderName ? { from_alias: item.senderName } : {}), reply_to_address: item.replyEnabled },
 			})) });
-		} catch (error) { return apiMessage(c, 502, error instanceof Error ? error.message : '阿里云发信地址读取失败'); }
+		} catch (error) { return apiMessage(c, 502, error instanceof Error ? error.message : '云端发信地址读取失败'); }
 	}
 	if (!params.id && c.req.method === 'GET') {
 		const [rows, options] = await Promise.all([
@@ -74,7 +83,8 @@ const handler: ApiHandler = async (c, next, params) => {
 				FROM global_cloud_email_channels ch JOIN global_cloud_credentials c ON c.id = ch.cloud_credential_id ORDER BY ch.id DESC`).all<Record<string, unknown>>(),
 			credentialOptions(database),
 		]);
-		const tableColumns = columns.map((column) => column.dataIndex === 'cloud_credential_id' ? { ...column, options } : column);
+		const tableColumns = columns.map((column) => column.dataIndex === 'cloud_credential_id' ? { ...column, options: options.credentials }
+			: column.dataIndex === 'region' ? { ...column, options: options.regions } : column);
 		const dataSource = rows.results.map((row) => ({ ...row, product: getCloudEmailProduct(String(row.provider)) }));
 		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { query: [{ key: 'search', label: '搜索' }], toolbar: [{ key: 'create', label: '新增' }, { key: 'delete', label: '删除' }], row: [{ key: 'test', label: '测试发件', form: { columns: testColumns } }, { key: 'edit', label: '编辑' }, { key: 'delete', label: '删除' }] } }, columns: tableColumns, dataSource, totalRecords: dataSource.length } });
 	}
@@ -102,10 +112,14 @@ const handler: ApiHandler = async (c, next, params) => {
 		if (text(c.req.query('field')) !== 'template_id') return apiMessage(c, 400, '不支持的发现字段');
 		const channel = await loadCloudEmailTarget(database, Number(params.id));
 		if (!channel) return apiMessage(c, 404, '邮件通道不存在或已停用');
-		const templates = await database.prepare(`SELECT id, template_key, name, template_type, subject, body_text, body_html, status FROM global_cloud_email_templates
-			WHERE status = 'enabled' AND template_type = 'email_verification' ORDER BY name, template_key`)
-			.all<CloudEmailTemplate>();
-		return apiResponse(c, 200, { options: templates.results.filter((item) => !validateCloudEmailTemplateVariables(item.template_type, item))
+		const templates = await database.prepare(`SELECT t.id, t.template_key, t.name, t.template_type, t.subject, t.body_text, t.body_html, t.status,
+			p.status AS publication_status FROM global_cloud_email_templates t
+			LEFT JOIN global_cloud_email_template_publications p ON p.template_id = t.id AND p.cloud_credential_id = ?1 AND p.region = ?2
+			WHERE t.status = 'enabled' AND t.template_type = 'email_verification' ORDER BY t.name, t.template_key`)
+			.bind(channel.cloud_credential_id, channel.region)
+			.all<CloudEmailTemplate & { publication_status?: string }>();
+		return apiResponse(c, 200, { options: templates.results.filter((item) => !validateCloudEmailTemplateVariables(item.template_type, item)
+			&& (channel.provider !== 'tencent' || item.publication_status === 'ready'))
 			.map((item) => ({ value: String(item.id), text: `${item.name} (${item.template_key})` })) });
 	}
 	if (params.id && c.req.method === 'GET') {
@@ -128,7 +142,15 @@ const handler: ApiHandler = async (c, next, params) => {
 		const variables = { code, email: to, expires_minutes: '10' };
 		try {
 			const rendered = renderCloudEmailTemplate(template, variables);
-			const result = await createCloudEmailAdapter(target).send({ to, ...rendered });
+			let providerTemplateId: string | undefined;
+			if (target.provider === 'tencent') {
+				const publication = await database.prepare(`SELECT provider_template_id FROM global_cloud_email_template_publications
+					WHERE template_id = ?1 AND cloud_credential_id = ?2 AND region = ?3 AND status = 'ready'`)
+					.bind(template.id, target.cloud_credential_id, target.region).first<{ provider_template_id: string }>();
+				if (!publication) return apiMessage(c, 400, '腾讯云 SES 测试发件需要已审核通过的云端模板');
+				providerTemplateId = publication.provider_template_id;
+			}
+			const result = await createCloudEmailAdapter(target).send({ to, ...rendered, ...(providerTemplateId ? { template: { providerTemplateId, variables } } : {}) });
 			return apiMessageData(c, 200, '测试邮件已提交', { requestId: result.requestId, messageId: result.messageId }, { component: 'modal', title: '测试发件成功' });
 		} catch (error) { return apiMessage(c, 502, error instanceof Error ? error.message : '测试邮件发送失败'); }
 	}

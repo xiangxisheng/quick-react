@@ -10,6 +10,7 @@ process.env.SKIP_SERVER_LISTEN = '1';
 const originalFetch = globalThis.fetch;
 let telegramWebhookUrl = '';
 const directMailActions = [];
+const tencentSesActions = [];
 const telegramActions = [];
 let telegramMessageId = 8000;
 globalThis.fetch = async (input, init) => {
@@ -36,6 +37,31 @@ globalThis.fetch = async (input, init) => {
 		}] } });
 		if (action === 'SingleSendMail') return Response.json({ RequestId: 'dm-send', EnvId: 'dm-message' });
 		return Response.json({ RequestId: 'dm-unsupported', Code: 'Unsupported', Message: String(action) }, { status: 400 });
+	}
+	if (url === 'https://cam.tencentcloudapi.com/') {
+		const action = new Headers(init?.headers).get('x-tc-action');
+		if (action === 'GetUserAppId') return Response.json({ Response: { Uin: '10001', OwnerUin: '10001', AppId: 1250000001, RequestId: 'cam-request' } });
+	}
+	if (url === 'https://ses.tencentcloudapi.com/') {
+		const action = new Headers(init?.headers).get('x-tc-action');
+		const body = JSON.parse(String(init?.body ?? '{}'));
+		tencentSesActions.push({ action, body, headers: new Headers(init?.headers) });
+		if (action === 'ListEmailAddress') return Response.json({ Response: { EmailSenders: [{ EmailAddress: 'notice@example.net', EmailSenderName: 'Tencent Passport' }], RequestId: 'ses-addresses' } });
+		if (action === 'CreateEmailTemplate') return Response.json({ Response: { TemplateID: 7001, RequestId: 'ses-create' } });
+		if (action === 'UpdateEmailTemplate') return Response.json({ Response: { RequestId: 'ses-update' } });
+		if (action === 'GetEmailTemplate') {
+			const imported = body.TemplateID === 7002;
+			const content = imported ? '腾讯云导入验证码：{{code}}' : '腾讯云验证码：{{code}}';
+			return Response.json({ Response: { TemplateContent: {
+				Html: Buffer.from(`<p>${content}</p>`).toString('base64'), Text: Buffer.from(content).toString('base64'),
+			}, TemplateStatus: 0, TemplateName: imported ? 'tencent_cloud_otp' : 'email_verification_1', RequestId: `ses-template-${body.TemplateID}` } });
+		}
+		if (action === 'ListEmailTemplates') return Response.json({ Response: { TemplatesMetadata: [
+			{ TemplateID: 7001, TemplateName: 'email_verification_1', TemplateStatus: 0 },
+			{ TemplateID: 7002, TemplateName: 'tencent_cloud_otp', TemplateStatus: 0 },
+		], TotalCount: 2, RequestId: 'ses-templates' } });
+		if (action === 'SendEmail') return Response.json({ Response: { MessageId: 'ses-message', RequestId: 'ses-send' } });
+		return Response.json({ Response: { Error: { Code: 'Unsupported', Message: String(action) }, RequestId: 'ses-unsupported' } }, { status: 400 });
 	}
 	if (!url.startsWith('https://api.telegram.org/bot')) return originalFetch(input, init);
 	const method = url.slice(url.lastIndexOf('/') + 1);
@@ -248,10 +274,10 @@ try {
 	const emailChannels = await (await request('localhost', emailChannelsPath, { cookie })).json();
 	const emailRegionColumn = emailChannels.table.columns.find((column) => column.dataIndex === 'region');
 	assert.deepEqual(emailRegionColumn.options, [
-		{ value: 'cn-hangzhou', text: '华东1（杭州）（cn-hangzhou）' },
-		{ value: 'ap-southeast-1', text: '新加坡（ap-southeast-1）' },
-		{ value: 'us-east-1', text: '美国（弗吉尼亚）（us-east-1）' },
-		{ value: 'eu-central-1', text: '德国（法兰克福）（eu-central-1）' },
+		{ value: 'cn-hangzhou', text: '华东1（杭州）（cn-hangzhou）', parentValue: String(emailCredential.id) },
+		{ value: 'ap-southeast-1', text: '新加坡（ap-southeast-1）', parentValue: String(emailCredential.id) },
+		{ value: 'us-east-1', text: '美国（弗吉尼亚）（us-east-1）', parentValue: String(emailCredential.id) },
+		{ value: 'eu-central-1', text: '德国（法兰克福）（eu-central-1）', parentValue: String(emailCredential.id) },
 	]);
 	const emailChannel = emailChannels.table.dataSource.find((item) => item.account_name === 'noreply@example.com');
 	assert.ok(emailChannel?.id);
@@ -265,6 +291,9 @@ try {
 	assert.equal(directMailActions.at(-1)?.action, 'CreateTemplate');
 	assert.equal(directMailActions.at(-1)?.parameters.get('TemplateSubject'), '验证码 {code}');
 	const emailTemplates = await (await request('localhost', emailTemplatesPath, { cookie })).json();
+	const syncTemplatesAction = emailTemplates.table.option.actions.toolbar.find((action) => action.key === 'sync');
+	assert.equal(syncTemplatesAction?.label, '同步模板');
+	assert.deepEqual(syncTemplatesAction.form.columns.map((column) => column.dataIndex), ['cloud_credential_id', 'region', 'template_type']);
 	const emailTemplate = emailTemplates.table.dataSource.find((item) => item.template_key === 'email_verification');
 	assert.ok(emailTemplate?.id);
 	assert.equal((await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}`, {
@@ -326,6 +355,50 @@ try {
 	const importedTemplate = syncedTemplates.table.dataSource.find((item) => item.template_key === `aliyun_${emailCredential.id}_cn_hangzhou_6002`);
 	assert.equal(importedTemplate?.template_type, 'email_verification');
 	assert.equal(importedTemplate?.body_text, '云端验证码：{{code}}');
+	assert.equal((await request('localhost', credentialsPath, {
+		method: 'POST', cookie, body: { name: 'smoke-tencent-mail', provider: 'tencent', access_key_id: 'tencent-secret-id', access_key_secret: 'tencent-secret-key' },
+	})).status, 201);
+	const tencentCredentials = await (await request('localhost', credentialsPath, { cookie })).json();
+	const tencentCredential = tencentCredentials.table.dataSource.find((item) => item.name === 'smoke-tencent-mail');
+	assert.ok(tencentCredential?.id);
+	assert.equal((await request('localhost', `${credentialsPath}/${tencentCredential.id}?action=test`, { method: 'POST', cookie })).status, 200);
+	const tencentAddresses = await (await request('localhost', `${emailChannelsPath}?action=discover&field=account_name&cloud_credential_id=${tencentCredential.id}&region=ap-hongkong`, { cookie })).json();
+	assert.deepEqual(tencentAddresses.options, [{ value: 'notice@example.net', text: 'notice@example.net', fieldValues: { from_alias: 'Tencent Passport', reply_to_address: false } }]);
+	assert.equal((await request('localhost', emailChannelsPath, {
+		method: 'POST', cookie, body: { cloud_credential_id: tencentCredential.id, region: 'ap-hongkong', account_name: 'notice@example.net', from_alias: 'Tencent Passport' },
+	})).status, 201);
+	const channelsWithTencent = await (await request('localhost', emailChannelsPath, { cookie })).json();
+	const tencentChannel = channelsWithTencent.table.dataSource.find((item) => item.account_name === 'notice@example.net');
+	assert.ok(tencentChannel?.id);
+	assert.deepEqual(channelsWithTencent.table.columns.find((column) => column.dataIndex === 'region').options.at(-1),
+		{ value: 'ap-hongkong', text: '中国香港（ap-hongkong）', parentValue: String(tencentCredential.id) });
+	assert.equal((await request('localhost', emailChannelsPath, {
+		method: 'POST', cookie, body: { cloud_credential_id: tencentCredential.id, region: 'ap-hongkong', account_name: 'notice2@example.net', from_alias: 'Tencent Passport 2' },
+	})).status, 201);
+	const createsBeforeTencentPublish = tencentSesActions.filter((item) => item.action === 'CreateEmailTemplate').length;
+	assert.equal((await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=publish`, { method: 'POST', cookie })).status, 200);
+	assert.equal(tencentSesActions.at(-1)?.action, 'CreateEmailTemplate');
+	assert.equal(tencentSesActions.filter((item) => item.action === 'CreateEmailTemplate').length, createsBeforeTencentPublish + 1);
+	assert.equal(tencentSesActions.at(-1)?.body.TemplateContent.Html, Buffer.from('<p>验证码：{{code}}</p>').toString('base64'));
+	assert.equal((await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=refresh`, { method: 'POST', cookie })).status, 200);
+	assert.equal(tencentSesActions.at(-1)?.action, 'GetEmailTemplate');
+	const tencentTemplateOptions = await (await request('localhost', `${emailChannelsPath}/${tencentChannel.id}?action=templates&field=template_id`, { cookie })).json();
+	assert.deepEqual(tencentTemplateOptions.options, [{ value: String(emailTemplate.id), text: '邮箱验证码 (email_verification)' }]);
+	assert.equal((await request('localhost', `${emailChannelsPath}/${tencentChannel.id}?action=test`, {
+		method: 'POST', cookie, body: { to: 'recipient@example.com', template_id: emailTemplate.id, code: '778899' },
+	})).status, 200);
+	assert.equal(tencentSesActions.at(-1)?.action, 'SendEmail');
+	assert.equal(tencentSesActions.at(-1)?.headers.get('x-tc-region'), 'ap-hongkong');
+	assert.deepEqual(tencentSesActions.at(-1)?.body.Template, { TemplateID: 7001, TemplateData: JSON.stringify({ code: '778899', email: 'recipient@example.com', expires_minutes: '10' }) });
+	const tencentSync = await request('localhost', `${emailTemplatesPath}?action=sync`, {
+		method: 'POST', cookie, body: { cloud_credential_id: tencentCredential.id, region: 'ap-hongkong', template_type: 'email_verification' },
+	});
+	assert.equal(tencentSync.status, 200);
+	const tencentSyncResult = await tencentSync.json();
+	assert.equal(tencentSyncResult.updated, 1);
+	assert.equal(tencentSyncResult.imported, 1);
+	const templatesWithTencent = await (await request('localhost', emailTemplatesPath, { cookie })).json();
+	assert.ok(templatesWithTencent.table.dataSource.some((item) => item.template_key === `tencent_${tencentCredential.id}_ap_hongkong_7002`));
 	assert.equal((await request('localhost', emailBindingsPath, {
 		method: 'POST', cookie, body: { site_key: 'passport', channel_id: emailChannel.id, template_id: emailTemplate.id, is_default: true },
 	})).status, 201);

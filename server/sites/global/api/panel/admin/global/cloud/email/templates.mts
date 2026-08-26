@@ -3,6 +3,7 @@ import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mj
 import { loadCloudEmailScope, publishCloudEmailTemplate, refreshCloudEmailTemplate } from '@server/cloud/email.mjs';
 import { cloudEmailPurposeKeys, cloudEmailPurposeOptions, cloudEmailTemplateDefaults, validateCloudEmailTemplateVariables } from '@server/cloud/email-purposes.mjs';
 import { getAliyunDirectMailTemplate, listAliyunDirectMailTemplates } from '@server/cloud/providers/aliyun-direct-mail.mjs';
+import { getTencentSesTemplate, listTencentSesTemplates } from '@server/cloud/providers/tencent-ses.mjs';
 import type { CloudEmailScope, CloudEmailTemplate } from '@server/cloud/index.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { getChangedFields } from '@server/changed-fields.mjs';
@@ -26,24 +27,25 @@ const text = (value: unknown) => typeof value === 'string' ? value.trim() : '';
 const localTemplateText = (value: string) => value.replace(/\{([A-Za-z][A-Za-z0-9_]*)\}/g, '{{$1}}');
 const plainText = (html: string) => html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
 	.replace(/<br\s*\/?>/gi, '\n').replace(/<\/p\s*>/gi, '\n').replace(/<[^>]+>/g, '').replace(/\n{3,}/g, '\n\n').trim() || '请查看 HTML 邮件内容';
+const htmlText = (value: string) => `<p>${value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('\n', '<br>')}</p>`;
 const importedTemplateKey = (provider: string, credentialId: number, region: string, providerTemplateId: string) => `${provider}_${credentialId}_${region}_${providerTemplateId}`.toLowerCase().replace(/[^a-z0-9_]/g, '_');
 const encoder = new TextEncoder();
-const cloudContentSnapshot = (template: CloudEmailTemplate) => JSON.stringify([
+const cloudContentSnapshot = (template: CloudEmailTemplate, provider: string) => JSON.stringify(provider === 'tencent' ? [
 	template.template_key,
-	template.name,
-	template.subject,
+	template.body_text,
 	template.body_html,
-]);
-const cloudContentHash = async (template: CloudEmailTemplate) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(cloudContentSnapshot(template))))]
+] : [template.template_key, template.name, template.subject, template.body_html]);
+const cloudContentHash = async (template: CloudEmailTemplate, provider: string) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(cloudContentSnapshot(template, provider))))]
 	.map((byte) => byte.toString(16).padStart(2, '0')).join('');
 const loadTemplate = (database: DatabaseAdapter, id: number) => database.prepare(`SELECT id, template_key, template_type, name, subject, body_text, body_html, status
 	FROM global_cloud_email_templates WHERE id = ?1`).bind(id).first<CloudEmailTemplate>();
 const savePublication = async (database: DatabaseAdapter, template: CloudEmailTemplate, target: CloudEmailScope) => {
-	const contentHash = await cloudContentHash(template);
+	const contentHash = await cloudContentHash(template, target.provider);
 	const current = await database.prepare(`SELECT provider_template_id, content_hash, status
 		FROM global_cloud_email_template_publications WHERE template_id = ?1 AND cloud_credential_id = ?2 AND region = ?3`)
 		.bind(template.id, target.cloud_credential_id, target.region).first<{ provider_template_id: string; content_hash: string; status: string }>();
-	const contentUnchanged = current && (current.content_hash === contentHash || current.content_hash === `legacy:${cloudContentSnapshot(template)}`);
+	const contentUnchanged = current && (current.content_hash === contentHash
+		|| (target.provider === 'aliyun' && current.content_hash === `legacy:${cloudContentSnapshot(template, target.provider)}`));
 	let publicationStatus = current?.status;
 	if (current && contentUnchanged && publicationStatus === 'reviewing') {
 		const refreshed = await refreshCloudEmailTemplate(target, current.provider_template_id);
@@ -72,7 +74,12 @@ const savePublication = async (database: DatabaseAdapter, template: CloudEmailTe
 const publishToEnabledScopes = async (database: DatabaseAdapter, template: CloudEmailTemplate) => {
 	const scopes = await database.prepare(`SELECT DISTINCT c.provider, c.id AS cloud_credential_id, ch.region, c.access_key_id, c.access_key_secret
 		FROM global_cloud_email_channels ch JOIN global_cloud_credentials c ON c.id = ch.cloud_credential_id
-		WHERE ch.status = 'enabled' AND c.status = 'enabled' ORDER BY c.id, ch.region`).all<CloudEmailScope>();
+		WHERE ch.status = 'enabled' AND c.status = 'enabled'
+		UNION
+		SELECT c.provider, c.id AS cloud_credential_id, p.region, c.access_key_id, c.access_key_secret
+		FROM global_cloud_email_template_publications p JOIN global_cloud_credentials c ON c.id = p.cloud_credential_id
+		WHERE p.template_id = ?1 AND c.status = 'enabled'
+		ORDER BY cloud_credential_id, region`).bind(template.id).all<CloudEmailScope>();
 	const failures: string[] = [];
 	let submitted = 0, skipped = 0;
 	for (const scope of scopes.results) {
@@ -85,28 +92,36 @@ const publishToEnabledScopes = async (database: DatabaseAdapter, template: Cloud
 	}
 	return { failures, submitted, skipped };
 };
-const syncAliyunTemplates = async (database: DatabaseAdapter, credentialId: number, region: string, templateType: string) => {
+const syncCloudTemplates = async (database: DatabaseAdapter, credentialId: number, region: string, templateType: string) => {
 	const target = await loadCloudEmailScope(database, credentialId, region);
-	if (!target || target.provider !== 'aliyun' || !getCloudEmailRegions(target.provider).includes(region)) throw new Error('请选择有效的阿里云凭据和 Region');
-	const remoteTemplates = await listAliyunDirectMailTemplates(target);
+	if (!target || !providerSupportsEmailPush(target.provider) || !getCloudEmailRegions(target.provider).includes(region)) throw new Error('请选择有效的云凭据和 Region');
+	const remoteTemplates = target.provider === 'aliyun' ? await listAliyunDirectMailTemplates(target) : await listTencentSesTemplates(target);
 	let imported = 0, updated = 0;
 	const failures: string[] = [];
 	for (const summary of remoteTemplates) {
 		try {
-			const remote = await getAliyunDirectMailTemplate(target, summary.providerTemplateId);
-			let local = await database.prepare(`SELECT p.template_id, t.template_type, t.body_text FROM global_cloud_email_template_publications p
+			const remote = target.provider === 'aliyun'
+				? await getAliyunDirectMailTemplate(target, summary.providerTemplateId)
+				: await getTencentSesTemplate(target, summary.providerTemplateId);
+			let local = await database.prepare(`SELECT p.template_id, t.template_type, t.subject, t.body_text FROM global_cloud_email_template_publications p
 				JOIN global_cloud_email_templates t ON t.id = p.template_id
 				WHERE p.provider_template_id = ?1 AND p.cloud_credential_id = ?2 AND p.region = ?3 LIMIT 1`)
-				.bind(remote.providerTemplateId, target.cloud_credential_id, target.region).first<{ template_id: number; template_type: string; body_text: string }>();
-			if (!local) local = await database.prepare(`SELECT id AS template_id, template_type, body_text FROM global_cloud_email_templates WHERE template_key = ?1`)
-				.bind(importedTemplateKey(target.provider, target.cloud_credential_id, target.region, remote.providerTemplateId)).first<{ template_id: number; template_type: string; body_text: string }>();
-			const now = Date.now(), subject = localTemplateText(remote.subject), bodyHtml = localTemplateText(remote.html);
-			const effectiveType = local?.template_type ?? templateType, bodyText = local?.body_text ?? plainText(bodyHtml);
+				.bind(remote.providerTemplateId, target.cloud_credential_id, target.region).first<{ template_id: number; template_type: string; subject: string; body_text: string }>();
+			if (!local) local = await database.prepare(`SELECT id AS template_id, template_type, subject, body_text FROM global_cloud_email_templates WHERE template_key = ?1`)
+				.bind(importedTemplateKey(target.provider, target.cloud_credential_id, target.region, remote.providerTemplateId))
+				.first<{ template_id: number; template_type: string; subject: string; body_text: string }>();
+			const normalize = target.provider === 'aliyun' ? localTemplateText : (value: string) => value;
+			const effectiveType = local?.template_type ?? templateType;
+			const remoteText = 'text' in remote ? normalize(remote.text) : '';
+			const bodyHtml = normalize(remote.html) || htmlText(remoteText);
+			const bodyText = remoteText || local?.body_text || plainText(bodyHtml);
+			const subject = 'subject' in remote ? normalize(remote.subject) : local?.subject ?? cloudEmailTemplateDefaults[effectiveType]?.subject ?? '邮件通知 {{code}}';
+			const now = Date.now();
 			const variableError = validateCloudEmailTemplateVariables(effectiveType, { subject, body_text: bodyText, body_html: bodyHtml });
 			if (variableError) throw new Error(variableError);
 			if (local) {
-				await database.prepare(`UPDATE global_cloud_email_templates SET subject = ?2, body_html = ?3, updated_at = ?4 WHERE id = ?1`)
-					.bind(local.template_id, subject, bodyHtml, now).run();
+				await database.prepare(`UPDATE global_cloud_email_templates SET subject = ?2, body_text = ?3, body_html = ?4, updated_at = ?5 WHERE id = ?1`)
+					.bind(local.template_id, subject, bodyText, bodyHtml, now).run();
 				updated += 1;
 			} else {
 				const templateKey = importedTemplateKey(target.provider, target.cloud_credential_id, target.region, remote.providerTemplateId);
@@ -114,14 +129,14 @@ const syncAliyunTemplates = async (database: DatabaseAdapter, credentialId: numb
 					(template_key, template_type, name, subject, body_text, body_html, status, created_at, updated_at)
 					VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'enabled', ?7, ?7)`)
 					.bind(templateKey, templateType, remote.name, subject, bodyText, bodyHtml, now).run();
-				local = await database.prepare('SELECT id AS template_id, template_type, body_text FROM global_cloud_email_templates WHERE template_key = ?1')
-					.bind(templateKey).first<{ template_id: number; template_type: string; body_text: string }>();
+				local = await database.prepare('SELECT id AS template_id, template_type, subject, body_text FROM global_cloud_email_templates WHERE template_key = ?1')
+					.bind(templateKey).first<{ template_id: number; template_type: string; subject: string; body_text: string }>();
 				if (!local) throw new Error('本地模板创建后无法读取');
 				imported += 1;
 			}
 			const synced = await loadTemplate(database, local.template_id);
 			if (!synced) throw new Error('本地模板同步后无法读取');
-			const contentHash = await cloudContentHash(synced);
+			const contentHash = await cloudContentHash(synced, target.provider);
 			const publication = await database.prepare(`SELECT template_id FROM global_cloud_email_template_publications
 				WHERE template_id = ?1 AND cloud_credential_id = ?2 AND region = ?3`)
 				.bind(local.template_id, target.cloud_credential_id, target.region).first();
@@ -181,7 +196,7 @@ const handler: ApiHandler = async (c, next, params) => {
 		const body = await parseBody(c), credentialId = Number(body.cloud_credential_id), region = text(body.region), templateType = text(body.template_type);
 		if (!Number.isInteger(credentialId) || !region || !cloudEmailPurposeKeys.has(templateType)) return apiMessage(c, 400, '云凭据、Region 或模板类型不合法');
 		try {
-			const result = await syncAliyunTemplates(database, credentialId, region, templateType);
+			const result = await syncCloudTemplates(database, credentialId, region, templateType);
 			const message = `云端模板同步完成：发现 ${result.total} 个，新增 ${result.imported} 个，更新 ${result.updated} 个${result.failures.length ? `，失败 ${result.failures.length} 个：${result.failures.join('；')}` : ''}`;
 			return apiMessageData(c, 200, message, result, { component: 'modal', type: result.failures.length ? 'warning' : 'success', title: '模板同步' });
 		} catch (error) { return apiMessage(c, 502, error instanceof Error ? error.message : '模板同步失败'); }
