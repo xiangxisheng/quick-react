@@ -45,6 +45,7 @@ export const createSqliteAdapter = (filename: string): SqliteDatabaseAdapter => 
 	const database = new DatabaseSync(filename);
 	database.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
 	return {
+		dialect: 'sqlite',
 		prepare: (query) => new SqliteStatement(database.prepare(query)),
 		batch: async (statements) => {
 			database.exec('BEGIN IMMEDIATE');

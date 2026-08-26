@@ -16,6 +16,7 @@ export type D1DatabaseLike = {
 };
 
 export const createD1Adapter = (database: D1DatabaseLike): DatabaseAdapter => ({
+	dialect: 'sqlite',
 	prepare: (query): DatabaseStatement => database.prepare(query),
 	batch: database.batch ? async (statements) => database.batch?.(statements.map(({ query, values = [] }) => database.prepare(query).bind(...values))) ?? [] : undefined,
 	exec: database.exec ? async (query) => { await database.exec?.(query); } : undefined,

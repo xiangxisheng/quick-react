@@ -16,6 +16,7 @@ export type DatabaseStatement = {
 };
 
 export type DatabaseAdapter = {
+	dialect?: 'sqlite' | 'mysql' | 'postgresql';
 	prepare: (query: string) => DatabaseStatement;
 	batch?: (statements: DatabaseBatchStatement[]) => Promise<DatabaseRunResult[]>;
 	exec?: (query: string) => Promise<void>;
