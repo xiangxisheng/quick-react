@@ -25,9 +25,6 @@ const projectDirectory = fileURLToPath(new URL('../', import.meta.url));
 const defaultDatabase = createSqliteAdapter(env.DEFAULT_DATABASE_FILE || resolve(projectDirectory, 'database/default.sqlite'));
 const siteDatabases = new Map<string, ReturnType<typeof createSqliteAdapter>>();
 await migrateDefaultDatabase(defaultDatabase, resolve(projectDirectory, 'migrations'));
-await initializeCodeSites(defaultDatabase, workerCodeSites, Object.fromEntries(
-	Object.entries(workerSiteNavigations).map(([siteKey, navigation]) => [siteKey, navigation[0]?.label || siteKey]),
-));
 const resolveSqliteDsn = (dsn: string) => {
 	if (!dsn.startsWith('sqlite://')) throw new Error('Only sqlite:// custom DSNs are supported by the Node runtime');
 	const dsnPath = dsn.slice('sqlite://'.length);
@@ -70,6 +67,15 @@ const migrateSite = async (siteKey: string) => {
 		throw error;
 	}
 };
+await initializeCodeSites(defaultDatabase, workerCodeSites, Object.fromEntries(
+	Object.entries(workerSiteNavigations).map(([siteKey, navigation]) => [siteKey, navigation[0]?.label || siteKey]),
+));
+const codeSiteRows = await defaultDatabase.prepare(`SELECT site_key, database_binding FROM global_sites
+	WHERE site_key != 'global' AND site_key != 'base'`).all<{ site_key: string; database_binding: string }>();
+for (const site of codeSiteRows.results) {
+	if (!workerCodeSites.includes(site.site_key as typeof workerCodeSites[number]) || site.database_binding) continue;
+	await migrateSite(site.site_key);
+}
 const defaultConfigStore = createDatabaseConfigStore(defaultDatabase);
 configureSystemConfig({
 	store: defaultConfigStore,

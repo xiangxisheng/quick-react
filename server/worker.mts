@@ -76,6 +76,7 @@ const configureForRequest = async (c: Context<WorkerEnv>) => {
 		configurationCache.set(database as object, configuration);
 	}
 	c.set('site', site);
+	c.set('globalDatabase', defaultDatabase);
 	c.set('database', database);
 	c.set('siteRouter', siteRouter);
 	c.set('configStore', configStore);

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { DatabaseSync } from 'node:sqlite';
 
 const temporaryDirectory = await mkdtemp(join(tmpdir(), 'quick-react-smoke-'));
 process.env.DEFAULT_DATABASE_FILE = join(temporaryDirectory, 'default.sqlite');
@@ -9,6 +10,10 @@ process.env.SKIP_SERVER_LISTEN = '1';
 
 try {
 	const { app } = await import(`../dist/server.mjs?smoke=${Date.now()}`);
+	const migratedDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
+	assert.equal(migratedDatabase.prepare("SELECT migration_status FROM global_sites WHERE site_key = 'passport'").get()?.migration_status, 'ready');
+	assert.equal(migratedDatabase.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'passport_users'").get()?.name, 'passport_users');
+	migratedDatabase.close();
 	const request = async (host, path, options = {}) => {
 		const headers = new Headers(options.headers);
 		if (options.cookie) headers.set('cookie', options.cookie);

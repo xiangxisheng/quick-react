@@ -16,6 +16,7 @@ export type AppEnv = {
 	Bindings: RuntimeBindings;
 	Variables: {
 		site: SiteRequestContext;
+		globalDatabase: DatabaseAdapter;
 		database: DatabaseAdapter;
 		siteRouter: SiteRouter;
 		configStore: ConfigStore;
