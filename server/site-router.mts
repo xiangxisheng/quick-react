@@ -8,7 +8,6 @@ export type SiteRecord = {
 	databaseBinding: string;
 	status: string;
 	migrationStatus: string;
-	passportSsoEnabled: boolean;
 	isDefault: boolean;
 	isSystem: boolean;
 };
@@ -27,7 +26,6 @@ type SiteRow = {
 	database_binding: string;
 	status: string;
 	migration_status: string;
-	passport_sso_enabled: number;
 	is_default: number;
 	is_system: number;
 };
@@ -70,7 +68,6 @@ const createSiteRecord = (row: SiteRow): SiteRecord => ({
 	databaseBinding: row.database_binding,
 	status: row.status,
 	migrationStatus: row.migration_status,
-	passportSsoEnabled: row.passport_sso_enabled === 1,
 	isDefault: row.is_default === 1,
 	isSystem: row.is_system === 1,
 });
@@ -96,10 +93,12 @@ const buildSiteChain = (site: SiteRecord, sites: Map<string, SiteRecord>) => {
 
 const buildEffectiveSiteChain = (site: SiteRecord, sites: Map<string, SiteRecord>) => {
 	const chain = buildSiteChain(site, sites);
-	if (site.siteKey === 'passport') chain.splice(Math.max(0, chain.lastIndexOf('base')), 0, 'accounts_oidc');
-	if (site.siteKey === 'passport' || site.passportSsoEnabled) {
+	if (site.siteKey === 'passport') {
 		const baseIndex = chain.lastIndexOf('base');
-		chain.splice(baseIndex < 0 ? chain.length : baseIndex, 0, 'passport_sso');
+		chain.splice(baseIndex < 0 ? chain.length : baseIndex, 0, 'accounts_oidc', 'accounts_identity');
+	} else if (site.siteKey !== 'global') {
+		const baseIndex = chain.lastIndexOf('base');
+		chain.splice(baseIndex < 0 ? chain.length : baseIndex, 0, 'accounts_oidc_client');
 	}
 	return chain;
 };
@@ -112,7 +111,7 @@ export class SiteRouter {
 
 	private async loadSnapshot() {
 		const siteRows = await this.database.prepare(`SELECT site_key, name, base_site_key, dsn, database_binding,
-		status, migration_status, passport_sso_enabled, is_default, is_system FROM global_sites
+		status, migration_status, is_default, is_system FROM global_sites
 		WHERE status = 'enabled' AND migration_status = 'ready'`).all<SiteRow>();
 		const sites = new Map(siteRows.results.filter((row) => siteKeyPattern.test(row.site_key)).map((row) => [row.site_key, createSiteRecord(row)]));
 		for (const site of sites.values()) buildSiteChain(site, sites);

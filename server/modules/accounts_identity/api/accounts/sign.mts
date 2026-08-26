@@ -3,8 +3,8 @@ import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mj
 import type { DatabaseAdapter, DatabaseBatchStatement } from '@server/database/index.mjs';
 import { normalizePassportEmail } from '@server/passport/identity.mjs';
 import { clearPassportSessionCookie, createPassportSessionCookie, loadPassportSession, readPassportSessionId } from '@server/passport/session.mjs';
-import { clearSsoRequestCookie, issuePassportLoginTicket, passportSsoRequestCookieName, readNamedCookie } from '@server/passport/sso.mjs';
 import { clearOidcRequestCookie, oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
+import { oidcIssuer, revokeOidcSession } from '@server/accounts/provider.mjs';
 import { sendTelegramMessage, type TelegramInlineKeyboard } from '@server/telegram/api.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 
@@ -86,7 +86,7 @@ const handler: ApiHandler = async (c, next) => {
 	if (c.req.method === 'GET') return apiResponse(c, 200, { user: await loadPassportSession(database, c.req.raw) ?? null, registrationAvailable: false, formPage: emailForm() });
 	if (c.req.method === 'DELETE') {
 		const sessionId = readPassportSessionId(c.req.raw);
-		if (sessionId) await database.prepare(`DELETE FROM passport_sessions WHERE id = ?1`).bind(sessionId).run();
+		if (sessionId) await revokeOidcSession(database, sessionId, oidcIssuer(c), c.env.OIDC_FETCH ?? fetch);
 		c.header('Set-Cookie', clearPassportSessionCookie(new URL(c.req.url).protocol === 'https:'));
 		return apiMessage(c, 200, '已退出 Passport');
 	}
@@ -154,14 +154,11 @@ const handler: ApiHandler = async (c, next) => {
 		if (!createdSession) return apiMessage(c, 409, '登录确认已被使用');
 		const secure = new URL(c.req.url).protocol === 'https:';
 		c.header('Set-Cookie', createPassportSessionCookie(sessionId, secure, maxAge));
-		const ssoRequestId = readNamedCookie(c.req.raw, passportSsoRequestCookieName);
 		const oidcRequestId = readCookie(c.req.raw, oidcRequestCookieName);
-		const ticket = ssoRequestId ? await issuePassportLoginTicket(database, ssoRequestId, challenge.user_id) : undefined;
-		if (ssoRequestId) c.header('Set-Cookie', clearSsoRequestCookie(secure), { append: true });
 		if (oidcRequestId) c.header('Set-Cookie', clearOidcRequestCookie(secure), { append: true });
-		return apiMessageData(c, 200, 'Passport 登录成功', {
+		return apiMessageData(c, 200, 'Accounts 登录成功', {
 			user: { id: challenge.user_id },
-			...(ticket ? { redirectTo: ticket.redirectUrl } : oidcRequestId ? { redirectTo: `/api/oidc/authorize?request_id=${encodeURIComponent(oidcRequestId)}` } : {}),
+			...(oidcRequestId ? { redirectTo: `/api/oidc/authorize?request_id=${encodeURIComponent(oidcRequestId)}` } : {}),
 		}, { redirectAfter: 0 });
 	}
 	return apiMessage(c, 400, '不支持的登录步骤');

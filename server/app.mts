@@ -130,6 +130,7 @@ nodeApp.all('*', (c) => worker.fetch(c.req.raw, {
 		return resolveSqliteDsn(site.databaseTarget.value);
 	},
 	MIGRATE_SITE: migrateSite,
+	OIDC_FETCH: fetch,
 } as WorkerBindings));
 
 export const app = nodeApp;

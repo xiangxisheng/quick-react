@@ -15,7 +15,6 @@ const columns = [
 	{ dataIndex: 'base_site_key', title: '父站点', component: 'select', placeholder: '搜索并选择父站点', rules: [{ required: true, message: '请选择父站点' }] },
 	{ dataIndex: 'dsn', title: 'Node DSN', component: 'textbox' },
 	{ dataIndex: 'status', title: '状态', component: 'switch', checkedValue: statusValues.enabled, uncheckedValue: statusValues.disabled, options: enabledDisabledOptions },
-	{ dataIndex: 'passport_sso_enabled', title: '业务站点 Passport SSO', component: 'switch' },
 	{ dataIndex: 'migration_status', title: '迁移状态' },
 	{ dataIndex: 'database_binding', title: 'D1 Binding', component: 'textbox' },
 ];
@@ -66,13 +65,12 @@ const handler: ApiHandler = async (c, next, params) => {
 		const baseSiteKey = String(body.base_site_key ?? 'base').trim() || 'base';
 		const dsn = String(body.dsn ?? '').trim();
 		const databaseBinding = String(body.database_binding ?? '').trim();
-		const passportSsoEnabled = booleanValue(body.passport_sso_enabled) ? 1 : 0;
 		if ((dsn && databaseBinding) || !bindingPattern.test(databaseBinding)) return apiMessage(c, 400, 'DSN 与 D1 Binding 只能配置一个，且 Binding 名称必须合法');
 		if (!await validateParent(database, siteKey, baseSiteKey)) return apiMessage(c, 400, '父站点不存在、不可继承或会形成循环');
 		await database.prepare(`INSERT INTO global_sites
-			(site_key, name, base_site_key, dsn, database_binding, status, passport_sso_enabled, migration_status, is_default, is_system)
-			VALUES (?1, ?2, ?3, ?4, ?5, 'disabled', ?6, 'creating', 0, 0)`)
-			.bind(siteKey, String(body.name ?? siteKey).trim() || siteKey, baseSiteKey, dsn, databaseBinding, passportSsoEnabled).run();
+			(site_key, name, base_site_key, dsn, database_binding, status, migration_status, is_default, is_system)
+			VALUES (?1, ?2, ?3, ?4, ?5, 'disabled', 'creating', 0, 0)`)
+			.bind(siteKey, String(body.name ?? siteKey).trim() || siteKey, baseSiteKey, dsn, databaseBinding).run();
 		let message = '站点已创建，请通过部署流程完成 migration';
 		if (c.env.MIGRATE_SITE) {
 			try {
@@ -117,12 +115,10 @@ const handler: ApiHandler = async (c, next, params) => {
 			.first<{ site_key: string; is_system: number; dsn: string; database_binding: string; base_site_key: string | null; migration_status: string }>();
 		if (!current) return apiMessage(c, 404, '站点不存在');
 		const body = await parseBody(c);
-		const changedFields = getChangedFields(body, ['name', 'base_site_key', 'dsn', 'database_binding', 'status', 'passport_sso_enabled']);
-		const passportSsoEnabled = changedFields.has('passport_sso_enabled') ? booleanValue(body.passport_sso_enabled) ? 1 : 0 : undefined;
+		const changedFields = getChangedFields(body, ['name', 'base_site_key', 'dsn', 'database_binding', 'status']);
 		const status = changedFields.has('status') && allowedStatuses.has(String(body.status)) ? String(body.status) : undefined;
 		if (status === statusValues.enabled && current.migration_status !== 'ready') return apiMessage(c, 400, 'Migration 未完成，站点不可启用');
 		if (current.is_system && status === statusValues.disabled) return apiMessage(c, 400, '系统站点不可禁用');
-		if (current.is_system && passportSsoEnabled !== undefined) return apiMessage(c, 400, '系统站点不可修改 Passport SSO 登录方式');
 		const dsn = changedFields.has('dsn') && typeof body.dsn === 'string' ? body.dsn.trim() : undefined;
 		const databaseBinding = changedFields.has('database_binding') && typeof body.database_binding === 'string' ? body.database_binding.trim() : undefined;
 		const nextDsn = dsn ?? current.dsn;
@@ -137,12 +133,11 @@ const handler: ApiHandler = async (c, next, params) => {
 		await database.prepare(`UPDATE global_sites SET
 			name = COALESCE(?2, name), base_site_key = ?3, dsn = COALESCE(?4, dsn), database_binding = COALESCE(?5, database_binding),
 			status = CASE WHEN ?7 = 1 THEN 'disabled' ELSE COALESCE(?6, status) END,
-			migration_status = CASE WHEN ?7 = 1 THEN 'creating' ELSE migration_status END,
-			passport_sso_enabled = COALESCE(?8, passport_sso_enabled)
+			migration_status = CASE WHEN ?7 = 1 THEN 'creating' ELSE migration_status END
 			WHERE site_key = ?1`).bind(params.id,
 			changedFields.has('name') && typeof body.name === 'string' ? body.name.trim() : null,
 			nextParent, dsn ?? null, databaseBinding ?? null,
-			status ?? null, (targetChanged || inheritanceChanged) ? 1 : 0, passportSsoEnabled ?? null).run();
+			status ?? null, (targetChanged || inheritanceChanged) ? 1 : 0).run();
 		await c.get('siteRouter').refresh();
 		return apiMessage(c, 200, '保存成功');
 	}

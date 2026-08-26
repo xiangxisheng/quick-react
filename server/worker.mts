@@ -11,7 +11,6 @@ import { oidcDiscovery } from './accounts/provider.mjs';
 import type { DatabaseAdapter } from './database/index.mjs';
 import { SiteRouter } from './site-router.mjs';
 import { loadCurrentUser } from './auth.mjs';
-import { loadPassportSession } from './passport/session.mjs';
 import { loadSystemConfigFromStore } from './system-config.mjs';
 import { applyTechStackHeaders, loadTechStackConfigFromStore } from './tech-stack.mjs';
 import type { AppEnv, RuntimeBindings } from './types.mjs';
@@ -63,7 +62,7 @@ const configureForRequest = async (c: Context<WorkerEnv>) => {
 
 	const database = await resolveSiteDatabase(c, site, defaultDatabase);
 	if (!database) throw new Error(`Database target is unavailable for site ${site.siteKey}`);
-	const passportSite = site.siteKey === 'passport' ? site : await siteRouter.resolveBySiteKey('passport', site.hostname);
+	const passportSite = site.siteKey === 'passport' ? site : site.siteKey === 'global' ? await siteRouter.resolveBySiteKey('passport', site.hostname) : undefined;
 	let passportDatabase: DatabaseAdapter | undefined;
 	if (passportSite) {
 		try { passportDatabase = passportSite.siteKey === site.siteKey ? database : await resolveSiteDatabase(c, passportSite, defaultDatabase); }
@@ -95,9 +94,7 @@ const configureForRequest = async (c: Context<WorkerEnv>) => {
 	c.set('configStore', configStore);
 	c.set('systemConfig', configuration.systemConfig);
 	c.set('techStackConfig', configuration.techStackConfig);
-	const currentUser = site.passportSsoEnabled
-		? passportDatabase ? await loadPassportSession(passportDatabase, c.req.raw, site.siteKey, site.hostname) : undefined
-		: await loadCurrentUser(database, c.req.raw);
+	const currentUser = await loadCurrentUser(database, c.req.raw);
 	if (currentUser) c.set('currentUser', currentUser);
 	c.set('effectiveRoles', currentUser ? ['public', 'user', ...currentUser.roles] : ['public']);
 	return true;
@@ -108,8 +105,8 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 	const siteConfig = c.get('techStackConfig');
 	const systemConfig = c.get('systemConfig');
 	const menuItems = getSiteNavigation(site.codeSiteChain, c.get('effectiveRoles'));
-	const passportSsoPages = site.siteKey === 'passport' && site.codeSiteChain.includes('passport_sso')
-		? [{ path: `/passport/sso/sign${siteConfig.pageSuffix}`, title: 'Passport 身份登录', description: '使用 Passport 身份完成统一登录', mode: 'sign' as const, apiPath: `/api/passport/sso/sign${siteConfig.apiSuffix}`, submitMethod: 'POST' as const, redirectPath: `/` }]
+	const passportSsoPages = site.siteKey === 'passport' && site.codeSiteChain.includes('accounts_identity')
+		? [{ path: `/accounts/sign${siteConfig.pageSuffix}`, title: 'Accounts 身份登录', description: '使用 Accounts 身份完成统一登录', mode: 'sign' as const, apiPath: `/api/accounts/sign${siteConfig.apiSuffix}`, submitMethod: 'POST' as const, redirectPath: `/` }]
 		: [];
 	const auth = c.get('currentUser')
 		? {

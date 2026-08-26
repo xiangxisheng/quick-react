@@ -1,4 +1,6 @@
 import type { DatabaseAdapter } from '@server/database/index.mjs';
+import { runSql, sql } from '@server/database/sql.mjs';
+import { activeSigningKey } from '@server/accounts/repository.mjs';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -32,8 +34,7 @@ export const safeEqual = (left: string, right: string) => {
 
 type SigningKeyRow = { kid: string; private_jwk: string; public_jwk: string };
 export const ensureSigningKey = async (database: DatabaseAdapter) => {
-	let row = await database.prepare(`SELECT kid, private_jwk, public_jwk FROM passport_oidc_signing_keys
-		WHERE status = 'active' ORDER BY created_at DESC LIMIT 1`).first<SigningKeyRow>();
+	let row: SigningKeyRow | null = await activeSigningKey(database);
 	if (row) return row;
 	const pair = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify']);
 	const privateJwk = await crypto.subtle.exportKey('jwk', pair.privateKey) as JsonWebKey & Record<string, unknown>;
@@ -41,8 +42,7 @@ export const ensureSigningKey = async (database: DatabaseAdapter) => {
 	const kid = crypto.randomUUID();
 	publicJwk.kid = kid; publicJwk.use = 'sig'; publicJwk.alg = 'RS256';
 	privateJwk.kid = kid; privateJwk.use = 'sig'; privateJwk.alg = 'RS256';
-	await database.prepare(`INSERT INTO passport_oidc_signing_keys (kid, private_jwk, public_jwk, status, created_at)
-		VALUES (?1, ?2, ?3, 'active', ?4)`).bind(kid, JSON.stringify(privateJwk), JSON.stringify(publicJwk), Date.now()).run();
+	await runSql(database, sql(database).insert('passport_oidc_signing_keys', { kid, private_jwk: JSON.stringify(privateJwk), public_jwk: JSON.stringify(publicJwk), status: 'active', created_at: Date.now() }));
 	row = { kid, private_jwk: JSON.stringify(privateJwk), public_jwk: JSON.stringify(publicJwk) };
 	return row;
 };

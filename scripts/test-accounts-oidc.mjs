@@ -10,18 +10,27 @@ process.env.SKIP_SERVER_LISTEN = '1';
 
 const base64Url = (bytes) => Buffer.from(bytes).toString('base64url');
 const sha256 = async (value) => new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)));
+const originalFetch = globalThis.fetch;
 
 try {
 	const { app } = await import(`../dist/server.mjs?accounts-oidc=${Date.now()}`);
+	globalThis.fetch = (input, init) => {
+		const url = new URL(String(input));
+		return ['accounts.test', 'site1.test'].includes(url.hostname) ? app.request(url.toString(), init) : originalFetch(input, init);
+	};
 	const database = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
 	const now = Date.now(), userId = 1000000000000000000n, sessionId = crypto.randomUUID();
 	database.prepare(`INSERT INTO global_site_hosts (hostname, site_key, status, created_at) VALUES ('accounts.test', 'passport', 'enabled', ?)`).run(now);
+	database.prepare(`INSERT INTO global_sites (site_key, name, base_site_key, dsn, database_binding, status, migration_status, is_default, is_system)
+		VALUES ('site1', 'Business Site', 'base', '', '', 'enabled', 'ready', 0, 0)`).run();
+	database.prepare(`INSERT INTO global_site_hosts (hostname, site_key, status, created_at) VALUES ('site1.test', 'site1', 'enabled', ?)`).run(now);
 	database.prepare(`INSERT INTO passport_users (user_id, nickname, status, created_at, updated_at) VALUES (?, 'AccountsUser', 'enabled', ?, ?)`).run(userId, now, now);
 	database.prepare(`INSERT INTO passport_sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)`).run(sessionId, userId, now + 3600_000, now);
 	const clientId = 'acct_test', clientSecret = 'test-client-secret', verifier = base64Url(crypto.getRandomValues(new Uint8Array(48)));
 	const secretHash = Buffer.from(await sha256(clientSecret)).toString('hex'), challenge = base64Url(await sha256(verifier));
-	database.prepare(`INSERT INTO passport_oidc_clients (id, name, secret_hash, redirect_uris, allowed_scopes, require_pkce, status, created_at, updated_at)
-		VALUES (?, 'Test Client', ?, '["https://client.test/callback"]', 'openid profile email', 1, 'enabled', ?, ?)`).run(clientId, secretHash, now, now);
+	database.prepare(`INSERT INTO passport_oidc_clients (id, name, secret_hash, redirect_uris, allowed_scopes, require_pkce, status, created_at, updated_at, backchannel_logout_uri)
+		VALUES (?, 'Test Client', ?, '["https://client.test/callback","https://site1.test/api/accounts/oidc/callback"]', 'openid profile email', 1, 'enabled', ?, ?, 'https://site1.test/api/accounts/oidc/backchannel-logout')`).run(clientId, secretHash, now, now);
+	database.prepare(`INSERT INTO base_system_configs (key, value, updated_at) VALUES ('accounts-oidc-client', ?, ?)`).run(JSON.stringify({ enabled: true, issuer: 'https://accounts.test', clientId, clientSecret }), now);
 	database.close();
 	const request = (path, options = {}) => app.request(`https://accounts.test${path}`, { method: options.method, headers: options.headers, body: options.body });
 	const discovery = await (await request('/.well-known/openid-configuration')).json();
@@ -43,7 +52,26 @@ try {
 	assert.equal(userinfo.sub, String(userId)); assert.equal(userinfo.name, 'AccountsUser');
 	assert.equal((await request('/api/oidc/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: tokenBody.toString() })).status, 400);
 	const jwks = await (await request('/api/oidc/jwks')).json(); assert.equal(jwks.keys[0].alg, 'RS256'); assert.ok(jwks.keys[0].n);
+	const businessSign = await (await app.request('https://site1.test/api/sign.php')).json();
+	assert.equal(businessSign.formPage.fields[0].name, 'action');
+	const businessStart = await app.request('https://site1.test/api/sign.php', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+	const loginCookie = businessStart.headers.get('set-cookie')?.split(';')[0];
+	const businessAuthorizeUrl = (await businessStart.json()).redirectTo;
+	const businessAuthorized = await app.request(businessAuthorizeUrl, { headers: { cookie: `passport_session=${sessionId}` } });
+	const businessCallback = businessAuthorized.headers.get('location');
+	const businessCallbackResponse = await app.request(businessCallback, { headers: { cookie: loginCookie } });
+	assert.equal(businessCallbackResponse.status, 302);
+	const businessSessionCookie = businessCallbackResponse.headers.getSetCookie().find((item) => item.startsWith('quick_react_session='))?.split(';')[0];
+	assert.ok(businessSessionCookie);
+	const signedInBusiness = await (await app.request('https://site1.test/api/sign.php', { headers: { cookie: businessSessionCookie } })).json();
+	assert.match(signedInBusiness.user.username, /^accounts_[0-9a-f]{16}$/);
+	const completed = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
+	assert.equal(completed.prepare('SELECT COUNT(*) AS count FROM base_oidc_accounts').get().count, 1); completed.close();
+	assert.equal((await app.request('https://accounts.test/api/oidc/logout', { headers: { cookie: `passport_session=${sessionId}` } })).status, 200);
+	const afterGlobalLogout = await (await app.request('https://site1.test/api/sign.php', { headers: { cookie: businessSessionCookie } })).json();
+	assert.equal(afterGlobalLogout.user, null);
 	console.log('accounts oidc test passed');
 } finally {
+	globalThis.fetch = originalFetch;
 	await rm(temporaryDirectory, { recursive: true, force: true });
 }

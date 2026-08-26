@@ -1,0 +1,2 @@
+ALTER TABLE passport_oidc_access_tokens ADD COLUMN authorization_code_hash TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS passport_oidc_access_tokens_code ON passport_oidc_access_tokens(authorization_code_hash);

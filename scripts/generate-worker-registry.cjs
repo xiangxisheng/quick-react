@@ -44,6 +44,11 @@ const moduleEntries = moduleKeys.flatMap((moduleKey) => {
 	return [path.join(moduleRoot, 'api.mts'), ...collectEntries(path.join(moduleRoot, 'api'))]
 		.filter((entry) => fs.existsSync(entry));
 });
+const moduleNavigationEntries = moduleKeys.map((site) => ({
+	site,
+	sourcePath: path.join(modulesRoot, site, 'navigation.mts'),
+})).filter((entry) => fs.existsSync(entry.sourcePath));
+navigationEntries.push(...moduleNavigationEntries);
 
 const moduleName = (sourcePath) => path.relative(serverDir, sourcePath)
 	.replace(/\.mts$/, '').split(/[\\/]/).map((part) => part.replace(/[^a-zA-Z0-9]/g, '_')).join('_');

@@ -11,6 +11,7 @@ export type RuntimeBindings = Record<string, unknown> & {
 	SNOWFLAKE_WORKER_ID?: string | number;
 	DATABASE_RESOLVER?: (site: SiteRequestContext) => Promise<DatabaseAdapter>;
 	MIGRATE_SITE?: (siteKey: string) => Promise<void>;
+	OIDC_FETCH?: typeof fetch;
 };
 
 export type AppEnv = {
