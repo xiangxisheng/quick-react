@@ -1,6 +1,6 @@
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { getCloudEmailAdapter } from './catalog.mjs';
-import type { CloudEmailAdapter, CloudEmailMessage, CloudEmailTarget, CloudEmailTemplate, CloudEmailTemplatePublication } from './index.mjs';
+import type { CloudEmailAdapter, CloudEmailMessage, CloudEmailScope, CloudEmailTarget, CloudEmailTemplate, CloudEmailTemplatePublication } from './index.mjs';
 import { createAliyunDirectMailAdapter, createAliyunDirectMailTemplate, describeAliyunDirectMailTemplate, updateAliyunDirectMailTemplate } from './providers/aliyun-direct-mail.mjs';
 
 type DefaultEmailConfiguration = CloudEmailTarget & CloudEmailTemplate & {
@@ -25,13 +25,17 @@ export const loadCloudEmailTarget = async (database: DatabaseAdapter, channelId:
 	JOIN global_cloud_credentials c ON c.id = ch.cloud_credential_id
 	WHERE ch.id = ?1 AND ch.status = 'enabled' AND c.status = 'enabled'`).bind(channelId).first<CloudEmailTarget>();
 
+export const loadCloudEmailScope = async (database: DatabaseAdapter, credentialId: number, region: string) => database.prepare(`SELECT c.provider,
+	c.id AS cloud_credential_id, ?2 AS region, c.access_key_id, c.access_key_secret FROM global_cloud_credentials c
+	WHERE c.id = ?1 AND c.status = 'enabled'`).bind(credentialId, region).first<CloudEmailScope>();
+
 export const createCloudEmailAdapter = (target: CloudEmailTarget): CloudEmailAdapter => {
 	const adapter = getCloudEmailAdapter(target.provider);
 	if (adapter === 'aliyun-direct-mail') return createAliyunDirectMailAdapter(target);
 	throw new Error(`该 Provider 不支持邮件推送：${target.provider}`);
 };
 
-export const publishCloudEmailTemplate = async (target: CloudEmailTarget, template: CloudEmailTemplate, providerTemplateId?: string): Promise<CloudEmailTemplatePublication> => {
+export const publishCloudEmailTemplate = async (target: CloudEmailScope, template: CloudEmailTemplate, providerTemplateId?: string): Promise<CloudEmailTemplatePublication> => {
 	const adapter = getCloudEmailAdapter(target.provider);
 	if (adapter === 'aliyun-direct-mail') return providerTemplateId
 		? updateAliyunDirectMailTemplate(target, template, providerTemplateId)
@@ -39,7 +43,7 @@ export const publishCloudEmailTemplate = async (target: CloudEmailTarget, templa
 	throw new Error(`该 Provider 不支持云端邮件模板：${target.provider}`);
 };
 
-export const refreshCloudEmailTemplate = async (target: CloudEmailTarget, providerTemplateId: string): Promise<CloudEmailTemplatePublication> => {
+export const refreshCloudEmailTemplate = async (target: CloudEmailScope, providerTemplateId: string): Promise<CloudEmailTemplatePublication> => {
 	const adapter = getCloudEmailAdapter(target.provider);
 	if (adapter === 'aliyun-direct-mail') return describeAliyunDirectMailTemplate(target, providerTemplateId);
 	throw new Error(`该 Provider 不支持云端邮件模板：${target.provider}`);
@@ -67,7 +71,8 @@ export const sendDefaultCloudEmail = async (database: DatabaseAdapter, siteKey: 
 		JOIN global_cloud_email_channels ch ON ch.id = b.channel_id
 		JOIN global_cloud_credentials c ON c.id = ch.cloud_credential_id
 		JOIN global_cloud_email_templates t ON t.id = b.template_id
-		JOIN global_cloud_email_template_publications p ON p.template_id = t.id AND p.channel_id = ch.id
+		JOIN global_cloud_email_template_publications p ON p.template_id = t.id
+			AND p.cloud_credential_id = ch.cloud_credential_id AND p.region = ch.region
 		WHERE b.site_key = ?1 AND b.purpose = ?2 AND b.is_default = 1 AND b.status = 'enabled'
 			AND ch.status = 'enabled' AND c.status = 'enabled' AND t.status = 'enabled' AND p.status = 'ready'`)
 		.bind(siteKey, purpose).first<DefaultEmailConfiguration>();

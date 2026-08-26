@@ -28,16 +28,19 @@ export type CloudBucket = {
 	region?: string;
 };
 
-export type CloudEmailTarget = {
-	id: number;
+export type CloudEmailScope = {
 	provider: string;
 	cloud_credential_id: number;
 	region: string;
+	access_key_id: string;
+	access_key_secret: string;
+};
+
+export type CloudEmailTarget = CloudEmailScope & {
+	id: number;
 	account_name: string;
 	from_alias: string;
 	reply_to_address: number;
-	access_key_id: string;
-	access_key_secret: string;
 };
 
 export type CloudEmailMessage = {

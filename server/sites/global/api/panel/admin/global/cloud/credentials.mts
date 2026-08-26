@@ -27,8 +27,9 @@ const deleteCredential = async (database: DatabaseAdapter, id: number) => {
 	if (!credential) return '云凭据不存在';
 	if (credential.status !== statusValues.disabled) return '云凭据必须先停用才能删除';
 	const association = await database.prepare(`SELECT cloud_credential_id FROM global_cloud_object_storage_buckets WHERE cloud_credential_id = ?1
-		UNION ALL SELECT cloud_credential_id FROM global_cloud_email_channels WHERE cloud_credential_id = ?1 LIMIT 1`).bind(id).first();
-	if (association) return '云凭据仍被 Bucket 或邮件通道使用，不能删除';
+		UNION ALL SELECT cloud_credential_id FROM global_cloud_email_channels WHERE cloud_credential_id = ?1
+		UNION ALL SELECT cloud_credential_id FROM global_cloud_email_template_publications WHERE cloud_credential_id = ?1 LIMIT 1`).bind(id).first();
+	if (association) return '云凭据仍被 Bucket、邮件通道或云端模板使用，不能删除';
 	await database.prepare('DELETE FROM global_cloud_credentials WHERE id = ?1').bind(id).run();
 };
 
@@ -96,8 +97,9 @@ const handler: ApiHandler = async (c, next, params) => {
 		if (!name || !cloudProviderKeys.has(provider) || !accessKeyId || !isCredentialContextValid(provider, accountId)) return apiMessage(c, 400, '名称、供应商、账号上下文或访问密钥不合法');
 		if (changed.has('provider') && provider !== current.provider) {
 			const inUse = await database.prepare(`SELECT cloud_credential_id FROM global_cloud_object_storage_buckets WHERE cloud_credential_id = ?1
-				UNION ALL SELECT cloud_credential_id FROM global_cloud_email_channels WHERE cloud_credential_id = ?1 LIMIT 1`).bind(Number(params.id)).first();
-			if (inUse) return apiMessage(c, 409, '凭据已被 Bucket 或邮件通道使用，不能修改供应商');
+				UNION ALL SELECT cloud_credential_id FROM global_cloud_email_channels WHERE cloud_credential_id = ?1
+				UNION ALL SELECT cloud_credential_id FROM global_cloud_email_template_publications WHERE cloud_credential_id = ?1 LIMIT 1`).bind(Number(params.id)).first();
+			if (inUse) return apiMessage(c, 409, '凭据已被 Bucket、邮件通道或云端模板使用，不能修改供应商');
 		}
 		const secret = changed.has('access_key_secret') && text(body.access_key_secret) ? text(body.access_key_secret) : String(current.access_key_secret ?? '');
 		try {

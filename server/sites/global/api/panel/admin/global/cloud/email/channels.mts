@@ -45,9 +45,8 @@ const deleteChannel = async (database: DatabaseAdapter, id: number) => {
 	const row = await database.prepare(`SELECT id, status FROM global_cloud_email_channels WHERE id = ?1`).bind(id).first<{ id: number; status: string }>();
 	if (!row) return '邮件通道不存在';
 	if (row.status !== statusValues.disabled) return '邮件通道必须先停用才能删除';
-	const association = await database.prepare(`SELECT channel_id FROM global_cloud_email_bindings WHERE channel_id = ?1
-		UNION ALL SELECT channel_id FROM global_cloud_email_template_publications WHERE channel_id = ?1 LIMIT 1`).bind(id).first();
-	if (association) return '邮件通道仍有站点绑定或模板发布记录，不能删除';
+	const association = await database.prepare(`SELECT channel_id FROM global_cloud_email_bindings WHERE channel_id = ?1 LIMIT 1`).bind(id).first();
+	if (association) return '邮件通道仍有站点绑定，不能删除';
 	await database.prepare(`DELETE FROM global_cloud_email_channels WHERE id = ?1`).bind(id).run();
 };
 
@@ -145,8 +144,8 @@ const handler: ApiHandler = async (c, next, params) => {
 		if (!Number.isInteger(credentialId) || !await validCredential(database, credentialId, region) || !emailPattern.test(accountName) || !fromAlias) return apiMessage(c, 400, '云凭据、Region 或发信身份不合法');
 		const identityChanged = credentialId !== Number(current.cloud_credential_id) || region !== current.region || accountName !== current.account_name;
 		if (identityChanged) {
-			const publication = await database.prepare(`SELECT channel_id FROM global_cloud_email_template_publications WHERE channel_id = ?1 LIMIT 1`).bind(Number(params.id)).first();
-			if (publication) return apiMessage(c, 409, '邮件通道已有模板发布记录，不能修改凭据、Region 或发信地址');
+			const binding = await database.prepare(`SELECT channel_id FROM global_cloud_email_bindings WHERE channel_id = ?1 LIMIT 1`).bind(Number(params.id)).first();
+			if (binding) return apiMessage(c, 409, '邮件通道已有站点绑定，不能修改凭据、Region 或发信地址');
 		}
 		try {
 			await database.prepare(`UPDATE global_cloud_email_channels SET cloud_credential_id = ?2, region = ?3, account_name = ?4,

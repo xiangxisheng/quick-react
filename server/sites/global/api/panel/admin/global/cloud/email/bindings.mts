@@ -38,7 +38,9 @@ const validateTarget = async (database: DatabaseAdapter, siteKey: string, channe
 		database.prepare(`SELECT ch.id FROM global_cloud_email_channels ch JOIN global_cloud_credentials c ON c.id = ch.cloud_credential_id
 			WHERE ch.id = ?1 AND ch.status = 'enabled' AND c.status = 'enabled'`).bind(channelId).first(),
 		database.prepare(`SELECT id, template_type FROM global_cloud_email_templates WHERE id = ?1 AND status = 'enabled'`).bind(templateId).first<{ id: number; template_type: string }>(),
-		database.prepare(`SELECT template_id FROM global_cloud_email_template_publications WHERE template_id = ?1 AND channel_id = ?2 AND status = 'ready'`).bind(templateId, channelId).first(),
+		database.prepare(`SELECT p.template_id FROM global_cloud_email_template_publications p
+			JOIN global_cloud_email_channels ch ON ch.cloud_credential_id = p.cloud_credential_id AND ch.region = p.region
+			WHERE p.template_id = ?1 AND ch.id = ?2 AND p.status = 'ready'`).bind(templateId, channelId).first(),
 	]);
 	return site && channel && template && (!enabled || publication) ? template.template_type : null;
 };

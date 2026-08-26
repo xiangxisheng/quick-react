@@ -132,12 +132,13 @@ model global_cloud_email_bindings {
 
 model global_cloud_email_template_publications {
   template_id          Int
-  channel_id           Int
+  cloud_credential_id  Int
+  region               String
   provider_template_id String
   content_hash         String @default("")
   status               String
   created_at           BigInt
   updated_at           BigInt
 
-  @@id([template_id, channel_id])
+  @@id([template_id, cloud_credential_id, region])
 }

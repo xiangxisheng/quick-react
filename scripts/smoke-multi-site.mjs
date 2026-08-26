@@ -290,7 +290,7 @@ try {
 	assert.equal(directMailActions.at(-1)?.parameters.get('Subject'), '您的邮箱验证码是 654321');
 	assert.equal(directMailActions.at(-1)?.parameters.get('HtmlBody'), '<p>您正在验证邮箱 recipient@example.com。</p><p>验证码：<strong>654321</strong></p><p>验证码将在 10 分钟后失效，请勿向他人泄露。</p>');
 	const syncResponse = await request('localhost', `${emailTemplatesPath}?action=sync`, {
-		method: 'POST', cookie, body: { channel_id: emailChannel.id, template_type: 'email_verification' },
+		method: 'POST', cookie, body: { cloud_credential_id: emailCredential.id, region: 'cn-hangzhou', template_type: 'email_verification' },
 	});
 	assert.equal(syncResponse.status, 200);
 	const syncResult = await syncResponse.json();
@@ -298,7 +298,7 @@ try {
 	assert.equal(syncResult.imported, 1);
 	const staleReviewDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
 	staleReviewDatabase.prepare(`UPDATE global_cloud_email_template_publications SET status = 'reviewing'
-		WHERE template_id = ?1 AND channel_id = ?2`).run(emailTemplate.id, emailChannel.id);
+		WHERE template_id = ?1 AND cloud_credential_id = ?2 AND region = 'cn-hangzhou'`).run(emailTemplate.id, emailCredential.id);
 	staleReviewDatabase.close();
 	const actionsBeforeStaleReviewPublish = directMailActions.length;
 	const staleReviewPublish = await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=publish`, { method: 'POST', cookie });
@@ -309,7 +309,7 @@ try {
 	const legacyPublicationDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
 	legacyPublicationDatabase.prepare(`UPDATE global_cloud_email_template_publications SET content_hash = 'legacy:' || (
 		SELECT json_array(template_key, name, subject, body_html) FROM global_cloud_email_templates WHERE id = ?1
-	) WHERE template_id = ?1 AND channel_id = ?2`).run(emailTemplate.id, emailChannel.id);
+	) WHERE template_id = ?1 AND cloud_credential_id = ?2 AND region = 'cn-hangzhou'`).run(emailTemplate.id, emailCredential.id);
 	legacyPublicationDatabase.close();
 	const actionsBeforeUnchangedPublish = directMailActions.length;
 	const unchangedPublish = await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=publish`, { method: 'POST', cookie });
@@ -318,12 +318,12 @@ try {
 	assert.equal(directMailActions.length, actionsBeforeUnchangedPublish);
 	const normalizedPublicationDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
 	assert.match(normalizedPublicationDatabase.prepare(`SELECT content_hash FROM global_cloud_email_template_publications
-		WHERE template_id = ?1 AND channel_id = ?2`).get(emailTemplate.id, emailChannel.id).content_hash, /^[0-9a-f]{64}$/);
+		WHERE template_id = ?1 AND cloud_credential_id = ?2 AND region = 'cn-hangzhou'`).get(emailTemplate.id, emailCredential.id).content_hash, /^[0-9a-f]{64}$/);
 	normalizedPublicationDatabase.close();
 	assert.equal((await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=publish`, { method: 'POST', cookie })).status, 200);
 	assert.equal(directMailActions.length, actionsBeforeUnchangedPublish);
 	const syncedTemplates = await (await request('localhost', emailTemplatesPath, { cookie })).json();
-	const importedTemplate = syncedTemplates.table.dataSource.find((item) => item.template_key === `aliyun_${emailCredential.id}_6002`);
+	const importedTemplate = syncedTemplates.table.dataSource.find((item) => item.template_key === `aliyun_${emailCredential.id}_cn_hangzhou_6002`);
 	assert.equal(importedTemplate?.template_type, 'email_verification');
 	assert.equal(importedTemplate?.body_text, '云端验证码：{{code}}');
 	assert.equal((await request('localhost', emailBindingsPath, {

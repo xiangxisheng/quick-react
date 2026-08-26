@@ -1,4 +1,4 @@
-import type { CloudEmailAdapter, CloudEmailTarget, CloudEmailTemplate, CloudEmailTemplatePublication } from '../index.mjs';
+import type { CloudEmailAdapter, CloudEmailScope, CloudEmailTarget, CloudEmailTemplate, CloudEmailTemplatePublication } from '../index.mjs';
 
 const encoder = new TextEncoder();
 
@@ -93,7 +93,7 @@ const callDirectMail = async (target: Pick<CloudEmailTarget, 'region' | 'access_
 };
 
 const providerTemplateText = (value: string) => value.replace(/\{\{([a-z][a-z0-9_]*)\}\}/g, '{$1}');
-const providerTemplateName = (template: CloudEmailTemplate, channelId: number) => `${template.template_key}_${template.id}_${channelId}`.slice(0, 30);
+const providerTemplateName = (template: CloudEmailTemplate) => `${template.template_key}_${template.id}`.slice(0, 30);
 const publicationStatus = (value: number | string | undefined): CloudEmailTemplatePublication['status'] => Number(value) === 2 ? 'ready' : Number(value) === 3 ? 'rejected' : 'reviewing';
 
 export const listAliyunDirectMailAddresses = async (target: Pick<CloudEmailTarget, 'region' | 'access_key_id' | 'access_key_secret'>) => {
@@ -138,9 +138,9 @@ export const getAliyunDirectMailTemplate = async (target: Pick<CloudEmailTarget,
 	};
 };
 
-export const createAliyunDirectMailTemplate = async (target: CloudEmailTarget, template: CloudEmailTemplate): Promise<CloudEmailTemplatePublication> => {
+export const createAliyunDirectMailTemplate = async (target: CloudEmailScope, template: CloudEmailTemplate): Promise<CloudEmailTemplatePublication> => {
 	const result = await callDirectMail(target, 'CreateTemplate', {
-		TemplateName: providerTemplateName(template, target.id),
+		TemplateName: providerTemplateName(template),
 		TemplateNickName: template.name.slice(0, 30),
 		TemplateSubject: providerTemplateText(template.subject),
 		TemplateText: providerTemplateText(template.body_html),
@@ -150,10 +150,10 @@ export const createAliyunDirectMailTemplate = async (target: CloudEmailTarget, t
 	return { providerTemplateId: String(result.TemplateId), status: 'reviewing', requestId: result.RequestId! };
 };
 
-export const updateAliyunDirectMailTemplate = async (target: CloudEmailTarget, template: CloudEmailTemplate, providerTemplateId: string): Promise<CloudEmailTemplatePublication> => {
+export const updateAliyunDirectMailTemplate = async (target: CloudEmailScope, template: CloudEmailTemplate, providerTemplateId: string): Promise<CloudEmailTemplatePublication> => {
 	const result = await callDirectMail(target, 'ModifyTemplate', {
 		TemplateId: providerTemplateId,
-		TemplateName: providerTemplateName(template, target.id),
+		TemplateName: providerTemplateName(template),
 		TemplateNickName: template.name.slice(0, 30),
 		TemplateSubject: providerTemplateText(template.subject),
 		TemplateText: providerTemplateText(template.body_html),
@@ -161,7 +161,7 @@ export const updateAliyunDirectMailTemplate = async (target: CloudEmailTarget, t
 	return { providerTemplateId, status: 'reviewing', requestId: result.RequestId! };
 };
 
-export const describeAliyunDirectMailTemplate = async (target: CloudEmailTarget, providerTemplateId: string): Promise<CloudEmailTemplatePublication> => {
+export const describeAliyunDirectMailTemplate = async (target: CloudEmailScope, providerTemplateId: string): Promise<CloudEmailTemplatePublication> => {
 	const result = await callDirectMail(target, 'DescTemplate', { TemplateId: providerTemplateId });
 	const status = publicationStatus(result.TemplateStatus);
 	return { providerTemplateId, status, requestId: result.RequestId! };
