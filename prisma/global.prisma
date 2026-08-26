@@ -74,3 +74,17 @@ model global_cloud_object_storage_binding_purposes {
 
   @@id([binding_id, purpose])
 }
+
+model global_telegram_bots {
+  id               BigInt @id @default(autoincrement())
+  name             String @unique
+  bot_token        String @unique
+  bot_username     String @unique
+  secret_token     String
+  webhook_hostname String
+  status           String @default("enabled")
+  created_at       BigInt
+  updated_at       BigInt
+
+  @@index([webhook_hostname])
+}

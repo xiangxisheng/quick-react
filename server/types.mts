@@ -17,6 +17,7 @@ export type AppEnv = {
 	Variables: {
 		site: SiteRequestContext;
 		globalDatabase: DatabaseAdapter;
+		passportDatabase?: DatabaseAdapter;
 		database: DatabaseAdapter;
 		siteRouter: SiteRouter;
 		configStore: ConfigStore;

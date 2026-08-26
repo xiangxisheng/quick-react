@@ -40,6 +40,13 @@ const asAdapter = (binding: unknown): DatabaseAdapter | undefined => {
 	return adapter;
 };
 
+const resolveSiteDatabase = async (c: Context<WorkerEnv>, site: Parameters<NonNullable<RuntimeBindings['DATABASE_RESOLVER']>>[0], defaultDatabase: DatabaseAdapter) => {
+	if (c.env.DATABASE_RESOLVER) return c.env.DATABASE_RESOLVER(site);
+	if (site.databaseTarget.kind === 'binding') return asAdapter(c.env[site.databaseTarget.value]);
+	if (site.databaseTarget.kind === 'default') return defaultDatabase;
+	return undefined;
+};
+
 const configureForRequest = async (c: Context<WorkerEnv>) => {
 	const defaultBinding = c.env.DEFAULT_DB;
 	const defaultDatabase = asAdapter(defaultBinding);
@@ -52,11 +59,14 @@ const configureForRequest = async (c: Context<WorkerEnv>) => {
 	const site = await siteRouter.resolve(c.req.raw);
 	if (!site) return false;
 
-	let database: DatabaseAdapter | undefined;
-	if (c.env.DATABASE_RESOLVER) database = await c.env.DATABASE_RESOLVER(site);
-	else if (site.databaseTarget.kind === 'binding') database = asAdapter(c.env[site.databaseTarget.value]);
-	else if (site.databaseTarget.kind === 'default') database = defaultDatabase;
+	const database = await resolveSiteDatabase(c, site, defaultDatabase);
 	if (!database) throw new Error(`Database target is unavailable for site ${site.siteKey}`);
+	const passportSite = site.siteKey === 'passport' ? site : await siteRouter.resolveBySiteKey('passport', site.hostname);
+	let passportDatabase: DatabaseAdapter | undefined;
+	if (passportSite) {
+		try { passportDatabase = passportSite.siteKey === site.siteKey ? database : await resolveSiteDatabase(c, passportSite, defaultDatabase); }
+		catch { /* Global administration remains available if Passport storage is temporarily unavailable. */ }
+	}
 
 	const baseConfigStore = createDatabaseConfigStore(database);
 	const configStore = {
@@ -77,6 +87,7 @@ const configureForRequest = async (c: Context<WorkerEnv>) => {
 	}
 	c.set('site', site);
 	c.set('globalDatabase', defaultDatabase);
+	if (passportDatabase) c.set('passportDatabase', passportDatabase);
 	c.set('database', database);
 	c.set('siteRouter', siteRouter);
 	c.set('configStore', configStore);

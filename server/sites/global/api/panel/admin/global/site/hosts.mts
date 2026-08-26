@@ -25,6 +25,17 @@ const parseBody = async (c: Parameters<ApiHandler>[0]): Promise<Record<string, u
 	catch { return {}; }
 };
 
+const removeHost = async (c: Parameters<ApiHandler>[0], id: number) => {
+	const database = c.get('database');
+	const host = await database.prepare('SELECT hostname, status FROM global_site_hosts WHERE id = ?1').bind(id).first<{ hostname: string; status: string }>();
+	if (!host) return undefined;
+	if (host.status !== statusValues.disabled) return apiMessage(c, 409, '域名必须先停用才能删除');
+	const bot = await database.prepare('SELECT id FROM global_telegram_bots WHERE webhook_hostname = ?1 LIMIT 1').bind(host.hostname).first();
+	if (bot) return apiMessage(c, 409, '域名正在被 Telegram 机器人使用，不能删除');
+	await database.prepare('DELETE FROM global_site_hosts WHERE id = ?1').bind(id).run();
+	return undefined;
+};
+
 const handler: ApiHandler = async (c, next, params) => {
 	const database = c.get('database');
 	if (!params.id && c.req.method === 'GET') {
@@ -51,7 +62,8 @@ const handler: ApiHandler = async (c, next, params) => {
 	if (!params.id && c.req.method === 'DELETE') {
 		const ids = await c.req.json<unknown[]>().catch(() => []);
 		for (const id of Array.isArray(ids) ? ids : []) {
-			await database.prepare('DELETE FROM global_site_hosts WHERE id = ?1').bind(Number(id)).run();
+			const response = await removeHost(c, Number(id));
+			if (response) return response;
 		}
 		await c.get('siteRouter').refresh();
 		return apiMessage(c, 200, '删除成功');
@@ -62,19 +74,31 @@ const handler: ApiHandler = async (c, next, params) => {
 		return row ? apiResponse(c, 200, row) : apiMessage(c, 404, 'Host 不存在');
 	}
 	if (params.id && c.req.method === 'PUT') {
+		const current = await database.prepare('SELECT hostname, site_key, status FROM global_site_hosts WHERE id = ?1').bind(Number(params.id))
+			.first<{ hostname: string; site_key: string; status: string }>();
+		if (!current) return apiMessage(c, 404, 'Host 不存在');
 		const body = await parseBody(c);
 		const changedFields = getChangedFields(body, ['hostname', 'site_key', 'status']);
 		const hostname = changedFields.has('hostname') ? normalizeHostPattern(body.hostname) : null;
 		if (changedFields.has('hostname') && !hostname) return apiMessage(c, 400, 'Host 不合法');
 		const status = !changedFields.has('status') ? null : body.status === statusValues.disabled ? statusValues.disabled : body.status === statusValues.enabled ? statusValues.enabled : null;
+		const nextSiteKey = changedFields.has('site_key') && typeof body.site_key === 'string' ? body.site_key.trim() : current.site_key;
+		const site = await database.prepare(`SELECT site_key FROM global_sites WHERE site_key = ?1
+			AND status = 'enabled' AND migration_status = 'ready'`).bind(nextSiteKey).first();
+		if (!site) return apiMessage(c, 400, '站点不存在或尚未就绪');
+		const bot = await database.prepare('SELECT id FROM global_telegram_bots WHERE webhook_hostname = ?1 LIMIT 1').bind(current.hostname).first();
+		if (bot && ((hostname && hostname !== current.hostname) || nextSiteKey !== 'passport' || status === statusValues.disabled)) {
+			return apiMessage(c, 409, '域名正在被 Telegram 机器人使用，请先切换或停用相关机器人');
+		}
 		await database.prepare(`UPDATE global_site_hosts SET hostname = COALESCE(?2, hostname),
 			site_key = COALESCE(?3, site_key), status = COALESCE(?4, status) WHERE id = ?1`)
-			.bind(Number(params.id), hostname, changedFields.has('site_key') && typeof body.site_key === 'string' ? body.site_key : null, status).run();
+			.bind(Number(params.id), hostname, changedFields.has('site_key') ? nextSiteKey : null, status).run();
 		await c.get('siteRouter').refresh();
 		return apiMessage(c, 200, '保存成功');
 	}
 	if (params.id && c.req.method === 'DELETE') {
-		await database.prepare('DELETE FROM global_site_hosts WHERE id = ?1').bind(Number(params.id)).run();
+		const response = await removeHost(c, Number(params.id));
+		if (response) return response;
 		await c.get('siteRouter').refresh();
 		return apiMessage(c, 200, '删除成功');
 	}

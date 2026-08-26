@@ -45,6 +45,8 @@ siteDatabase
 
 每个站点继续遵循现有数据库路由规则：未配置独立 DSN 时直接使用 `default.sqlite` 或默认 D1；配置独立 DSN 或 Binding 后才使用独立数据库。因此 Passport 不新增固定的 `PASSPORT_DB` 变量。
 
+`global` 是低数据量控制面，可以长期使用 `default.sqlite`，只保存站点、域名、机器人、凭据和管理设置等配置型数据。Passport 用户、登录记录以及业务站点的大规模数据后续通过站点 DSN 迁移到 MySQL 或 PostgreSQL；不得把高增长业务记录写入 global 控制面表。
+
 当 Passport 后期迁移到独立数据库时，Passport webhook 仍可通过运行时预声明的 `DEFAULT_DB` 访问 global 数据库获取机器人配置。Node 使用 `default.sqlite`，Worker 使用默认 D1 Binding；不得通过文件系统扫描或运行时动态发现数据库。
 
 请求上下文应显式提供 `globalDatabase` 和当前 `database`，业务代码不得依赖变量名称猜测数据库用途。
@@ -216,29 +218,19 @@ global_telegram_bots
   bot_token TEXT NOT NULL
   bot_username TEXT NOT NULL
   secret_token TEXT NOT NULL
+  webhook_hostname TEXT NOT NULL
   status TEXT NOT NULL DEFAULT 'enabled'
   created_at BIGINT NOT NULL
   updated_at BIGINT NOT NULL
 ```
 
-机器人与域名建议使用独立绑定表：
-
-```text
-global_telegram_bot_hosts
-  bot_id BIGINT NOT NULL
-  hostname TEXT NOT NULL
-  status TEXT NOT NULL DEFAULT 'enabled'
-  created_at BIGINT NOT NULL
-  PRIMARY KEY (bot_id, hostname)
-```
-
-绑定域名必须已经存在于 `global_site_hosts`，并指向 `passport` 站点。Webhook URL 不作为机器人表字段保存，而是根据绑定域名、固定路由和 `bot_id` 自动生成，例如：
+所有机器人都可以选择 `passport` 站点下任一启用域名，不建立机器人与域名的多对多绑定表。由于 Telegram 每个机器人同时只能设置一个 webhook URL，每个机器人通过 `webhook_hostname` 保存当前 webhook 域名。该域名必须已经存在于 `global_site_hosts`、指向 `passport` 站点且处于启用状态。Webhook URL 不单独保存，而是根据当前域名、固定路由和 `bot_id` 自动生成，例如：
 
 ```text
 https://<hostname>/api/tgwebhook?bot_id=<bot_id>
 ```
 
-同一个 Host 可以绑定多个启用中的机器人，Telegram 请求通过 `bot_id` 查询参数选择机器人；同一个机器人也可以绑定多个 Host。`bot_id` 只用于路由选择，不作为认证凭据，仍必须校验 Telegram Secret Token。同一个用户绑定多个机器人不生成新的 Passport `user_id`。
+同一个 Host 可以被多个启用中的机器人同时使用，Telegram 请求通过 `bot_id` 查询参数选择机器人。切换 `webhook_hostname` 时，后台重新调用 Telegram `setWebhook`；旧域名失效不会破坏机器人配置。`bot_id` 只用于路由选择，不作为认证凭据，仍必须校验 Telegram Secret Token。同一个用户绑定多个机器人不生成新的 Passport `user_id`。
 
 机器人 Token 和 Secret Token 只能由后端保存和使用，列表接口不得回显完整密钥，编辑接口也不得把密钥作为普通明文初始值返回。
 
@@ -248,7 +240,7 @@ global 控制面提供：
 
 - 添加机器人；
 - 编辑名称、Token、Username、Secret Token 和状态；
-- 选择一个或多个已绑定到 Passport 的域名，由后端自动生成 Webhook URL；
+- 从 Passport 站点启用域名中选择当前 webhook 域名，由后端自动生成 Webhook URL；
 - 启用、停用机器人；
 - 删除机器人；
 - 设置 Telegram webhook；

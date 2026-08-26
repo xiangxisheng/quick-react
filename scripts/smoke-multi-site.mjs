@@ -7,6 +7,25 @@ import { DatabaseSync } from 'node:sqlite';
 const temporaryDirectory = await mkdtemp(join(tmpdir(), 'quick-react-smoke-'));
 process.env.DEFAULT_DATABASE_FILE = join(temporaryDirectory, 'default.sqlite');
 process.env.SKIP_SERVER_LISTEN = '1';
+const originalFetch = globalThis.fetch;
+let telegramWebhookUrl = '';
+globalThis.fetch = async (input, init) => {
+	const url = String(input);
+	if (!url.startsWith('https://api.telegram.org/bot')) return originalFetch(input, init);
+	const method = url.slice(url.lastIndexOf('/') + 1);
+	const body = init?.body ? JSON.parse(String(init.body)) : {};
+	if (method === 'getMe') return Response.json({ ok: true, result: { id: 10001, username: 'smoke_passport_bot', first_name: 'Smoke Bot' } });
+	if (method === 'setWebhook') {
+		telegramWebhookUrl = String(body.url ?? '');
+		return Response.json({ ok: true, result: true });
+	}
+	if (method === 'deleteWebhook') {
+		telegramWebhookUrl = '';
+		return Response.json({ ok: true, result: true });
+	}
+	if (method === 'getWebhookInfo') return Response.json({ ok: true, result: { url: telegramWebhookUrl, pending_update_count: 0 } });
+	return Response.json({ ok: false, description: 'unsupported smoke method' }, { status: 400 });
+};
 
 try {
 	const { app } = await import(`../dist/server.mjs?smoke=${Date.now()}`);
@@ -81,6 +100,32 @@ try {
 			method: 'POST', cookie, body: { hostname, site_key: 'site1' },
 		})).status, 201);
 	}
+	for (const hostname of ['passport.test', 'passport-alt.test']) {
+		assert.equal((await request('localhost', '/api/panel/admin/global/site/hosts.php', {
+			method: 'POST', cookie, body: { hostname, site_key: 'passport' },
+		})).status, 201);
+	}
+	const botsPath = '/api/panel/admin/global/telegram/bots.php';
+	assert.equal((await request('localhost', botsPath, {
+		method: 'POST', cookie, body: { name: 'smoke-passport-bot', bot_token: '10001:smoke-token', webhook_hostname: 'passport.test' },
+	})).status, 201);
+	assert.equal(telegramWebhookUrl, 'https://passport.test/api/tgwebhook?bot_id=1');
+	const botsResult = await (await request('localhost', botsPath, { cookie })).json();
+	const bot = botsResult.table.dataSource.find((item) => item.name === 'smoke-passport-bot');
+	assert.equal(bot.bot_username, 'smoke_passport_bot');
+	assert.equal(Object.hasOwn(bot, 'bot_token'), false);
+	assert.equal(Object.hasOwn(bot, 'secret_token'), false);
+	assert.equal((await request('localhost', `${botsPath}/${bot.id}?action=test`, { method: 'POST', cookie })).status, 200);
+	assert.equal((await request('localhost', `${botsPath}/${bot.id}`, {
+		method: 'PUT', cookie, body: { webhook_hostname: 'passport-alt.test', __changedFields: ['webhook_hostname'] },
+	})).status, 200);
+	assert.equal(telegramWebhookUrl, 'https://passport-alt.test/api/tgwebhook?bot_id=1');
+	assert.equal((await request('localhost', `${botsPath}/${bot.id}`, { method: 'DELETE', cookie })).status, 409);
+	assert.equal((await request('localhost', `${botsPath}/${bot.id}`, {
+		method: 'PUT', cookie, body: { status: 'disabled', __changedFields: ['status'] },
+	})).status, 200);
+	assert.equal(telegramWebhookUrl, '');
+	assert.equal((await request('localhost', `${botsPath}/${bot.id}`, { method: 'DELETE', cookie })).status, 200);
 	assert.equal((await request('site1.test', '/api/health.php')).status, 200);
 	assert.equal((await request('site1.test', '/api/panel/admin/global/site/sites.php', { cookie })).status, 404);
 	assert.equal((await request('a.wild.test', '/api/panel/admin/global/site/sites.php', { cookie })).status, 404);
@@ -136,5 +181,6 @@ try {
 	assert.equal(adminDocument.includes('站点管理'), true);
 	console.log('multi-site smoke test passed');
 } finally {
+	globalThis.fetch = originalFetch;
 	await rm(temporaryDirectory, { recursive: true, force: true });
 }

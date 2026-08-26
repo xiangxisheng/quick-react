@@ -152,4 +152,14 @@ export class SiteRouter {
 			: site.dsn ? { kind: 'dsn', value: site.dsn } : { kind: 'default', value: '' };
 		return { ...site, hostname, codeSiteChain: buildSiteChain(site, snapshot.sites), databaseTarget };
 	}
+
+	async resolveBySiteKey(siteKey: string, hostname = ''): Promise<SiteRequestContext | undefined> {
+		const snapshot = await this.currentSnapshot();
+		const site = snapshot.sites.get(siteKey);
+		if (!site) return undefined;
+		const databaseTarget: DatabaseTarget = site.databaseBinding
+			? { kind: 'binding', value: site.databaseBinding }
+			: site.dsn ? { kind: 'dsn', value: site.dsn } : { kind: 'default', value: '' };
+		return { ...site, hostname, codeSiteChain: buildSiteChain(site, snapshot.sites), databaseTarget };
+	}
 }

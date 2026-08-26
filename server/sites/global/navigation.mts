@@ -11,6 +11,14 @@ const navigation: MenuNode[] = [{
 			icon: 'appstore',
 			children: [
 				{
+					label: 'Telegram',
+					key: 'telegram',
+					icon: 'appstore',
+					children: [
+						{ label: '机器人管理', key: 'bots', icon: 'appstore', component: 'table', title: 'Telegram 机器人', description: '管理机器人、Passport Webhook 域名和启停状态' },
+					],
+				},
+				{
 					label: '站点管理',
 					key: 'site',
 					icon: 'appstore',
