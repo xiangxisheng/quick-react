@@ -2,6 +2,7 @@ import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
 import { createStoredPassword, readStoredPassword } from '@server/auth.mjs';
 import { getChangedFields } from '@server/changed-fields.mjs';
+import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 
 const columns = [
@@ -27,11 +28,11 @@ const publicUser = (row: Record<string, unknown>) => ({
 const handler: ApiHandler = async (c, next, params) => {
 	const database = c.get('database');
 	if (c.req.method === 'GET' && !params.id) {
-		const rows = await database.prepare('SELECT id, username, roles, status, password, created_at, updated_at FROM base_system_users ORDER BY id DESC').all<Record<string, unknown>>();
-		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { query: [{ key: 'search', label: '搜索' }], toolbar: [{ key: 'create', label: '新增' }, { key: 'delete', label: '删除' }], row: [{ key: 'edit', label: '编辑' }, { key: 'delete', label: '删除' }] } }, columns, dataSource: rows.results.map(publicUser), totalRecords: rows.results.length } });
+		const rows = await allSql<Record<string, unknown>>(database, sql(database).select({ table: 'base_system_users', columns: { id: 'id', username: 'username', roles: 'roles', status: 'status', password: 'password', created_at: 'created_at', updated_at: 'updated_at' }, orderBy: [{ column: 'id', direction: 'DESC' }] }));
+		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { query: [{ key: 'search', label: '搜索' }], toolbar: [{ key: 'create', label: '新增' }, { key: 'delete', label: '删除' }], row: [{ key: 'edit', label: '编辑' }, { key: 'delete', label: '删除' }] } }, columns, dataSource: rows.map(publicUser), totalRecords: rows.length } });
 	}
 	if (params.id && c.req.method === 'GET') {
-		const row = await database.prepare('SELECT id, username, roles, status, password, created_at, updated_at FROM base_system_users WHERE id = ?1').bind(params.id).first<Record<string, unknown>>();
+		const row = await firstSql<Record<string, unknown>>(database, sql(database).select({ table: 'base_system_users', columns: { id: 'id', username: 'username', roles: 'roles', status: 'status', password: 'password', created_at: 'created_at', updated_at: 'updated_at' }, where: [{ column: 'id', value: params.id }] }));
 		return row ? apiResponse(c, 200, publicUser(row)) : apiMessage(c, 404, '用户不存在');
 	}
 	if (!params.id && c.req.method === 'POST') {
@@ -41,39 +42,35 @@ const handler: ApiHandler = async (c, next, params) => {
 		if (!/^[a-zA-Z0-9_.-]{3,64}$/.test(username) || password.length < 8) return apiMessage(c, 400, '用户名至少 3 个合法字符，密码至少 8 个字符');
 		const now = Date.now();
 		try {
-			const result = await database.prepare('INSERT INTO base_system_users (username, password, roles, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?5)')
-				.bind(username, await createStoredPassword(password), String(body.roles ?? '["user"]'), String(body.status ?? 'enabled'), now).run();
-			return apiMessageData(c, 201, '用户已创建', { id: result.meta?.last_row_id, username });
+			await runSql(database, sql(database).insert('base_system_users', { username, password: await createStoredPassword(password), roles: String(body.roles ?? '["user"]'), status: String(body.status ?? 'enabled'), created_at: now, updated_at: now }));
+			const created = await firstSql<{ id: number | string }>(database, sql(database).select({ table: 'base_system_users', columns: { id: 'id' }, where: [{ column: 'username', value: username }] }));
+			return apiMessageData(c, 201, '用户已创建', { id: created?.id, username });
 		} catch {
 			return apiMessage(c, 409, '用户名已存在');
 		}
 	}
 	if (params.id && c.req.method === 'PUT') {
 		const body: Record<string, unknown> = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>));
-		const current = await database.prepare('SELECT id FROM base_system_users WHERE id = ?1').bind(params.id).first<{ id: number }>();
+		const current = await firstSql<{ id: number }>(database, sql(database).select({ table: 'base_system_users', columns: { id: 'id' }, where: [{ column: 'id', value: params.id }] }));
 		if (!current) return apiMessage(c, 404, '用户不存在');
 		const changedFields = getChangedFields(body, ['username', 'roles', 'status', 'password']);
-		const fields: string[] = [];
-		const values: unknown[] = [];
+		const values: Record<string, unknown> = {};
 		for (const key of ['username', 'roles', 'status']) {
-			if (changedFields.has(key)) {
-				fields.push(`${key} = ?${fields.length + 1}`);
-				values.push(String(body[key] ?? ''));
-			}
+			if (changedFields.has(key)) values[key] = String(body[key] ?? '');
 		}
 		const password = String(body.password ?? '');
 		if (changedFields.has('password') && password) {
-			fields.push(`password = ?${fields.length + 1}`); values.push(await createStoredPassword(password));
+			values.password = await createStoredPassword(password);
 		}
-		if (!fields.length) return apiMessage(c, 400, '没有可修改的字段');
-		fields.push(`updated_at = ?${fields.length + 1}`); values.push(Date.now()); values.push(params.id);
+		if (!Object.keys(values).length) return apiMessage(c, 400, '没有可修改的字段');
+		values.updated_at = Date.now();
 		try {
-			await database.prepare(`UPDATE base_system_users SET ${fields.join(', ')} WHERE id = ?${values.length}`).bind(...values).run();
+			await runSql(database, sql(database).update('base_system_users', values, { id: params.id }));
 			return apiMessage(c, 200, '用户已保存');
 		} catch { return apiMessage(c, 409, '用户名已存在'); }
 	}
 	if (params.id && c.req.method === 'DELETE') {
-		await database.prepare('DELETE FROM base_system_users WHERE id = ?1').bind(params.id).run();
+		await runSql(database, sql(database).delete('base_system_users', { id: params.id }));
 		return apiMessage(c, 200, '用户已删除');
 	}
 	return next();

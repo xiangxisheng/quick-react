@@ -2,7 +2,7 @@ import type { DatabaseAdapter, DatabaseRunResult } from './index.mjs';
 
 export type SqlDialect = 'sqlite' | 'mysql' | 'postgresql';
 export type SqlQuery = { query: string; values: unknown[] };
-type SqlValue = string | number | bigint | boolean | Uint8Array | null;
+type SqlValue = unknown;
 type Values = Record<string, SqlValue | undefined>;
 
 const identifierPattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -18,7 +18,7 @@ const definedEntries = (values: Values) => Object.entries(values).filter((entry)
 export type SqlCondition = { column: string; value?: SqlValue; operator?: '=' | '!=' | '<' | '<=' | '>' | '>=' | 'IS NULL' | 'IS NOT NULL' };
 export type SqlJoin = { type?: 'INNER' | 'LEFT'; table: string; alias?: string; left: string; right: string };
 export type SqlColumn = string | { column: string; cast?: 'text' };
-export type SqlSelectOptions = { table: string; alias?: string; distinct?: boolean; columns?: Record<string, SqlColumn>; joins?: SqlJoin[]; where?: SqlCondition[]; orderBy?: Array<{ column: string; direction?: 'ASC' | 'DESC' }>; limit?: number; offset?: number };
+export type SqlSelectOptions = { table: string; alias?: string; distinct?: boolean; columns?: Record<string, SqlColumn>; includeAll?: boolean; sqliteRowIdAlias?: string; joins?: SqlJoin[]; where?: SqlCondition[]; orderBy?: Array<{ column: string; direction?: 'ASC' | 'DESC' }>; limit?: number; offset?: number };
 
 export abstract class SqlBuilder {
 	constructor(readonly dialect: SqlDialect) {}
@@ -26,12 +26,18 @@ export abstract class SqlBuilder {
 	protected placeholders(count: number, start = 1) { return Array.from({ length: count }, (_, index) => this.placeholder(start + index)); }
 
 	select(options: SqlSelectOptions): SqlQuery {
-		const columns = options.columns && Object.keys(options.columns).length
+		const selectedColumns = options.columns && Object.keys(options.columns).length
 			? Object.entries(options.columns).map(([alias, definition]) => {
 				const column = typeof definition === 'string' ? quoteIdentifier(definition, this.dialect) : definition.cast === 'text' ? this.castText(definition.column) : quoteIdentifier(definition.column, this.dialect);
 				return `${column} AS ${quoteIdentifier(alias, this.dialect)}`;
-			}).join(', ')
-			: '*';
+			})
+			: [];
+		if (options.sqliteRowIdAlias) {
+			if (this.dialect !== 'sqlite') throw new Error('rowid is only available for SQLite');
+			selectedColumns.unshift(`rowid AS ${quoteIdentifier(options.sqliteRowIdAlias, this.dialect)}`);
+		}
+		if (options.includeAll || !selectedColumns.length) selectedColumns.push('*');
+		const columns = selectedColumns.join(', ');
 		let query = `SELECT${options.distinct ? ' DISTINCT' : ''} ${columns} FROM ${quoteIdentifier(options.table, this.dialect)}${options.alias ? ` AS ${quoteIdentifier(options.alias, this.dialect)}` : ''}`;
 		for (const join of options.joins ?? []) query += ` ${join.type ?? 'INNER'} JOIN ${quoteIdentifier(join.table, this.dialect)}${join.alias ? ` AS ${quoteIdentifier(join.alias, this.dialect)}` : ''} ON ${quoteIdentifier(join.left, this.dialect)} = ${quoteIdentifier(join.right, this.dialect)}`;
 		const conditions = options.where ?? [], boundConditions = conditions.filter((condition) => !['IS NULL', 'IS NOT NULL'].includes(condition.operator ?? ''));
@@ -43,6 +49,16 @@ export abstract class SqlBuilder {
 		if (options.orderBy?.length) query += ` ORDER BY ${options.orderBy.map((order) => `${quoteIdentifier(order.column, this.dialect)} ${order.direction ?? 'ASC'}`).join(', ')}`;
 		if (options.limit !== undefined) { query += ` LIMIT ${this.placeholder(boundConditions.length + 1)}`; if (options.offset !== undefined) query += ` OFFSET ${this.placeholder(boundConditions.length + 2)}`; }
 		return { query, values: [...boundConditions.map((condition) => condition.value as SqlValue), ...(options.limit !== undefined ? [options.limit, ...(options.offset !== undefined ? [options.offset] : [])] : [])] };
+	}
+
+	count(table: string, where: SqlCondition[] = []): SqlQuery {
+		let query = `SELECT COUNT(*) AS ${quoteIdentifier('count', this.dialect)} FROM ${quoteIdentifier(table, this.dialect)}`;
+		let parameterIndex = 0;
+		if (where.length) query += ` WHERE ${where.map((condition) => {
+			const operator = condition.operator ?? '=';
+			return ['IS NULL', 'IS NOT NULL'].includes(operator) ? `${quoteIdentifier(condition.column, this.dialect)} ${operator}` : `${quoteIdentifier(condition.column, this.dialect)} ${operator} ${this.placeholder(++parameterIndex)}`;
+		}).join(' AND ')}`;
+		return { query, values: where.filter((condition) => !['IS NULL', 'IS NOT NULL'].includes(condition.operator ?? '')).map((condition) => condition.value) };
 	}
 
 	insert(table: string, values: Values): SqlQuery {
