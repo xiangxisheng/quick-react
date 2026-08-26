@@ -173,11 +173,13 @@ try {
 	const externalProvidersPath = '/api/panel/admin/accounts/external-providers.php';
 	const externalProviders = await (await request('passport.test', externalProvidersPath, { cookie })).json();
 	const createProviderAction = externalProviders.table.option.actions.toolbar.find((action) => action.key === 'create');
-	const createSecretColumn = createProviderAction.form.columns.find((column) => column.dataIndex === 'client_secret');
-	assert.equal(createSecretColumn.inputType, 'password');
-	assert.equal(createSecretColumn.rules[0].required, true);
-	assert.match(createSecretColumn.title, /微信 AppSecret/);
-	assert.equal(externalProviders.table.columns.find((column) => column.dataIndex === 'client_secret').hideInTable, true);
+	assert.equal(createProviderAction.form, undefined);
+	const secretColumn = externalProviders.table.columns.find((column) => column.dataIndex === 'client_secret');
+	assert.equal(secretColumn.inputType, 'password');
+	assert.equal(secretColumn.form.create.rules[0].required, true);
+	assert.match(secretColumn.title, /微信 AppSecret/);
+	assert.equal(secretColumn.hideInTable, true);
+	assert.equal(externalProviders.table.columns.find((column) => column.dataIndex === 'id').form.edit, false);
 	assert.equal((await request('passport.test', externalProvidersPath, {
 		method: 'POST', cookie, body: { id: 'wechat', display_name: '微信', client_id: 'wechat-app-id', client_secret: 'wechat-app-secret', status: 'enabled' },
 	})).status, 201);

@@ -13,6 +13,8 @@
 - API 和页面路径保持对应关系，例如 `/panel/me` 对应 `/api/panel/me`。
 - 后端返回能由 `key`、`route` 或配置生成的数据时，不重复返回 `href`、`url`、`visible` 等冗余字段。
 - 查询条件只在用户点击后端提供的查询 action 后应用；编辑中的查询值不得自动触发列表请求。
+- CRUD 的列表、新增表单和编辑表单必须共用一份 `columns` 字段定义；新增/编辑差异使用字段的 `form.create`、`form.edit` 场景覆盖，禁止再维护 `createColumns`、`editColumns` 等重复数组。
+- `action.form.columns` 只用于测试、同步、发布等非 CRUD 自定义动作，不得用于替代 CRUD 新增或编辑字段。
 - Worker 运行时不依赖文件系统扫描；构建阶段负责注册代码和路由。
 
 ## 验证与提交

@@ -11,21 +11,14 @@ const providerOptions = [
 	{ value: 'wechat', text: '微信开放平台' },
 ];
 const columns = [
-	{ dataIndex: 'id', title: 'ID', component: 'select', options: providerOptions, rules: [{ required: true, message: '请选择身份源' }] },
+	{ dataIndex: 'id', title: 'ID', component: 'select', options: providerOptions, rules: [{ required: true, message: '请选择身份源' }], form: { edit: false } },
 	{ dataIndex: 'display_name', title: '显示名称', component: 'textbox', rules: [{ required: true, message: '请输入显示名称' }] },
 	{ dataIndex: 'client_id', title: '客户端 ID / AppID', component: 'textbox', rules: [{ required: true, message: '请输入客户端 ID 或 AppID' }] },
-	{ dataIndex: 'client_secret', title: 'Google Client Secret / 微信 AppSecret', component: 'textbox', inputType: 'password', hideInTable: true, placeholder: '编辑时留空表示保留现有密钥' },
+	{ dataIndex: 'client_secret', title: 'Google Client Secret / 微信 AppSecret', component: 'textbox', inputType: 'password', hideInTable: true, placeholder: '留空表示保留现有密钥', form: { create: { placeholder: '请输入 Google Client Secret 或微信 AppSecret', rules: [{ required: true, message: '请输入 Google Client Secret 或微信 AppSecret' }] } } },
 	{ dataIndex: 'secret_configured', title: '密钥状态' },
 	{ dataIndex: 'callback_url', title: '授权回调地址' },
 	{ dataIndex: 'status', title: '状态', component: 'switch', checkedValue: statusValues.enabled, uncheckedValue: statusValues.disabled, options: enabledDisabledOptions },
 ];
-const createColumns = columns
-	.filter((column) => ['id', 'display_name', 'client_id', 'client_secret', 'status'].includes(column.dataIndex))
-	.map((column) => column.dataIndex === 'client_secret' ? {
-		...column,
-		placeholder: '请输入 Google Client Secret 或微信 AppSecret',
-		rules: [{ required: true, message: '请输入 Google Client Secret 或微信 AppSecret' }],
-	} : column);
 const providerId = (value: unknown): ProviderId | undefined => value === 'google' || value === 'wechat' ? value : undefined;
 const requiredText = (value: unknown) => String(value ?? '').trim();
 const parseBody = async (c: Parameters<ApiHandler>[0]): Promise<Record<string, unknown>> => c.req.json<Record<string, unknown>>().catch(() => ({}));
@@ -36,7 +29,7 @@ const handler: ApiHandler = async (c, next, params) => {
 	if (!params.id && c.req.method === 'GET') {
 		const rows = await allSql<ProviderRow>(database, sql(database).select({ table: 'passport_external_providers', columns: { id: 'id', display_name: 'display_name', client_id: 'client_id', client_secret: 'client_secret', status: 'status', created_at: 'created_at', updated_at: 'updated_at' }, orderBy: [{ column: 'created_at' }] }));
 		const origin = c.get('systemConfig').publicOrigin?.trim() || new URL(c.req.url).origin;
-		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { toolbar: [{ key: 'create', label: '新增身份源', form: { columns: createColumns } }], row: [{ key: 'edit', label: '编辑' }, { key: 'delete', label: '删除', confirm: '只能删除已停用且从未产生授权历史的身份源，确定继续吗？' }] } }, columns, dataSource: rows.map((row) => ({ ...row, client_secret: '', secret_configured: row.client_secret ? '已配置' : '未配置', callback_url: new URL(`/api/accounts/external/${row.id}`, origin).toString() })), totalRecords: rows.length } });
+		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { toolbar: [{ key: 'create', label: '新增身份源' }], row: [{ key: 'edit', label: '编辑' }, { key: 'delete', label: '删除', confirm: '只能删除已停用且从未产生授权历史的身份源，确定继续吗？' }] } }, columns, dataSource: rows.map((row) => ({ ...row, client_secret: '', secret_configured: row.client_secret ? '已配置' : '未配置', callback_url: new URL(`/api/accounts/external/${row.id}`, origin).toString() })), totalRecords: rows.length } });
 	}
 	if (!params.id && c.req.method === 'POST') {
 		const body = await parseBody(c);

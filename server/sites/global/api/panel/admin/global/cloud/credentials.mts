@@ -14,7 +14,7 @@ const columns = [
 	{ dataIndex: 'provider', title: '供应商', component: 'select', options: cloudProviderOptions, rules: [{ required: true, message: '请选择供应商' }] },
 	{ dataIndex: 'account_id', title: 'Account ID', component: 'textbox', dependsOn: 'provider', parentValues: accountIdProviderKeys, hideInTable: true, rules: [{ required: true, message: '请输入 Account ID' }] },
 	{ dataIndex: 'access_key_id', title: 'Access Key ID', component: 'textbox', rules: [{ required: true, message: '请输入 Access Key ID' }] },
-	{ dataIndex: 'access_key_secret', title: 'Access Key Secret', component: 'textbox', inputType: 'password', hideInTable: true, placeholder: '新增时必填；编辑时留空表示保持原值' },
+	{ dataIndex: 'access_key_secret', title: 'Access Key Secret', component: 'textbox', inputType: 'password', hideInTable: true, placeholder: '留空表示保持原值', form: { create: { placeholder: '新增时必填', rules: [{ required: true, message: '请输入 Access Key Secret' }] } } },
 	{ dataIndex: 'status', title: '状态', component: 'switch', checkedValue: statusValues.enabled, uncheckedValue: statusValues.disabled, options: enabledDisabledOptions },
 ];
 

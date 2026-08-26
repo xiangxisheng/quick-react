@@ -6,7 +6,7 @@ import { runSql, sql } from '@server/database/sql.mjs';
 import { oidcClients } from '@server/accounts/repository.mjs';
 
 const columns = [
-	{ dataIndex: 'id', title: '客户端 ID', component: 'textbox' },
+	{ dataIndex: 'id', title: '客户端 ID' },
 	{ dataIndex: 'name', title: '名称', component: 'textbox', rules: [{ required: true, message: '请输入客户端名称' }] },
 	{ dataIndex: 'redirect_uris', title: '回调地址', component: 'textarea', tableDisplay: 'multiline' as const, rules: [{ required: true, message: '请输入回调地址' }] },
 	{ dataIndex: 'backchannel_logout_uri', title: '后端注销地址', component: 'url', placeholder: 'https://site.example/api/accounts/oidc/backchannel-logout' },

@@ -6,6 +6,7 @@ import type { ResJSON, DataType, ResJsonTable } from '@/utils/common/api.js';
 import type { ResJsonTableOption } from '@/utils/common/api.js';
 import type { CommonApi, ResJsonTableColumn } from '@/utils/common/api.js';
 import type { TableAction, TableQueryField } from '@shared/types/table.mjs';
+import { resolveTableFormColumns } from '@shared/table-form.mjs';
 
 import { useRef, useState, useEffect } from 'react';
 import { Table, Button, Flex, Input, Space, Tag, Select, Progress, Typography } from 'antd';
@@ -140,7 +141,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 		}
 		const drawerForm1 = drawer.drawerForm({
 			title: action.label,
-			columns: cacheResJsonTable.current.columns,
+			columns: resolveTableFormColumns(cacheResJsonTable.current.columns, 'edit'),
 			optionsPath: apiPath,
 		}, async (newRow) => {
 			if (!newRow) {
@@ -322,10 +323,10 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 	// 代码分类：导航
 	const navigate = useNavigate();
 
-	const onAddNew = async (columns: ResJsonTableColumn[], action: TableAction) => {
+	const onAddNew = async (action: TableAction) => {
 		const drawerForm = drawer.drawerForm({
 			title: action.label,
-			columns,
+			columns: resolveTableFormColumns(resJsonColumns, 'create'),
 			optionsPath: apiPath,
 		}, async (newRow) => {
 			if (!newRow) {
@@ -467,7 +468,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 		}}>{action.label}</a>,
 	};
 	const toolbarActionHandlers: Record<string, (action: TableAction) => React.ReactNode> = {
-		create: (action) => <Button key={action.key} type="primary" onClick={() => onAddNew(action.form?.columns ?? resJsonColumns, action)} icon={<PlusOutlined />} disabled={loading || action.disabled}>{action.label}</Button>,
+		create: (action) => <Button key={action.key} type="primary" onClick={() => onAddNew(action)} icon={<PlusOutlined />} disabled={loading || action.disabled}>{action.label}</Button>,
 		delete: (action) => <Button key={action.key} danger type="primary" disabled={selectedRowKeys.length === 0 || action.disabled} onClick={() => onDelete(action)} icon={<DeleteOutlined />}>{action.label}</Button>,
 		upload: (action) => <Button key={action.key} type="primary" icon={<UploadOutlined />} disabled={loading || action.disabled || uploadState?.phase === 'signing' || uploadState?.phase === 'uploading'} onClick={() => {
 			const input = document.createElement('input');

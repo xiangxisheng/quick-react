@@ -11,7 +11,7 @@ const allowedStatuses = new Set<string>(Object.values(statusValues));
 
 const columns = [
 	{ dataIndex: 'id', title: 'ID', dataType: 'int' as const },
-	{ dataIndex: 'site_key', title: '站点标识', component: 'textbox' },
+	{ dataIndex: 'site_key', title: '站点标识', component: 'textbox', rules: [{ required: true, message: '请输入站点标识' }], form: { edit: false } },
 	{ dataIndex: 'name', title: '名称', component: 'textbox' },
 	{ dataIndex: 'base_site_key', title: '父站点', component: 'select', placeholder: '搜索并选择父站点', rules: [{ required: true, message: '请选择父站点' }] },
 	{ dataIndex: 'dsn', title: 'Node DSN', component: 'textbox' },
