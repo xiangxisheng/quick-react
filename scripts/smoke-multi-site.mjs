@@ -250,6 +250,9 @@ try {
 	assert.ok(emailChannel?.id);
 	const emailTemplatesPath = '/api/panel/admin/global/cloud/email/templates.php';
 	assert.equal((await request('localhost', emailTemplatesPath, {
+		method: 'POST', cookie, body: { template_key: 'invalid_verification', template_type: 'email_verification', name: '无变量验证码', subject: '验证码', body_text: '验证码', body_html: '<p>验证码</p>' },
+	})).status, 400);
+	assert.equal((await request('localhost', emailTemplatesPath, {
 		method: 'POST', cookie, body: { template_key: 'email_verification', template_type: 'email_verification', name: '邮箱验证码', subject: '验证码 {{code}}', body_text: '验证码：{{code}}', body_html: '<p>验证码：{{code}}</p>' },
 	})).status, 201);
 	assert.equal(directMailActions.at(-1)?.action, 'CreateTemplate');
@@ -257,6 +260,9 @@ try {
 	const emailTemplates = await (await request('localhost', emailTemplatesPath, { cookie })).json();
 	const emailTemplate = emailTemplates.table.dataSource.find((item) => item.template_key === 'email_verification');
 	assert.ok(emailTemplate?.id);
+	assert.equal((await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}`, {
+		method: 'PUT', cookie, body: { body_html: '<p>验证码</p>', __changedFields: ['body_html'] },
+	})).status, 400);
 	const emailBindingsPath = '/api/panel/admin/global/cloud/email/bindings.php';
 	assert.equal((await request('localhost', emailBindingsPath, {
 		method: 'POST', cookie, body: { site_key: 'passport', channel_id: emailChannel.id, template_id: emailTemplate.id, is_default: true },

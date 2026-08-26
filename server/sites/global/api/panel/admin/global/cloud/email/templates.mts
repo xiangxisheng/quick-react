@@ -1,7 +1,7 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
 import { loadCloudEmailTarget, publishCloudEmailTemplate, refreshCloudEmailTemplate } from '@server/cloud/email.mjs';
-import { cloudEmailPurposeKeys, cloudEmailPurposeOptions } from '@server/cloud/email-purposes.mjs';
+import { cloudEmailPurposeKeys, cloudEmailPurposeOptions, validateCloudEmailTemplateVariables } from '@server/cloud/email-purposes.mjs';
 import { getAliyunDirectMailTemplate, listAliyunDirectMailTemplates } from '@server/cloud/providers/aliyun-direct-mail.mjs';
 import type { CloudEmailTemplate } from '@server/cloud/index.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
@@ -12,9 +12,9 @@ const columns = [
 	{ dataIndex: 'template_key', title: '模板 Key', component: 'textbox', placeholder: 'email_verification', rules: [{ required: true, message: '请输入模板 Key' }] },
 	{ dataIndex: 'template_type', title: '类型', component: 'select', options: cloudEmailPurposeOptions, rules: [{ required: true, message: '请选择模板类型' }] },
 	{ dataIndex: 'name', title: '名称', component: 'textbox', rules: [{ required: true, message: '请输入名称' }] },
-	{ dataIndex: 'subject', title: '主题', component: 'textbox', rules: [{ required: true, message: '请输入主题' }] },
-	{ dataIndex: 'body_text', title: '纯文本正文', component: 'textarea', rules: [{ required: true, message: '请输入纯文本正文' }] },
-	{ dataIndex: 'body_html', title: 'HTML 正文', component: 'textarea', rules: [{ required: true, message: '请输入 HTML 正文' }] },
+	{ dataIndex: 'subject', title: '主题', component: 'textbox', placeholder: '您的验证码是 {{code}}', rules: [{ required: true, message: '请输入主题' }] },
+	{ dataIndex: 'body_text', title: '纯文本正文', component: 'textarea', placeholder: '您的验证码是 {{code}}', rules: [{ required: true, message: '请输入纯文本正文' }] },
+	{ dataIndex: 'body_html', title: 'HTML 正文', component: 'textarea', placeholder: '<p>您的验证码是 {{code}}</p>', rules: [{ required: true, message: '请输入 HTML 正文' }] },
 	{ dataIndex: 'publication_status', title: '云端发布' },
 	{ dataIndex: 'status', title: '状态', component: 'switch', checkedValue: statusValues.enabled, uncheckedValue: statusValues.disabled, options: enabledDisabledOptions },
 ];
@@ -59,13 +59,17 @@ const syncAliyunTemplates = async (database: DatabaseAdapter, channelId: number,
 	for (const summary of remoteTemplates) {
 		try {
 			const remote = await getAliyunDirectMailTemplate(target, summary.providerTemplateId);
-			let local = await database.prepare(`SELECT p.template_id FROM global_cloud_email_template_publications p
+			let local = await database.prepare(`SELECT p.template_id, t.template_type, t.body_text FROM global_cloud_email_template_publications p
 				JOIN global_cloud_email_channels ch ON ch.id = p.channel_id
+				JOIN global_cloud_email_templates t ON t.id = p.template_id
 				WHERE p.provider_template_id = ?1 AND ch.cloud_credential_id = ?2 LIMIT 1`)
-				.bind(remote.providerTemplateId, target.cloud_credential_id).first<{ template_id: number }>();
-			if (!local) local = await database.prepare('SELECT id AS template_id FROM global_cloud_email_templates WHERE template_key = ?1')
-				.bind(importedTemplateKey(target.cloud_credential_id, remote.providerTemplateId)).first<{ template_id: number }>();
+				.bind(remote.providerTemplateId, target.cloud_credential_id).first<{ template_id: number; template_type: string; body_text: string }>();
+			if (!local) local = await database.prepare(`SELECT id AS template_id, template_type, body_text FROM global_cloud_email_templates WHERE template_key = ?1`)
+				.bind(importedTemplateKey(target.cloud_credential_id, remote.providerTemplateId)).first<{ template_id: number; template_type: string; body_text: string }>();
 			const now = Date.now(), subject = localTemplateText(remote.subject), bodyHtml = localTemplateText(remote.html);
+			const effectiveType = local?.template_type ?? templateType, bodyText = local?.body_text ?? plainText(bodyHtml);
+			const variableError = validateCloudEmailTemplateVariables(effectiveType, { subject, body_text: bodyText, body_html: bodyHtml });
+			if (variableError) throw new Error(variableError);
 			if (local) {
 				await database.prepare(`UPDATE global_cloud_email_templates SET subject = ?2, body_html = ?3, updated_at = ?4 WHERE id = ?1`)
 					.bind(local.template_id, subject, bodyHtml, now).run();
@@ -75,9 +79,9 @@ const syncAliyunTemplates = async (database: DatabaseAdapter, channelId: number,
 				await database.prepare(`INSERT INTO global_cloud_email_templates
 					(template_key, template_type, name, subject, body_text, body_html, status, created_at, updated_at)
 					VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'enabled', ?7, ?7)`)
-					.bind(templateKey, templateType, remote.name, subject, plainText(bodyHtml), bodyHtml, now).run();
-				local = await database.prepare('SELECT id AS template_id FROM global_cloud_email_templates WHERE template_key = ?1')
-					.bind(templateKey).first<{ template_id: number }>();
+					.bind(templateKey, templateType, remote.name, subject, bodyText, bodyHtml, now).run();
+				local = await database.prepare('SELECT id AS template_id, template_type, body_text FROM global_cloud_email_templates WHERE template_key = ?1')
+					.bind(templateKey).first<{ template_id: number; template_type: string; body_text: string }>();
 				if (!local) throw new Error('本地模板创建后无法读取');
 				imported += 1;
 			}
@@ -134,6 +138,8 @@ const handler: ApiHandler = async (c, next, params) => {
 	if (!params.id && c.req.method === 'POST') {
 		const body = await parseBody(c), templateKey = text(body.template_key), templateType = text(body.template_type), name = text(body.name), subject = text(body.subject), bodyText = text(body.body_text), bodyHtml = text(body.body_html);
 		if (!keyPattern.test(templateKey) || !cloudEmailPurposeKeys.has(templateType) || !name || !subject || !bodyText || !bodyHtml) return apiMessage(c, 400, '模板 Key、类型、名称、主题和正文不合法');
+		const variableError = validateCloudEmailTemplateVariables(templateType, { subject, body_text: bodyText, body_html: bodyHtml });
+		if (variableError) return apiMessage(c, 400, variableError);
 		try {
 			await database.prepare(`INSERT INTO global_cloud_email_templates
 				(template_key, template_type, name, subject, body_text, body_html, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)`)
@@ -189,6 +195,8 @@ const handler: ApiHandler = async (c, next, params) => {
 		const bodyText = changed.has('body_text') ? text(body.body_text) : current.body_text, bodyHtml = changed.has('body_html') ? text(body.body_html) : current.body_html;
 		const status = changed.has('status') && body.status === statusValues.disabled ? statusValues.disabled : changed.has('status') ? statusValues.enabled : current.status;
 		if (!keyPattern.test(templateKey) || !cloudEmailPurposeKeys.has(templateType) || !name || !subject || !bodyText || !bodyHtml) return apiMessage(c, 400, '模板 Key、类型、名称、主题和正文不合法');
+		const variableError = validateCloudEmailTemplateVariables(templateType, { subject, body_text: bodyText, body_html: bodyHtml });
+		if (variableError) return apiMessage(c, 400, variableError);
 		if (templateType !== current.template_type) {
 			const binding = await database.prepare('SELECT template_id FROM global_cloud_email_bindings WHERE template_id = ?1 LIMIT 1').bind(current.id).first();
 			if (binding) return apiMessage(c, 409, '模板已有站点绑定，不能修改类型');

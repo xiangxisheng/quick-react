@@ -3,6 +3,7 @@ import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mj
 import { cloudProviderOptions, getCloudEmailProduct, getCloudEmailRegions, providerSupportsEmailPush } from '@server/cloud/catalog.mjs';
 import { listAliyunDirectMailAddresses } from '@server/cloud/providers/aliyun-direct-mail.mjs';
 import { createCloudEmailAdapter, loadCloudEmailTarget, renderCloudEmailTemplate } from '@server/cloud/email.mjs';
+import { validateCloudEmailTemplateVariables } from '@server/cloud/email-purposes.mjs';
 import type { CloudCredential, CloudEmailTemplate } from '@server/cloud/index.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { getChangedFields } from '@server/changed-fields.mjs';
@@ -102,10 +103,11 @@ const handler: ApiHandler = async (c, next, params) => {
 		if (text(c.req.query('field')) !== 'template_id') return apiMessage(c, 400, '不支持的发现字段');
 		const channel = await loadCloudEmailTarget(database, Number(params.id));
 		if (!channel) return apiMessage(c, 404, '邮件通道不存在或已停用');
-		const templates = await database.prepare(`SELECT id, template_key, name FROM global_cloud_email_templates
+		const templates = await database.prepare(`SELECT id, template_key, name, template_type, subject, body_text, body_html, status FROM global_cloud_email_templates
 			WHERE status = 'enabled' AND template_type = 'email_verification' ORDER BY name, template_key`)
-			.all<{ id: number; template_key: string; name: string }>();
-		return apiResponse(c, 200, { options: templates.results.map((item) => ({ value: String(item.id), text: `${item.name} (${item.template_key})` })) });
+			.all<CloudEmailTemplate>();
+		return apiResponse(c, 200, { options: templates.results.filter((item) => !validateCloudEmailTemplateVariables(item.template_type, item))
+			.map((item) => ({ value: String(item.id), text: `${item.name} (${item.template_key})` })) });
 	}
 	if (params.id && c.req.method === 'GET') {
 		const row = await database.prepare(`SELECT id, cloud_credential_id, region, account_name, from_alias, reply_to_address,
@@ -122,6 +124,8 @@ const handler: ApiHandler = async (c, next, params) => {
 				.bind(templateId).first<CloudEmailTemplate>(),
 		]);
 		if (!target || !template) return apiMessage(c, 404, '邮件通道或启用的验证码模板不存在');
+		const variableError = validateCloudEmailTemplateVariables(template.template_type, template);
+		if (variableError) return apiMessage(c, 400, variableError);
 		const variables = { code, email: to, expires_minutes: '10' };
 		try {
 			const rendered = renderCloudEmailTemplate(template, variables);
