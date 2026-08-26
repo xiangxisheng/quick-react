@@ -1,6 +1,9 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
 import { cloudProviderOptions, getCloudEmailProduct, getCloudEmailRegions, providerSupportsEmailPush } from '@server/cloud/catalog.mjs';
+import { listAliyunDirectMailAddresses } from '@server/cloud/providers/aliyun-direct-mail.mjs';
+import { createCloudEmailAdapter, loadCloudEmailTarget, renderCloudEmailTemplate } from '@server/cloud/email.mjs';
+import type { CloudCredential, CloudEmailTemplate } from '@server/cloud/index.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { getChangedFields } from '@server/changed-fields.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
@@ -8,10 +11,15 @@ import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 const columns = [
 	{ dataIndex: 'cloud_credential_id', title: '云凭据', component: 'select', rules: [{ required: true, message: '请选择云凭据' }] },
 	{ dataIndex: 'region', title: 'Region', component: 'select', options: getCloudEmailRegions('aliyun').map((value) => ({ value, text: value })), rules: [{ required: true, message: '请选择 Region' }] },
-	{ dataIndex: 'account_name', title: '发信地址', component: 'textbox', rules: [{ required: true, message: '请输入已验证的发信地址' }, { type: 'email', message: '发信地址格式不正确' }] },
+	{ dataIndex: 'account_name', title: '发信地址', component: 'select', remoteOptions: { action: 'discover', dependencies: ['cloud_credential_id', 'region'], clearFields: ['reply_to_address'] }, rules: [{ required: true, message: '请选择发信地址' }] },
 	{ dataIndex: 'from_alias', title: '发信人名称', component: 'textbox', rules: [{ required: true, message: '请输入发信人名称' }] },
 	{ dataIndex: 'reply_to_address', title: '启用回信地址', component: 'switch' },
 	{ dataIndex: 'status', title: '状态', component: 'switch', checkedValue: statusValues.enabled, uncheckedValue: statusValues.disabled, options: enabledDisabledOptions },
+];
+const testColumns = [
+	{ dataIndex: 'to', title: '收件人', component: 'textbox', placeholder: 'recipient@example.com', rules: [{ required: true, message: '请输入收件人邮箱' }] },
+	{ dataIndex: 'template_id', title: '邮箱验证码模板', component: 'select', remoteOptions: { action: 'templates', dependencies: [] }, rules: [{ required: true, message: '请选择已审核通过的模板' }] },
+	{ dataIndex: 'code', title: '验证码内容', component: 'textbox', placeholder: '123456', rules: [{ required: true, message: '请输入 6 位数字验证码' }] },
 ];
 
 const parseBody = async (c: Parameters<ApiHandler>[0]): Promise<Record<string, unknown>> => c.req.json<Record<string, unknown>>().catch(() => ({}));
@@ -30,6 +38,8 @@ const validCredential = async (database: DatabaseAdapter, id: number, region: st
 		.bind(id).first<{ id: number; provider: string }>();
 	return Boolean(credential && providerSupportsEmailPush(credential.provider) && getCloudEmailRegions(credential.provider).some((item) => item === region));
 };
+const loadCredential = (database: DatabaseAdapter, id: number) => database.prepare(`SELECT id, name, provider, account_id,
+	access_key_id, access_key_secret, status FROM global_cloud_credentials WHERE id = ?1 AND status = 'enabled'`).bind(id).first<CloudCredential>();
 const deleteChannel = async (database: DatabaseAdapter, id: number) => {
 	const row = await database.prepare(`SELECT id, status FROM global_cloud_email_channels WHERE id = ?1`).bind(id).first<{ id: number; status: string }>();
 	if (!row) return '邮件通道不存在';
@@ -42,6 +52,21 @@ const deleteChannel = async (database: DatabaseAdapter, id: number) => {
 
 const handler: ApiHandler = async (c, next, params) => {
 	const database = c.get('database');
+	if (!params.id && c.req.method === 'GET' && c.req.query('action') === 'discover') {
+		if (text(c.req.query('field')) !== 'account_name') return apiMessage(c, 400, '不支持的发现字段');
+		const credentialId = Number(c.req.query('cloud_credential_id'));
+		const region = text(c.req.query('region'));
+		const credential = Number.isInteger(credentialId) ? await loadCredential(database, credentialId) : null;
+		if (!credential || credential.provider !== 'aliyun' || !getCloudEmailRegions(credential.provider).includes(region)) return apiMessage(c, 400, '阿里云凭据或 Region 不合法');
+		try {
+			const addresses = await listAliyunDirectMailAddresses({ region, access_key_id: credential.access_key_id, access_key_secret: credential.access_key_secret });
+			return apiResponse(c, 200, { options: addresses.map((item) => ({
+				value: item.accountName,
+				text: item.accountName,
+				fieldValues: { reply_to_address: item.replyEnabled },
+			})) });
+		} catch (error) { return apiMessage(c, 502, error instanceof Error ? error.message : '阿里云发信地址读取失败'); }
+	}
 	if (!params.id && c.req.method === 'GET') {
 		const [rows, options] = await Promise.all([
 			database.prepare(`SELECT ch.id, ch.cloud_credential_id, c.name AS credential_name, c.provider, ch.region,
@@ -51,7 +76,7 @@ const handler: ApiHandler = async (c, next, params) => {
 		]);
 		const tableColumns = columns.map((column) => column.dataIndex === 'cloud_credential_id' ? { ...column, options } : column);
 		const dataSource = rows.results.map((row) => ({ ...row, product: getCloudEmailProduct(String(row.provider)) }));
-		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { query: [{ key: 'search', label: '搜索' }], toolbar: [{ key: 'create', label: '新增' }, { key: 'delete', label: '删除' }], row: [{ key: 'edit', label: '编辑' }, { key: 'delete', label: '删除' }] } }, columns: tableColumns, dataSource, totalRecords: dataSource.length } });
+		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { query: [{ key: 'search', label: '搜索' }], toolbar: [{ key: 'create', label: '新增' }, { key: 'delete', label: '删除' }], row: [{ key: 'test', label: '测试发件', form: { columns: testColumns } }, { key: 'edit', label: '编辑' }, { key: 'delete', label: '删除' }] } }, columns: tableColumns, dataSource, totalRecords: dataSource.length } });
 	}
 	if (!params.id && c.req.method === 'POST') {
 		const body = await parseBody(c);
@@ -73,10 +98,36 @@ const handler: ApiHandler = async (c, next, params) => {
 		}
 		return apiMessage(c, 200, '删除成功');
 	}
+	if (params.id && c.req.method === 'GET' && c.req.query('action') === 'templates') {
+		if (text(c.req.query('field')) !== 'template_id') return apiMessage(c, 400, '不支持的发现字段');
+		const templates = await database.prepare(`SELECT t.id, t.template_key, t.name FROM global_cloud_email_templates t
+			JOIN global_cloud_email_template_publications p ON p.template_id = t.id
+			WHERE p.channel_id = ?1 AND p.status = 'ready' AND t.status = 'enabled' AND t.template_type = 'email_verification'
+			ORDER BY t.name, t.template_key`).bind(Number(params.id)).all<{ id: number; template_key: string; name: string }>();
+		return apiResponse(c, 200, { options: templates.results.map((item) => ({ value: String(item.id), text: `${item.name} (${item.template_key})` })) });
+	}
 	if (params.id && c.req.method === 'GET') {
 		const row = await database.prepare(`SELECT id, cloud_credential_id, region, account_name, from_alias, reply_to_address,
 			status, created_at, updated_at FROM global_cloud_email_channels WHERE id = ?1`).bind(Number(params.id)).first();
 		return row ? apiResponse(c, 200, row) : apiMessage(c, 404, '邮件通道不存在');
+	}
+	if (params.id && c.req.method === 'POST' && c.req.query('action') === 'test') {
+		const body = await parseBody(c), to = text(body.to), templateId = Number(body.template_id), code = text(body.code);
+		if (!emailPattern.test(to) || !Number.isInteger(templateId) || !/^\d{6}$/.test(code)) return apiMessage(c, 400, '收件人、验证码模板或 6 位数字验证码不合法');
+		const [target, template] = await Promise.all([
+			loadCloudEmailTarget(database, Number(params.id)),
+			database.prepare(`SELECT t.id, t.template_key, t.template_type, t.name, t.subject, t.body_text, t.body_html, t.status,
+				p.provider_template_id FROM global_cloud_email_templates t JOIN global_cloud_email_template_publications p ON p.template_id = t.id
+				WHERE t.id = ?1 AND p.channel_id = ?2 AND t.template_type = 'email_verification' AND t.status = 'enabled' AND p.status = 'ready'`)
+				.bind(templateId, Number(params.id)).first<CloudEmailTemplate & { provider_template_id: string }>(),
+		]);
+		if (!target || !template) return apiMessage(c, 404, '邮件通道或已审核验证码模板不存在');
+		const variables = { code, email: to, expires_minutes: '10' };
+		try {
+			const rendered = renderCloudEmailTemplate(template, variables);
+			const result = await createCloudEmailAdapter(target).send({ to, ...rendered, template: { providerTemplateId: template.provider_template_id, variables } });
+			return apiMessageData(c, 200, '测试邮件已提交', { requestId: result.requestId, messageId: result.messageId }, { component: 'modal', title: '测试发件成功' });
+		} catch (error) { return apiMessage(c, 502, error instanceof Error ? error.message : '测试邮件发送失败'); }
 	}
 	if (params.id && c.req.method === 'PUT') {
 		const current = await database.prepare(`SELECT id, cloud_credential_id, region, account_name, from_alias, reply_to_address, status

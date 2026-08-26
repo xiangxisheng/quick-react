@@ -18,9 +18,44 @@ const endpoint = (region: string) => region === 'ap-southeast-1'
 	? 'https://dm.ap-southeast-1.aliyuncs.com/'
 	: 'https://dm.aliyuncs.com/';
 
-type AliyunResult = { RequestId?: string; Code?: string; Message?: string; EnvId?: string; TemplateId?: number | string; TemplateStatus?: number };
+type AliyunMailAddress = {
+	AccountName?: string;
+	AccountStatus?: number;
+	DomainStatus?: number;
+	ReplyAddress?: string;
+	ReplyStatus?: number;
+	Sendtype?: string;
+};
 
-const callDirectMail = async (target: CloudEmailTarget, action: string, actionParameters: Record<string, string>) => {
+type AliyunTemplateSummary = {
+	TemplateId?: number | string;
+	TemplateName?: string;
+	TemplateStatus?: number | string;
+};
+
+export type AliyunDirectMailRemoteTemplate = {
+	providerTemplateId: string;
+	name: string;
+	subject: string;
+	html: string;
+	status: CloudEmailTemplatePublication['status'];
+};
+
+type AliyunResult = {
+	RequestId?: string;
+	Code?: string;
+	Message?: string;
+	EnvId?: string;
+	TemplateId?: number | string;
+	TemplateStatus?: number | string;
+	TemplateName?: string;
+	TemplateSubject?: string;
+	TemplateText?: string;
+	TotalCount?: number;
+	data?: { mailAddress?: AliyunMailAddress[]; template?: AliyunTemplateSummary[] };
+};
+
+const callDirectMail = async (target: Pick<CloudEmailTarget, 'region' | 'access_key_id' | 'access_key_secret'>, action: string, actionParameters: Record<string, string>) => {
 	if (!target.access_key_id || !target.access_key_secret) throw new Error('阿里云邮件推送凭据不完整');
 	const parameters: Record<string, string> = {
 		AccessKeyId: target.access_key_id,
@@ -50,6 +85,49 @@ const callDirectMail = async (target: CloudEmailTarget, action: string, actionPa
 
 const providerTemplateText = (value: string) => value.replace(/\{\{([a-z][a-z0-9_]*)\}\}/g, '{$1}');
 const providerTemplateName = (template: CloudEmailTemplate, channelId: number) => `${template.template_key}_${template.id}_${channelId}`.slice(0, 30);
+const publicationStatus = (value: number | string | undefined): CloudEmailTemplatePublication['status'] => Number(value) === 2 ? 'ready' : Number(value) === 3 ? 'rejected' : 'reviewing';
+
+export const listAliyunDirectMailAddresses = async (target: Pick<CloudEmailTarget, 'region' | 'access_key_id' | 'access_key_secret'>) => {
+	const pageSize = 100;
+	const addresses: Array<{ accountName: string; replyAddress: string; replyEnabled: boolean }> = [];
+	for (let page = 1; ; page += 1) {
+		const result = await callDirectMail(target, 'QueryMailAddressByParam', {
+			KeyWord: '@',
+			PageNo: String(page),
+			PageSize: String(pageSize),
+			Sendtype: 'trigger',
+		});
+		const rows = result.data?.mailAddress ?? [];
+		addresses.push(...rows.filter((item) => item.AccountName && item.AccountStatus === 0 && item.DomainStatus === 0)
+			.map((item) => ({ accountName: item.AccountName!, replyAddress: item.ReplyAddress ?? '', replyEnabled: item.ReplyStatus === 0 })));
+		if (!rows.length || page * pageSize >= (result.TotalCount ?? rows.length)) break;
+	}
+	return addresses;
+};
+
+export const listAliyunDirectMailTemplates = async (target: Pick<CloudEmailTarget, 'region' | 'access_key_id' | 'access_key_secret'>) => {
+	const pageSize = 100;
+	const templates: AliyunTemplateSummary[] = [];
+	for (let page = 1; ; page += 1) {
+		const result = await callDirectMail(target, 'QueryTemplateByParam', { PageNo: String(page), PageSize: String(pageSize) });
+		const rows = result.data?.template ?? [];
+		templates.push(...rows);
+		if (!rows.length || page * pageSize >= (result.TotalCount ?? rows.length)) break;
+	}
+	return templates.filter((item) => item.TemplateId !== undefined && String(item.TemplateId).trim())
+		.map((item) => ({ providerTemplateId: String(item.TemplateId), name: item.TemplateName?.trim() || `阿里云模板 ${item.TemplateId}`, status: publicationStatus(item.TemplateStatus) }));
+};
+
+export const getAliyunDirectMailTemplate = async (target: Pick<CloudEmailTarget, 'region' | 'access_key_id' | 'access_key_secret'>, providerTemplateId: string): Promise<AliyunDirectMailRemoteTemplate> => {
+	const result = await callDirectMail(target, 'DescTemplate', { TemplateId: providerTemplateId });
+	return {
+		providerTemplateId,
+		name: result.TemplateName?.trim() || `阿里云模板 ${providerTemplateId}`,
+		subject: result.TemplateSubject?.trim() || '无主题',
+		html: result.TemplateText?.trim() || '<p>空模板</p>',
+		status: publicationStatus(result.TemplateStatus),
+	};
+};
 
 export const createAliyunDirectMailTemplate = async (target: CloudEmailTarget, template: CloudEmailTemplate): Promise<CloudEmailTemplatePublication> => {
 	const result = await callDirectMail(target, 'CreateTemplate', {
@@ -76,7 +154,7 @@ export const updateAliyunDirectMailTemplate = async (target: CloudEmailTarget, t
 
 export const describeAliyunDirectMailTemplate = async (target: CloudEmailTarget, providerTemplateId: string): Promise<CloudEmailTemplatePublication> => {
 	const result = await callDirectMail(target, 'DescTemplate', { TemplateId: providerTemplateId });
-	const status = result.TemplateStatus === 2 ? 'ready' : result.TemplateStatus === 3 ? 'rejected' : 'reviewing';
+	const status = publicationStatus(result.TemplateStatus);
 	return { providerTemplateId, status, requestId: result.RequestId! };
 };
 

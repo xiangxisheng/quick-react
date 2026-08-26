@@ -104,15 +104,16 @@ model global_cloud_email_channels {
 }
 
 model global_cloud_email_templates {
-  id           Int    @id @default(autoincrement())
-  template_key String @unique
-  name         String
-  subject      String
-  body_text    String
-  body_html    String
-  status       String @default("enabled")
-  created_at   BigInt
-  updated_at   BigInt
+  id            Int    @id @default(autoincrement())
+  template_key  String @unique
+  template_type String
+  name          String
+  subject       String
+  body_text     String
+  body_html     String
+  status        String @default("enabled")
+  created_at    BigInt
+  updated_at    BigInt
 }
 
 model global_cloud_email_bindings {

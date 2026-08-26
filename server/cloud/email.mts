@@ -61,7 +61,7 @@ export const renderCloudEmailTemplate = (template: Pick<CloudEmailTemplate, 'sub
 export const sendDefaultCloudEmail = async (database: DatabaseAdapter, siteKey: string, purpose: string, to: string, variables: Record<string, string>) => {
 	const configuration = await database.prepare(`SELECT ch.id, c.provider, ch.cloud_credential_id, ch.region, ch.account_name,
 		ch.from_alias, ch.reply_to_address, c.access_key_id, c.access_key_secret,
-		t.id AS template_id, t.template_key, t.name, t.subject, t.body_text, t.body_html, t.status,
+		t.id AS template_id, t.template_key, t.template_type, t.name, t.subject, t.body_text, t.body_html, t.status,
 		p.provider_template_id, p.status AS publication_status
 		FROM global_cloud_email_bindings b
 		JOIN global_cloud_email_channels ch ON ch.id = b.channel_id

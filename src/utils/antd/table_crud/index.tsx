@@ -247,7 +247,8 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 						fixed: 'right',
 						width: 100,
 						render: (value: any, record: DataType, index: number) => <Space>
-							{(resJsonTableOption.actions?.row ?? []).map((action) => rowActionHandlers[action.key]?.(action, value, record, index) ?? null)}
+							{(resJsonTableOption.actions?.row ?? []).map((action) => rowActionHandlers[action.key]?.(action, value, record, index)
+								?? <a key={action.key} aria-disabled={action.disabled} onClick={() => onSimpleRowAction(action, record)}>{action.label}</a>)}
 						</Space>,
 					});
 					setTableColumns(tableColumns);
@@ -352,13 +353,68 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 		await apiDelete(selectedRowKeys);
 	}
 
+	const onTest = async (action: TableAction, record: DataType) => {
+		const rowId = String(record[resJsonTableOption.rowKey] ?? '');
+		if (!rowId) return;
+		const url = `${apiPath}/${encodeURIComponent(rowId)}?action=test`;
+		if (!action.form) {
+			await commonApi.apiFetch(url, { method: 'POST' });
+			return;
+		}
+		const drawerForm = drawer.drawerForm({
+			title: action.label,
+			columns: action.form.columns,
+			optionsPath: `${apiPath}/${encodeURIComponent(rowId)}`,
+		}, async (values) => {
+			if (!values) return;
+			drawerForm.setSubmitting‌(true);
+			try {
+				await commonApi.apiFetch(url, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(values),
+				});
+				drawer.drawerClose();
+			} catch (error) {
+				console.error(error);
+			} finally {
+				drawerForm.setSubmitting‌(false);
+			}
+		});
+	};
+
+	const onToolbarFormAction = (action: TableAction) => {
+		if (!action.form) return;
+		const drawerForm = drawer.drawerForm({ title: action.label, columns: action.form.columns, optionsPath: apiPath }, async (values) => {
+			if (!values) return;
+			drawerForm.setSubmitting‌(true);
+			try {
+				await commonApi.apiFetch(`${apiPath}?action=${encodeURIComponent(action.key)}`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(values),
+				});
+				drawer.drawerClose();
+				await fetchData();
+			} catch (error) {
+				console.error(error);
+			} finally {
+				drawerForm.setSubmitting‌(false);
+			}
+		});
+	};
+	const onSimpleRowAction = async (action: TableAction, record: DataType) => {
+		const rowId = String(record[resJsonTableOption.rowKey] ?? '');
+		if (!rowId || action.disabled) return;
+		if (action.confirm && !await commonApi.modalConfirm([action.confirm])) return;
+		await commonApi.apiFetch(`${apiPath}/${encodeURIComponent(rowId)}?action=${encodeURIComponent(action.key)}`, { method: 'POST' });
+		await fetchData();
+	};
+
 	const rowActionHandlers: Record<string, (action: TableAction, value: any, record: DataType, index: number) => React.ReactNode> = {
 		edit: (action, value, record, index) => <a key={action.key} aria-disabled={action.disabled} onClick={() => !action.disabled && onOpenEdit(value, record, index, action)}>{action.label}</a>,
 		delete: (action, value, record, index) => <a key={action.key} aria-disabled={action.disabled} onClick={() => !action.disabled && onDeleteOne(value, record, index, action)}>{action.label}</a>,
-		test: (action, _value, record) => <a key={action.key} aria-disabled={action.disabled} onClick={async () => {
-			if (action.disabled) return;
-			await commonApi.apiFetch(`${apiPath}/${encodeURIComponent(String(record[resJsonTableOption.rowKey] ?? ''))}?action=test`, { method: 'POST' });
-		}}>{action.label}</a>,
+		test: (action, _value, record) => <a key={action.key} aria-disabled={action.disabled} onClick={() => !action.disabled && onTest(action, record)}>{action.label}</a>,
 		download: (action, _value, record) => <a key={action.key} aria-disabled={action.disabled} onClick={async () => {
 			if (action.disabled) return;
 			const key = String(record[resJsonTableOption.rowKey] ?? '');
@@ -431,7 +487,8 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 			{queryActions.map((action) => queryActionHandlers[action.key]?.(action) ?? null)}
 		</Flex>
 		<Flex wrap gap="small">
-			{(resJsonTableOption.actions?.toolbar ?? []).map((action) => toolbarActionHandlers[action.key]?.(action) ?? null)}
+			{(resJsonTableOption.actions?.toolbar ?? []).map((action) => toolbarActionHandlers[action.key]?.(action)
+				?? (action.form ? <Button key={action.key} disabled={loading || action.disabled} onClick={() => onToolbarFormAction(action)}>{action.label}</Button> : null))}
 		</Flex>
 		{uploadState && <Flex gap="middle" align="center" style={{ padding: '12px 16px', border: '1px solid #f0f0f0', borderRadius: 8 }}>
 			<Flex vertical style={{ flex: 1, minWidth: 0 }}>

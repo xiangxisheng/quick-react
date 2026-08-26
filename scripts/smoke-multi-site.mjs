@@ -20,7 +20,14 @@ globalThis.fetch = async (input, init) => {
 		directMailActions.push({ action, parameters });
 		if (action === 'CreateTemplate') return Response.json({ RequestId: 'dm-create', TemplateId: 5001 });
 		if (action === 'ModifyTemplate') return Response.json({ RequestId: 'dm-modify' });
-		if (action === 'DescTemplate') return Response.json({ RequestId: 'dm-describe', TemplateStatus: 2 });
+		if (action === 'DescTemplate' && parameters.get('TemplateId') === '6002') return Response.json({ RequestId: 'dm-describe-import', TemplateId: 6002, TemplateName: 'cloud_otp',
+			TemplateSubject: '云端验证码 {code}', TemplateText: '<p>云端验证码：{code}</p>', TemplateStatus: 2 });
+		if (action === 'DescTemplate') return Response.json({ RequestId: 'dm-describe', TemplateId: 5001, TemplateName: 'email_verification_1_1',
+			TemplateSubject: '验证码 {code}', TemplateText: '<p>验证码：{code}</p>', TemplateStatus: 2 });
+		if (action === 'QueryTemplateByParam') return Response.json({ RequestId: 'dm-templates', TotalCount: 2, data: { template: [
+			{ TemplateId: 5001, TemplateName: 'email_verification_1_1', TemplateStatus: 2 },
+			{ TemplateId: 6002, TemplateName: 'cloud_otp', TemplateStatus: 2 },
+		] } });
 		if (action === 'QueryMailAddressByParam') return Response.json({ RequestId: 'dm-addresses', TotalCount: 1, data: { mailAddress: [{
 			AccountName: 'noreply@example.com', AccountStatus: 0, DomainStatus: 0, ReplyAddress: 'reply@example.com', ReplyStatus: 0, Sendtype: 'trigger',
 		}] } });
@@ -239,7 +246,7 @@ try {
 	assert.ok(emailChannel?.id);
 	const emailTemplatesPath = '/api/panel/admin/global/cloud/email/templates.php';
 	assert.equal((await request('localhost', emailTemplatesPath, {
-		method: 'POST', cookie, body: { template_key: 'email_verification', name: '邮箱验证码', subject: '验证码 {{code}}', body_text: '验证码：{{code}}', body_html: '<p>验证码：{{code}}</p>' },
+		method: 'POST', cookie, body: { template_key: 'email_verification', template_type: 'email_verification', name: '邮箱验证码', subject: '验证码 {{code}}', body_text: '验证码：{{code}}', body_html: '<p>验证码：{{code}}</p>' },
 	})).status, 201);
 	assert.equal(directMailActions.at(-1)?.action, 'CreateTemplate');
 	assert.equal(directMailActions.at(-1)?.parameters.get('TemplateSubject'), '验证码 {code}');
@@ -248,12 +255,30 @@ try {
 	assert.ok(emailTemplate?.id);
 	const emailBindingsPath = '/api/panel/admin/global/cloud/email/bindings.php';
 	assert.equal((await request('localhost', emailBindingsPath, {
-		method: 'POST', cookie, body: { site_key: 'passport', channel_id: emailChannel.id, template_id: emailTemplate.id, purpose: 'email_verification', is_default: true },
+		method: 'POST', cookie, body: { site_key: 'passport', channel_id: emailChannel.id, template_id: emailTemplate.id, is_default: true },
 	})).status, 400);
 	assert.equal((await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=refresh`, { method: 'POST', cookie })).status, 200);
 	assert.equal(directMailActions.at(-1)?.action, 'DescTemplate');
+	const testTemplateOptions = await (await request('localhost', `${emailChannelsPath}/${emailChannel.id}?action=templates&field=template_id`, { cookie })).json();
+	assert.deepEqual(testTemplateOptions.options, [{ value: String(emailTemplate.id), text: '邮箱验证码 (email_verification)' }]);
+	assert.equal((await request('localhost', `${emailChannelsPath}/${emailChannel.id}?action=test`, {
+		method: 'POST', cookie, body: { to: 'recipient@example.com', template_id: emailTemplate.id, code: '654321' },
+	})).status, 200);
+	const testedTemplate = JSON.parse(directMailActions.at(-1)?.parameters.get('Template'));
+	assert.deepEqual(testedTemplate, { TemplateId: '5001', TemplateData: { code: '654321', email: 'recipient@example.com', expires_minutes: '10' } });
+	const syncResponse = await request('localhost', `${emailTemplatesPath}?action=sync`, {
+		method: 'POST', cookie, body: { channel_id: emailChannel.id, template_type: 'email_verification' },
+	});
+	assert.equal(syncResponse.status, 200);
+	const syncResult = await syncResponse.json();
+	assert.equal(syncResult.updated, 1);
+	assert.equal(syncResult.imported, 1);
+	const syncedTemplates = await (await request('localhost', emailTemplatesPath, { cookie })).json();
+	const importedTemplate = syncedTemplates.table.dataSource.find((item) => item.template_key === `aliyun_${emailCredential.id}_6002`);
+	assert.equal(importedTemplate?.template_type, 'email_verification');
+	assert.equal(importedTemplate?.body_text, '云端验证码：{{code}}');
 	assert.equal((await request('localhost', emailBindingsPath, {
-		method: 'POST', cookie, body: { site_key: 'passport', channel_id: emailChannel.id, template_id: emailTemplate.id, purpose: 'email_verification', is_default: true },
+		method: 'POST', cookie, body: { site_key: 'passport', channel_id: emailChannel.id, template_id: emailTemplate.id, is_default: true },
 	})).status, 201);
 	const emailBindings = await (await request('localhost', emailBindingsPath, { cookie })).json();
 	const emailBinding = emailBindings.table.dataSource[0];
@@ -282,7 +307,7 @@ try {
 	assert.deepEqual(JSON.parse(directMailActions.at(-1)?.parameters.get('Template')), { TemplateId: '5001', TemplateData: { code: '123456' } });
 	assert.equal(directMailActions.at(-1)?.parameters.has('HtmlBody'), false);
 	assert.equal((await request('localhost', emailBindingsPath, {
-		method: 'POST', cookie, body: { site_key: 'passport', channel_id: emailChannel.id, template_id: emailTemplate.id, purpose: 'email_verification', is_default: true },
+		method: 'POST', cookie, body: { site_key: 'passport', channel_id: emailChannel.id, template_id: emailTemplate.id, is_default: true },
 	})).status, 201);
 	assert.equal((await request('localhost', `${botsPath}/${webhookBot.id}`, {
 		method: 'PUT', cookie, body: { status: 'enabled', __changedFields: ['status'] },

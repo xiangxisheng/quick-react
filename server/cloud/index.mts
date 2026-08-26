@@ -63,6 +63,7 @@ export type CloudEmailAdapter = {
 export type CloudEmailTemplate = {
 	id: number;
 	template_key: string;
+	template_type: string;
 	name: string;
 	subject: string;
 	body_text: string;

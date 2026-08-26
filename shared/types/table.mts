@@ -8,6 +8,9 @@ export type TableAction = {
 	label: string;
 	disabled?: boolean;
 	confirm?: string;
+	form?: {
+		columns: TableColumn[];
+	};
 };
 export type TableQueryField = {
 	dataIndex: string;

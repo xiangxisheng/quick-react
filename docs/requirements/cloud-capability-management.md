@@ -91,9 +91,9 @@ Bucket 不保存人工名称，也不保存 `provider` 或 `service`。管理界
 
 同一凭据可以接入多个 Bucket。默认以 `cloud_credential_id + endpoint + bucket` 标识接入记录，避免同一个 Bucket 被重复添加。Endpoint 是 Bucket 接入配置而不是凭据字段：已知云厂商由 Provider 根据 Bucket 地域推导并自动回填，同时允许在 Bucket 表单中覆盖；自建或其他 S3 兼容 Provider 在 Bucket 表单中填写。
 
-邮件模板以 `template_key` 稳定标识，本地表直接保存当前主题、纯文本正文和 HTML 正文，变量统一写为 `{{variable_name}}`。一期不建立模板版本表；编辑时更新同一条本地模板，并更新各通道对应的云端模板。支持云端模板的 Provider 通过 `global_cloud_email_template_publications` 保存 Provider Template ID 和审核状态；只有状态为 `ready` 的模板才能启用站点绑定。不支持云端模板的 Provider 后续由适配器直接发送本地渲染后的正文，不创建伪造的云端模板记录。
+邮件模板以 `template_key` 稳定标识，并用 `template_type` 标识邮箱验证码等业务类型；站点绑定的用途由模板类型自动派生。本地表直接保存当前主题、纯文本正文和 HTML 正文，变量统一写为 `{{variable_name}}`。一期不建立模板版本表；编辑时更新同一条本地模板，并更新各通道对应的云端模板。支持云端模板的 Provider 通过 `global_cloud_email_template_publications` 保存 Provider Template ID 和审核状态；只有状态为 `ready` 的模板才能启用站点绑定。不支持云端模板的 Provider 后续由适配器直接发送本地渲染后的正文，不创建伪造的云端模板记录。
 
-阿里云 DirectMail 一期支持 `CreateTemplate`、`ModifyTemplate`、`DescTemplate` 和带 Template Data 的 `SingleSendMail`。新增或修改模板后状态回到 `reviewing`，管理员刷新远端状态，审核通过后才能设为站点默认模板。模板变量在发布时由内部双花括号语法转换为阿里云语法，日志和 API 响应不得包含 AccessKey Secret、验证码或完整签名参数。
+阿里云 DirectMail 支持发信地址发现、`CreateTemplate`、`ModifyTemplate`、`DescTemplate`、`QueryTemplateByParam` 和带 Template Data 的 `SingleSendMail`。新增或修改模板后状态回到 `reviewing`，管理员可以刷新远端状态或把云端模板同步到本地，审核通过后才能设为站点默认模板。模板变量在发布时由内部双花括号语法转换为阿里云语法，日志和 API 响应不得包含 AccessKey Secret、验证码或完整签名参数。
 
 ## 5. Provider 与处理模块
 

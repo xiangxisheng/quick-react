@@ -1,17 +1,16 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
 import { getCloudEmailProduct } from '@server/cloud/catalog.mjs';
+import { cloudEmailPurposeOptions } from '@server/cloud/email-purposes.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { getChangedFields } from '@server/changed-fields.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 
-const purposes = [{ value: 'email_verification', text: '邮箱验证码' }];
-const allowedPurposes = new Set(purposes.map((item) => item.value));
 const columns = [
 	{ dataIndex: 'site_key', title: '站点', component: 'select', rules: [{ required: true, message: '请选择站点' }] },
 	{ dataIndex: 'channel_id', title: '邮件通道', component: 'select', rules: [{ required: true, message: '请选择邮件通道' }] },
 	{ dataIndex: 'template_id', title: '邮件模板', component: 'select', rules: [{ required: true, message: '请选择邮件模板' }] },
-	{ dataIndex: 'purpose', title: '用途', component: 'select', options: purposes, rules: [{ required: true, message: '请选择用途' }] },
+	{ dataIndex: 'purpose', title: '类型', options: cloudEmailPurposeOptions },
 	{ dataIndex: 'is_default', title: '默认通道', component: 'switch' },
 	{ dataIndex: 'status', title: '状态', component: 'switch', checkedValue: statusValues.enabled, uncheckedValue: statusValues.disabled, options: enabledDisabledOptions },
 ];
@@ -25,12 +24,12 @@ const listOptions = async (database: DatabaseAdapter) => {
 		database.prepare(`SELECT ch.id, ch.account_name, ch.region, c.name AS credential_name, c.provider
 			FROM global_cloud_email_channels ch JOIN global_cloud_credentials c ON c.id = ch.cloud_credential_id
 			WHERE ch.status = 'enabled' AND c.status = 'enabled' ORDER BY c.name, ch.account_name`).all<{ id: number; account_name: string; region: string; credential_name: string; provider: string }>(),
-		database.prepare(`SELECT id, template_key, name FROM global_cloud_email_templates WHERE status = 'enabled' ORDER BY template_key`).all<{ id: number; template_key: string; name: string }>(),
+		database.prepare(`SELECT id, template_key, template_type, name FROM global_cloud_email_templates WHERE status = 'enabled' ORDER BY template_type, template_key`).all<{ id: number; template_key: string; template_type: string; name: string }>(),
 	]);
 	return {
 		sites: sites.results.map((item) => ({ value: item.site_key, text: `${item.name} (${item.site_key})` })),
 		channels: channels.results.map((item) => ({ value: String(item.id), text: `${item.credential_name} / ${getCloudEmailProduct(item.provider)} / ${item.account_name} (${item.region})` })),
-		templates: templates.results.map((item) => ({ value: String(item.id), text: `${item.name} (${item.template_key})` })),
+		templates: templates.results.map((item) => ({ value: String(item.id), text: `${cloudEmailPurposeOptions.find((purpose) => purpose.value === item.template_type)?.text ?? item.template_type} / ${item.name} (${item.template_key})` })),
 	};
 };
 const validateTarget = async (database: DatabaseAdapter, siteKey: string, channelId: number, templateId: number, enabled: boolean) => {
@@ -38,10 +37,10 @@ const validateTarget = async (database: DatabaseAdapter, siteKey: string, channe
 		database.prepare(`SELECT site_key FROM global_sites WHERE site_key = ?1 AND status = 'enabled' AND migration_status = 'ready'`).bind(siteKey).first(),
 		database.prepare(`SELECT ch.id FROM global_cloud_email_channels ch JOIN global_cloud_credentials c ON c.id = ch.cloud_credential_id
 			WHERE ch.id = ?1 AND ch.status = 'enabled' AND c.status = 'enabled'`).bind(channelId).first(),
-		database.prepare(`SELECT id FROM global_cloud_email_templates WHERE id = ?1 AND status = 'enabled'`).bind(templateId).first(),
+		database.prepare(`SELECT id, template_type FROM global_cloud_email_templates WHERE id = ?1 AND status = 'enabled'`).bind(templateId).first<{ id: number; template_type: string }>(),
 		database.prepare(`SELECT template_id FROM global_cloud_email_template_publications WHERE template_id = ?1 AND channel_id = ?2 AND status = 'ready'`).bind(templateId, channelId).first(),
 	]);
-	return Boolean(site && channel && template && (!enabled || publication));
+	return site && channel && template && (!enabled || publication) ? template.template_type : null;
 };
 const clearOtherDefaults = (database: DatabaseAdapter, id: number, siteKey: string, purpose: string) => database.prepare(`UPDATE global_cloud_email_bindings
 	SET is_default = 0, updated_at = ?4 WHERE site_key = ?1 AND purpose = ?2 AND id != ?3 AND is_default = 1`).bind(siteKey, purpose, id, Date.now()).run();
@@ -70,11 +69,12 @@ const handler: ApiHandler = async (c, next, params) => {
 		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { query: [{ key: 'search', label: '搜索' }], toolbar: [{ key: 'create', label: '新增' }, { key: 'delete', label: '删除' }], row: [{ key: 'edit', label: '编辑' }, { key: 'delete', label: '删除' }] } }, columns: tableColumns, dataSource: rows.results, totalRecords: rows.results.length } });
 	}
 	if (!params.id && c.req.method === 'POST') {
-		const body = await parseBody(c), siteKey = text(body.site_key), channelId = Number(body.channel_id), templateId = Number(body.template_id), purpose = text(body.purpose);
+		const body = await parseBody(c), siteKey = text(body.site_key), channelId = Number(body.channel_id), templateId = Number(body.template_id);
 		const status = body.status === statusValues.disabled ? statusValues.disabled : statusValues.enabled;
 		const isDefault = booleanValue(body.is_default) && status === statusValues.enabled ? 1 : 0;
-		if (!allowedPurposes.has(purpose) || !Number.isInteger(channelId) || !Number.isInteger(templateId)
-			|| !await validateTarget(database, siteKey, channelId, templateId, status === statusValues.enabled)) return apiMessage(c, 400, '站点、邮件通道、模板或云端审核状态不合法');
+		if (!Number.isInteger(channelId) || !Number.isInteger(templateId)) return apiMessage(c, 400, '站点、邮件通道或模板不合法');
+		const purpose = await validateTarget(database, siteKey, channelId, templateId, status === statusValues.enabled);
+		if (!purpose) return apiMessage(c, 400, '站点、邮件通道、模板或云端审核状态不合法');
 		try {
 			const now = Date.now();
 			const insert = `INSERT INTO global_cloud_email_bindings
@@ -108,13 +108,14 @@ const handler: ApiHandler = async (c, next, params) => {
 		const current = await database.prepare(`SELECT id, site_key, channel_id, template_id, purpose, is_default, status
 			FROM global_cloud_email_bindings WHERE id = ?1`).bind(Number(params.id)).first<Record<string, unknown>>();
 		if (!current) return apiMessage(c, 404, '邮件绑定不存在');
-		const body = await parseBody(c), changed = getChangedFields(body, ['site_key', 'channel_id', 'template_id', 'purpose', 'is_default', 'status']);
+		const body = await parseBody(c), changed = getChangedFields(body, ['site_key', 'channel_id', 'template_id', 'is_default', 'status']);
 		const siteKey = changed.has('site_key') ? text(body.site_key) : String(current.site_key), channelId = changed.has('channel_id') ? Number(body.channel_id) : Number(current.channel_id);
-		const templateId = changed.has('template_id') ? Number(body.template_id) : Number(current.template_id), purpose = changed.has('purpose') ? text(body.purpose) : String(current.purpose);
+		const templateId = changed.has('template_id') ? Number(body.template_id) : Number(current.template_id);
 		const status = changed.has('status') && body.status === statusValues.disabled ? statusValues.disabled : changed.has('status') ? statusValues.enabled : String(current.status);
 		const isDefault = status === statusValues.enabled && (changed.has('is_default') ? booleanValue(body.is_default) : Boolean(current.is_default)) ? 1 : 0;
-		if (!allowedPurposes.has(purpose) || !Number.isInteger(channelId) || !Number.isInteger(templateId)
-			|| !await validateTarget(database, siteKey, channelId, templateId, status === statusValues.enabled)) return apiMessage(c, 400, '站点、邮件通道、模板或云端审核状态不合法');
+		if (!Number.isInteger(channelId) || !Number.isInteger(templateId)) return apiMessage(c, 400, '站点、邮件通道或模板不合法');
+		const purpose = await validateTarget(database, siteKey, channelId, templateId, status === statusValues.enabled);
+		if (!purpose) return apiMessage(c, 400, '站点、邮件通道、模板或云端审核状态不合法');
 		try {
 			const now = Date.now();
 			const update = `UPDATE global_cloud_email_bindings SET site_key = ?2, channel_id = ?3, template_id = ?4,
