@@ -3,6 +3,7 @@ import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mj
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 import { getChangedFields } from '@server/changed-fields.mjs';
+import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
 
 const siteKeyPattern = /^[a-z][a-z0-9_]*$/;
 const bindingPattern = /^(?:[A-Z][A-Z0-9_]{0,63})?$/;
@@ -27,17 +28,15 @@ const booleanValue = (value: unknown) => value === true || value === 1 || value 
 
 const list = async (c: Parameters<ApiHandler>[0]) => {
 	const database = c.get('database');
-	const rows = await database.prepare(`SELECT id, site_key, name, base_site_key, dsn,
-		database_binding, status, passport_sso_enabled, migration_status, is_default, is_system
-		FROM global_sites ORDER BY id`).all<Record<string, unknown>>();
+	const rows = await allSql<Record<string, unknown>>(database, sql(database).select({ table: 'global_sites', orderBy: [{ column: 'id' }] }));
 	const parentOptions = [
 		{ value: 'base', text: '基础层 (base)' },
-		...rows.results
+		...rows
 			.filter((site) => site.is_system !== 1 && site.migration_status === 'ready')
 			.map((site) => ({ value: String(site.site_key), text: `${String(site.name)} (${String(site.site_key)})` })),
 	];
 	const tableColumns = columns.map((column) => column.dataIndex === 'base_site_key' ? { ...column, options: parentOptions } : column);
-	return apiResponse(c, 200, { table: { option: { rowKey: 'site_key', actions: { query: [{ key: 'search', label: '搜索' }], toolbar: [{ key: 'create', label: '新增' }, { key: 'delete', label: '删除' }], row: [{ key: 'edit', label: '编辑' }, { key: 'delete', label: '删除' }] } }, columns: tableColumns, dataSource: rows.results, totalRecords: rows.results.length } });
+	return apiResponse(c, 200, { table: { option: { rowKey: 'site_key', actions: { query: [{ key: 'search', label: '搜索' }], toolbar: [{ key: 'create', label: '新增' }, { key: 'delete', label: '删除' }], row: [{ key: 'edit', label: '编辑' }, { key: 'delete', label: '删除' }] } }, columns: tableColumns, dataSource: rows, totalRecords: rows.length } });
 };
 
 const validateParent = async (database: DatabaseAdapter, siteKey: string, parentSiteKey: string) => {
@@ -47,8 +46,7 @@ const validateParent = async (database: DatabaseAdapter, siteKey: string, parent
 	for (let depth = 0; depth < 8 && current !== 'base'; depth += 1) {
 		if (visited.has(current)) return false;
 		visited.add(current);
-		const parent = await database.prepare('SELECT base_site_key, is_system FROM global_sites WHERE site_key = ?1').bind(current)
-			.first<{ base_site_key: string | null; is_system: number }>();
+		const parent = await firstSql<{ base_site_key: string | null; is_system: number }>(database, sql(database).select({ table: 'global_sites', columns: { base_site_key: 'base_site_key', is_system: 'is_system' }, where: [{ column: 'site_key', value: current }] }));
 		if (!parent || parent.is_system) return false;
 		current = parent.base_site_key || 'base';
 	}
@@ -67,10 +65,7 @@ const handler: ApiHandler = async (c, next, params) => {
 		const databaseBinding = String(body.database_binding ?? '').trim();
 		if ((dsn && databaseBinding) || !bindingPattern.test(databaseBinding)) return apiMessage(c, 400, 'DSN 与 D1 Binding 只能配置一个，且 Binding 名称必须合法');
 		if (!await validateParent(database, siteKey, baseSiteKey)) return apiMessage(c, 400, '父站点不存在、不可继承或会形成循环');
-		await database.prepare(`INSERT INTO global_sites
-			(site_key, name, base_site_key, dsn, database_binding, status, migration_status, is_default, is_system)
-			VALUES (?1, ?2, ?3, ?4, ?5, 'disabled', 'creating', 0, 0)`)
-			.bind(siteKey, String(body.name ?? siteKey).trim() || siteKey, baseSiteKey, dsn, databaseBinding).run();
+		await runSql(database, sql(database).insert('global_sites', { site_key: siteKey, name: String(body.name ?? siteKey).trim() || siteKey, base_site_key: baseSiteKey, dsn, database_binding: databaseBinding, status: 'disabled', migration_status: 'creating', is_default: 0, is_system: 0 }));
 		let message = '站点已创建，请通过部署流程完成 migration';
 		if (c.env.MIGRATE_SITE) {
 			try {
@@ -87,17 +82,16 @@ const handler: ApiHandler = async (c, next, params) => {
 		const ids = await c.req.json<unknown[]>().catch(() => []);
 		const siteKeys = Array.isArray(ids) ? ids.map(String) : [];
 		for (const siteKey of siteKeys) {
-			const current = await database.prepare('SELECT is_system FROM global_sites WHERE site_key = ?1').bind(siteKey).first<{ is_system: number }>();
+			const current = await firstSql<{ is_system: number }>(database, sql(database).select({ table: 'global_sites', columns: { is_system: 'is_system' }, where: [{ column: 'site_key', value: siteKey }] }));
 			if (!current || current.is_system) continue;
-			await database.prepare('DELETE FROM global_site_hosts WHERE site_key = ?1').bind(siteKey).run();
-			await database.prepare('DELETE FROM global_sites WHERE site_key = ?1').bind(siteKey).run();
+			await runSql(database, sql(database).delete('global_site_hosts', { site_key: siteKey }));
+			await runSql(database, sql(database).delete('global_sites', { site_key: siteKey }));
 		}
 		await c.get('siteRouter').refresh();
 		return apiMessage(c, 200, '删除成功');
 	}
 	if (params.id && c.req.method === 'GET') {
-		const row = await database.prepare(`SELECT id, site_key, name, base_site_key, dsn, database_binding,
-			status, passport_sso_enabled, migration_status, is_default, is_system FROM global_sites WHERE site_key = ?1`).bind(params.id).first();
+		const row = await firstSql<Record<string, unknown>>(database, sql(database).select({ table: 'global_sites', where: [{ column: 'site_key', value: params.id }] }));
 		return row ? apiResponse(c, 200, row) : apiMessage(c, 404, '站点不存在');
 	}
 	if (params.id && c.req.method === 'POST') {
@@ -111,8 +105,7 @@ const handler: ApiHandler = async (c, next, params) => {
 		}
 	}
 	if (params.id && c.req.method === 'PUT') {
-		const current = await database.prepare('SELECT site_key, is_system, dsn, database_binding, base_site_key, migration_status FROM global_sites WHERE site_key = ?1').bind(params.id)
-			.first<{ site_key: string; is_system: number; dsn: string; database_binding: string; base_site_key: string | null; migration_status: string }>();
+		const current = await firstSql<{ site_key: string; is_system: number; dsn: string; database_binding: string; base_site_key: string | null; migration_status: string }>(database, sql(database).select({ table: 'global_sites', columns: { site_key: 'site_key', is_system: 'is_system', dsn: 'dsn', database_binding: 'database_binding', base_site_key: 'base_site_key', migration_status: 'migration_status' }, where: [{ column: 'site_key', value: params.id }] }));
 		if (!current) return apiMessage(c, 404, '站点不存在');
 		const body = await parseBody(c);
 		const changedFields = getChangedFields(body, ['name', 'base_site_key', 'dsn', 'database_binding', 'status']);
@@ -130,23 +123,24 @@ const handler: ApiHandler = async (c, next, params) => {
 			|| (databaseBinding !== undefined && databaseBinding !== current.database_binding);
 		const inheritanceChanged = nextParent !== (current.base_site_key || 'base');
 		if (current.is_system && targetChanged) return apiMessage(c, 400, '系统站点不可修改数据库目标');
-		await database.prepare(`UPDATE global_sites SET
-			name = COALESCE(?2, name), base_site_key = ?3, dsn = COALESCE(?4, dsn), database_binding = COALESCE(?5, database_binding),
-			status = CASE WHEN ?7 = 1 THEN 'disabled' ELSE COALESCE(?6, status) END,
-			migration_status = CASE WHEN ?7 = 1 THEN 'creating' ELSE migration_status END
-			WHERE site_key = ?1`).bind(params.id,
-			changedFields.has('name') && typeof body.name === 'string' ? body.name.trim() : null,
-			nextParent, dsn ?? null, databaseBinding ?? null,
-			status ?? null, (targetChanged || inheritanceChanged) ? 1 : 0).run();
+		const values: Record<string, unknown> = { base_site_key: nextParent };
+		if (changedFields.has('name') && typeof body.name === 'string') values.name = body.name.trim();
+		if (dsn !== undefined) values.dsn = dsn;
+		if (databaseBinding !== undefined) values.database_binding = databaseBinding;
+		if (targetChanged || inheritanceChanged) {
+			values.status = statusValues.disabled;
+			values.migration_status = 'creating';
+		} else if (status !== undefined) values.status = status;
+		await runSql(database, sql(database).update('global_sites', values, { site_key: params.id }));
 		await c.get('siteRouter').refresh();
 		return apiMessage(c, 200, '保存成功');
 	}
 	if (params.id && c.req.method === 'DELETE') {
-		const current = await database.prepare('SELECT is_system FROM global_sites WHERE site_key = ?1').bind(params.id).first<{ is_system: number }>();
+		const current = await firstSql<{ is_system: number }>(database, sql(database).select({ table: 'global_sites', columns: { is_system: 'is_system' }, where: [{ column: 'site_key', value: params.id }] }));
 		if (!current) return apiMessage(c, 404, '站点不存在');
 		if (current.is_system) return apiMessage(c, 400, '系统站点不可删除');
-		await database.prepare('DELETE FROM global_site_hosts WHERE site_key = ?1').bind(params.id).run();
-		await database.prepare('DELETE FROM global_sites WHERE site_key = ?1').bind(params.id).run();
+		await runSql(database, sql(database).delete('global_site_hosts', { site_key: params.id }));
+		await runSql(database, sql(database).delete('global_sites', { site_key: params.id }));
 		await c.get('siteRouter').refresh();
 		return apiMessage(c, 200, '删除成功');
 	}
