@@ -177,6 +177,9 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 			{formConfig?.fields.map((field) => field.type === 'hidden' ? (
 				<Form.Item key={field.name} name={field.name} hidden><Input /></Form.Item>
 			) : (
+				(() => {
+					const readOnly = field.readOnlyWhen ? (field.readOnlyWhen.values ? field.readOnlyWhen.values.includes(String(formValues?.[field.readOnlyWhen.field] ?? '')) : !field.readOnlyWhen.notValues?.includes(String(formValues?.[field.readOnlyWhen.field] ?? ''))) : false;
+					return (
 				<Form.Item
 					key={field.name}
 					label={(
@@ -215,8 +218,10 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 						? <Switch checkedChildren={field.checkedChildren} unCheckedChildren={field.unCheckedChildren} />
 						: field.type === 'select'
 							? <Select options={field.options?.map((option) => ({ value: option.value, label: option.text }))} placeholder={field.placeholder} />
-						: <Input type={field.type === 'password' ? 'password' : 'text'} placeholder={field.placeholder} maxLength={field.maxLength} readOnly={field.readOnlyWhen ? (field.readOnlyWhen.values ? field.readOnlyWhen.values.includes(String(formValues?.[field.readOnlyWhen.field] ?? '')) : !field.readOnlyWhen.notValues?.includes(String(formValues?.[field.readOnlyWhen.field] ?? ''))) : false} />}
+						: <Input type={field.type === 'password' ? 'password' : 'text'} placeholder={field.placeholder} maxLength={field.maxLength} readOnly={readOnly} disabled={readOnly} />}
 				</Form.Item>
+					);
+				})()
 			))}
 			<Space>
 				<Button type="primary" htmlType="submit" loading={saving}>{formConfig?.submitLabel}</Button>
