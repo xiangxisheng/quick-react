@@ -22,7 +22,7 @@ const handler: ApiHandler = async (c) => {
 		if (!ticket) return apiMessage(c, 409, '跨站登录请求已失效');
 		return c.redirect(ticket.redirectUrl, 302);
 	}
-	return c.redirect(`/sign${c.get('techStackConfig').pageSuffix}`, 302);
+	return c.redirect(`/passport/sso/sign${c.get('techStackConfig').pageSuffix}`, 302);
 };
 
 export default handler;

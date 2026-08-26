@@ -94,8 +94,7 @@ const configureForRequest = async (c: Context<WorkerEnv>) => {
 	c.set('configStore', configStore);
 	c.set('systemConfig', configuration.systemConfig);
 	c.set('techStackConfig', configuration.techStackConfig);
-	const usesPassportSso = site.siteKey === 'passport' || site.passportSsoEnabled;
-	const currentUser = usesPassportSso
+	const currentUser = site.passportSsoEnabled
 		? passportDatabase ? await loadPassportSession(passportDatabase, c.req.raw, site.siteKey, site.hostname) : undefined
 		: await loadCurrentUser(database, c.req.raw);
 	if (currentUser) c.set('currentUser', currentUser);
@@ -108,6 +107,9 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 	const siteConfig = c.get('techStackConfig');
 	const systemConfig = c.get('systemConfig');
 	const menuItems = getSiteNavigation(site.codeSiteChain, c.get('effectiveRoles'));
+	const passportSsoPages = site.siteKey === 'passport' && site.codeSiteChain.includes('passport_sso')
+		? [{ path: `/passport/sso/sign${siteConfig.pageSuffix}`, title: 'Passport 身份登录', description: '使用 Passport 身份完成统一登录', mode: 'sign' as const, apiPath: `/api/passport/sso/sign${siteConfig.apiSuffix}`, submitMethod: 'POST' as const, redirectPath: `/` }]
+		: [];
 	const auth = c.get('currentUser')
 		? {
 			component: 'dropdown' as const,
@@ -118,6 +120,7 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 			pages: [
 				{ path: `/sign${siteConfig.pageSuffix}`, title: '登录', description: '登录 Quick React', mode: 'sign' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'POST' as const, redirectPath: `/panel/admin${siteConfig.pageSuffix}` },
 				...(site.siteKey === 'global' ? [{ path: `/sign-up${siteConfig.pageSuffix}`, title: '注册', description: '创建初始管理员', mode: 'sign-up' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'PUT' as const, redirectPath: `/sign${siteConfig.pageSuffix}` }] : []),
+				...passportSsoPages,
 			],
 		}
 		: {
@@ -129,6 +132,7 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 			pages: [
 				{ path: `/sign${siteConfig.pageSuffix}`, title: '登录', description: '登录 Quick React', mode: 'sign' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'POST' as const, redirectPath: `/panel/admin${siteConfig.pageSuffix}` },
 				...(site.siteKey === 'global' ? [{ path: `/sign-up${siteConfig.pageSuffix}`, title: '注册', description: '创建初始管理员', mode: 'sign-up' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'PUT' as const, redirectPath: `/sign${siteConfig.pageSuffix}` }] : []),
+				...passportSsoPages,
 			],
 		};
 	const metadata = getPageMetadata(c.req.path, menuItems, siteConfig.pageSuffix);

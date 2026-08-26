@@ -53,14 +53,16 @@ try {
 			body: options.body === undefined ? undefined : JSON.stringify(options.body),
 		});
 	};
-	const initial = await (await request('/api/sign.php')).json();
+	const localSign = await (await request('/api/sign.php')).json();
+	assert.equal(localSign.formPage.fields[0].name, 'username');
+	const initial = await (await request('/api/passport/sso/sign.php')).json();
 	assert.equal(initial.formPage.initialValues.step, 'email');
-	const telegramSelection = await (await request('/api/sign.php', {
+	const telegramSelection = await (await request('/api/passport/sso/sign.php', {
 		method: 'POST', body: { step: 'email', email: 'USER@example.com' },
 	})).json();
 	assert.equal(telegramSelection.formPage.fields.find((field) => field.name === 'account_id').type, 'select');
 	assert.equal(telegramSelection.currentValues.account_id, '201');
-	const challengeResponse = await request('/api/sign.php', {
+	const challengeResponse = await request('/api/passport/sso/sign.php', {
 		method: 'POST', body: { step: 'telegram', email: 'user@example.com', account_id: '201' },
 	});
 	assert.equal(challengeResponse.status, 200);
@@ -79,15 +81,15 @@ try {
 	assert.equal((await webhook({ update_id: 1, callback_query: {
 		id: 'wrong-number', from: { id: 9001, first_name: 'PassportUser' }, data: `login:approve:${challengeId}:${challenge.expected_number === 99 ? 98 : challenge.expected_number + 1}`, message: callbackMessage,
 	} })).status, 200);
-	assert.equal((await request('/api/sign.php', { method: 'POST', body: { step: 'poll', challenge_id: challengeId } })).status, 200);
+	assert.equal((await request('/api/passport/sso/sign.php', { method: 'POST', body: { step: 'poll', challenge_id: challengeId } })).status, 200);
 	assert.equal((await webhook({ update_id: 2, callback_query: {
 		id: 'correct-number', from: { id: 9001, first_name: 'PassportUser' }, data: `login:approve:${challengeId}:${challenge.expected_number}`, message: callbackMessage,
 	} })).status, 200);
-	const loginResponse = await request('/api/sign.php', { method: 'POST', body: { step: 'poll', challenge_id: challengeId } });
+	const loginResponse = await request('/api/passport/sso/sign.php', { method: 'POST', body: { step: 'poll', challenge_id: challengeId } });
 	assert.equal(loginResponse.status, 200);
 	const passportCookie = loginResponse.headers.get('set-cookie')?.split(';')[0];
 	assert.match(passportCookie ?? '', /^passport_session=/);
-	const signedIn = await (await request('/api/sign.php', { cookie: passportCookie })).json();
+	const signedIn = await (await request('/api/passport/sso/sign.php', { cookie: passportCookie })).json();
 	assert.equal(signedIn.user.id, userId);
 	assert.equal(signedIn.user.username, 'PassportUser');
 	const businessSign = await (await request('/api/sign.php', { host: 'site1.test' })).json();
@@ -108,7 +110,7 @@ try {
 	assert.equal(businessSignedIn.user.id, userId);
 	assert.equal((await request(`${callbackUrl.pathname}${callbackUrl.search}`, { host: 'site1.test' })).status, 409);
 	assert.equal((await request('/api/sign.php', { host: 'site1.test', method: 'DELETE', cookie: siteCookie })).status, 200);
-	assert.equal((await request('/api/sign.php', { method: 'DELETE', cookie: passportCookie })).status, 200);
+	assert.equal((await request('/api/passport/sso/sign.php', { method: 'DELETE', cookie: passportCookie })).status, 200);
 	const completedDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
 	assert.equal(completedDatabase.prepare(`SELECT status FROM passport_login_challenges WHERE id = ?`).get(challengeId).status, 'consumed');
 	assert.equal(completedDatabase.prepare(`SELECT COUNT(*) AS count FROM passport_sessions`).get().count, 0);
