@@ -7,6 +7,7 @@ import { getChangedFields } from '@server/changed-fields.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 
 const columns = [
+	{ dataIndex: 'id', title: 'ID', dataType: 'int' as const },
 	{ dataIndex: 'site_key', title: '站点', component: 'select', rules: [{ required: true, message: '请选择站点' }] },
 	{ dataIndex: 'channel_id', title: '邮件通道', component: 'select', tableDisplay: 'reference', tableDisplayTextField: 'account_name', rules: [{ required: true, message: '请选择邮件通道' }] },
 	{ dataIndex: 'template_id', title: '邮件模板', component: 'select', tableDisplay: 'reference', tableDisplayTextField: 'template_name', rules: [{ required: true, message: '请选择邮件模板' }] },

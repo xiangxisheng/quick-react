@@ -161,12 +161,17 @@ try {
 			method: 'POST', cookie, body: { hostname, site_key: 'passport' },
 		})).status, 201);
 	}
+	const sitesResult = await (await request('localhost', '/api/panel/admin/global/site/sites.php', { cookie })).json();
+	assert.equal(sitesResult.table.columns[0]?.dataIndex, 'id');
+	const hostsResult = await (await request('localhost', '/api/panel/admin/global/site/hosts.php', { cookie })).json();
+	assert.equal(hostsResult.table.columns[0]?.dataIndex, 'id');
 	const botsPath = '/api/panel/admin/global/telegram/bots.php';
 	assert.equal((await request('localhost', botsPath, {
 		method: 'POST', cookie, body: { name: 'smoke-passport-bot', bot_token: '10001:smoke-token', webhook_hostname: 'passport.test' },
 	})).status, 201);
 	assert.equal(telegramWebhookUrl, 'https://passport.test/api/tgwebhook?bot_id=1');
 	const botsResult = await (await request('localhost', botsPath, { cookie })).json();
+	assert.equal(botsResult.table.columns[0]?.dataIndex, 'id');
 	const bot = botsResult.table.dataSource.find((item) => item.name === 'smoke-passport-bot');
 	assert.equal(bot.bot_username, 'smoke_passport_bot');
 	assert.equal(Object.hasOwn(bot, 'bot_token'), false);
@@ -230,6 +235,7 @@ try {
 		method: 'POST', cookie, body: { name: 'smoke-s3', provider: 'other', access_key_id: 'smoke-key', access_key_secret: 'smoke-secret' },
 	})).status, 201);
 	const credentialsResult = await (await request('localhost', credentialsPath, { cookie })).json();
+	assert.equal(credentialsResult.table.columns[0]?.dataIndex, 'id');
 	const credential = credentialsResult.table.dataSource.find((item) => item.name === 'smoke-s3');
 	assert.ok(credential?.id);
 	assert.equal(Object.hasOwn(credential, 'access_key_secret'), false);
@@ -246,6 +252,7 @@ try {
 		method: 'POST', cookie, body: { cloud_credential_id: credential.id, endpoint: 'https://s3.example.invalid', region: 'us-east-1', bucket: 'smoke-bucket', path_style: true },
 	})).status, 201);
 	const bucketsResult = await (await request('localhost', bucketsPath, { cookie })).json();
+	assert.equal(bucketsResult.table.columns[0]?.dataIndex, 'id');
 	const bucket = bucketsResult.table.dataSource.find((item) => item.bucket === 'smoke-bucket');
 	assert.ok(bucket?.id);
 
@@ -254,6 +261,7 @@ try {
 		method: 'POST', cookie, body: { site_key: 'site1', bucket_id: bucket.id, purposes: ['uploads', 'attachments'], default_purposes: ['uploads'] },
 	})).status, 201);
 	const bindingsResult = await (await request('localhost', bindingsPath, { cookie })).json();
+	assert.equal(bindingsResult.table.columns[0]?.dataIndex, 'id');
 	assert.equal(bindingsResult.table.dataSource.length, 1);
 	assert.deepEqual(bindingsResult.table.dataSource[0].purposes.sort(), ['attachments', 'uploads']);
 	assert.deepEqual(bindingsResult.table.dataSource[0].default_purposes, ['uploads']);
@@ -272,6 +280,9 @@ try {
 		method: 'POST', cookie, body: { cloud_credential_id: emailCredential.id, region: 'cn-hangzhou', account_name: 'noreply@example.com', from_alias: 'Smoke Passport' },
 	})).status, 201);
 	const emailChannels = await (await request('localhost', emailChannelsPath, { cookie })).json();
+	assert.equal(emailChannels.table.columns[0]?.dataIndex, 'id');
+	assert.equal(emailChannels.table.columns.find((column) => column.dataIndex === 'cloud_credential_id')?.tableDisplay, 'reference');
+	assert.equal(emailChannels.table.columns.find((column) => column.dataIndex === 'cloud_credential_id')?.tableDisplayTextField, 'credential_name');
 	const emailRegionColumn = emailChannels.table.columns.find((column) => column.dataIndex === 'region');
 	assert.deepEqual(emailRegionColumn.options, [
 		{ value: 'cn-hangzhou', text: '华东1（杭州）（cn-hangzhou）', parentValue: String(emailCredential.id) },
@@ -294,6 +305,7 @@ try {
 	})).status, 201);
 	assert.equal(directMailActions.length, directMailActionsBeforeTemplateCreate);
 	const emailTemplates = await (await request('localhost', emailTemplatesPath, { cookie })).json();
+	assert.equal(emailTemplates.table.columns[0]?.dataIndex, 'id');
 	assert.equal(emailTemplates.table.columns.find((column) => column.dataIndex === 'body_text')?.tableDisplay, 'multiline');
 	assert.equal(emailTemplates.table.columns.find((column) => column.dataIndex === 'body_html')?.tableDisplay, 'multiline');
 	const syncTemplatesAction = emailTemplates.table.option.actions.toolbar.find((action) => action.key === 'sync');
@@ -425,6 +437,7 @@ try {
 		method: 'POST', cookie, body: { site_key: 'passport', channel_id: emailChannel.id, template_id: emailTemplate.id, is_default: true },
 	})).status, 201);
 	const emailBindings = await (await request('localhost', emailBindingsPath, { cookie })).json();
+	assert.equal(emailBindings.table.columns[0]?.dataIndex, 'id');
 	assert.deepEqual(emailBindings.table.columns.find((column) => column.dataIndex === 'channel_id')?.tableDisplay, 'reference');
 	assert.equal(emailBindings.table.columns.find((column) => column.dataIndex === 'channel_id')?.tableDisplayTextField, 'account_name');
 	assert.equal(emailBindings.table.columns.find((column) => column.dataIndex === 'template_id')?.tableDisplayTextField, 'template_name');

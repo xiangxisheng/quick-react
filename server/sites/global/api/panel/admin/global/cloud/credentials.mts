@@ -8,6 +8,7 @@ import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 
 const columns = [
+	{ dataIndex: 'id', title: 'ID', dataType: 'int' as const },
 	{ dataIndex: 'name', title: '名称', component: 'textbox', rules: [{ required: true, message: '请输入名称' }] },
 	{ dataIndex: 'provider', title: '供应商', component: 'select', options: cloudProviderOptions, rules: [{ required: true, message: '请选择供应商' }] },
 	{ dataIndex: 'account_id', title: 'Account ID', component: 'textbox', dependsOn: 'provider', parentValues: accountIdProviderKeys, hideInTable: true, rules: [{ required: true, message: '请输入 Account ID' }] },

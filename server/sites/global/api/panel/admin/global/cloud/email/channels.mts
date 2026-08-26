@@ -11,7 +11,8 @@ import { getChangedFields } from '@server/changed-fields.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 
 const columns = [
-	{ dataIndex: 'cloud_credential_id', title: '云凭据', component: 'select', rules: [{ required: true, message: '请选择云凭据' }] },
+	{ dataIndex: 'id', title: 'ID', dataType: 'int' as const },
+	{ dataIndex: 'cloud_credential_id', title: '云凭据', component: 'select', tableDisplay: 'reference', tableDisplayTextField: 'credential_name', rules: [{ required: true, message: '请选择云凭据' }] },
 	{ dataIndex: 'region', title: 'Region', component: 'select', dependsOn: 'cloud_credential_id', rules: [{ required: true, message: '请选择 Region' }] },
 	{ dataIndex: 'account_name', title: '发信地址', component: 'select', remoteOptions: { action: 'discover', dependencies: ['cloud_credential_id', 'region'], clearFields: ['reply_to_address'] }, rules: [{ required: true, message: '请选择发信地址' }] },
 	{ dataIndex: 'from_alias', title: '发信人名称', component: 'textbox', rules: [{ required: true, message: '请输入发信人名称' }] },

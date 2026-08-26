@@ -10,6 +10,7 @@ import { getChangedFields } from '@server/changed-fields.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 
 const baseColumns = [
+	{ dataIndex: 'id', title: 'ID', dataType: 'int' as const },
 	{ dataIndex: 'cloud_credential_id', title: '凭据', component: 'select', rules: [{ required: true, message: '请选择凭据' }] },
 	{ dataIndex: 'bucket', title: 'Bucket', component: 'select', allowCustomValue: true, remoteOptions: { action: 'discover', dependencies: ['cloud_credential_id'], clearFields: ['endpoint', 'region', 'path_style'] }, rules: [{ required: true, message: '请选择或输入 Bucket' }] },
 	{ dataIndex: 'provider', title: 'Provider' },

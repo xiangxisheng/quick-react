@@ -49,7 +49,11 @@ export const readTable = async (database: DatabaseAdapter, mode: 'columns' | 'ro
 	const total = await database.prepare(`SELECT COUNT(*) AS count FROM ${quotedTable}`).first<{ count: number }>();
 	const rows = await database.prepare(`SELECT rowid AS __rowid__, * FROM ${quotedTable} LIMIT ?1 OFFSET ?2`).bind(pageSize, (pageNum - 1) * pageSize).all<TableData>();
 	const dataSource = rows.results.map((row) => ({ ...row, key: String(row[rowKey] ?? row.__rowid__) }));
-	return { tables, columns: info.map(tableColumn), dataSource, totalRecords: Number(total?.count ?? 0), option: { rowKey: 'key' } };
+	const dataColumns = info.map(tableColumn);
+	const idIndex = dataColumns.findIndex((column) => column.dataIndex === 'id');
+	if (idIndex > 0) dataColumns.unshift(dataColumns.splice(idIndex, 1)[0]);
+	if (idIndex === -1) dataColumns.unshift({ dataIndex: '__rowid__', title: 'ID', dataType: 'int' });
+	return { tables, columns: dataColumns, dataSource, totalRecords: Number(total?.count ?? 0), option: { rowKey: 'key' } };
 };
 export const assertTable = async (database: DatabaseAdapter, tableName: string) => { if (!(await getTables(database)).some((item) => item.value === tableName)) throw new Error('数据表不存在'); };
 export const tableIdentifier = quoteIdentifier;

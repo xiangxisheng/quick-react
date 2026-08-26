@@ -14,6 +14,7 @@ const purposes = [
 ];
 const allowedPurposes = new Set(purposes.map((item) => item.value));
 const columns = [
+	{ dataIndex: 'id', title: 'ID', dataType: 'int' as const },
 	{ dataIndex: 'site_key', title: '站点', component: 'select', rules: [{ required: true, message: '请选择站点' }] },
 	{ dataIndex: 'bucket_id', title: 'Bucket', component: 'select', rules: [{ required: true, message: '请选择 Bucket' }] },
 	{ dataIndex: 'purposes', title: '用途', component: 'select', multiple: true, options: purposes, rules: [{ required: true, message: '请至少选择一个用途' }] },

@@ -6,6 +6,7 @@ import { deleteTelegramWebhook, getTelegramBotIdentity, getTelegramWebhookInfo, 
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 
 const columns = [
+	{ dataIndex: 'id', title: 'ID', dataType: 'int' as const },
 	{ dataIndex: 'name', title: '名称', component: 'textbox', rules: [{ required: true, message: '请输入名称' }] },
 	{ dataIndex: 'bot_username', title: 'Bot Username' },
 	{ dataIndex: 'bot_token', title: 'Bot Token', component: 'textbox', inputType: 'password', hideInTable: true, placeholder: '新增时必填；编辑时留空表示保持原值' },
