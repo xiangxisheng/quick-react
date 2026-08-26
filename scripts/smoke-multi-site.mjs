@@ -289,6 +289,9 @@ try {
 	assert.equal((await request('localhost', emailTemplatesPath, {
 		method: 'POST', cookie, body: { template_key: 'email_verification', template_type: 'email_verification', name: '邮箱验证码', subject: '验证码 {{code}}', body_text: '验证码：{{code}}', body_html: '<p>验证码：{{code}}</p>' },
 	})).status, 201);
+	assert.equal((await request('localhost', emailTemplatesPath, {
+		method: 'POST', cookie, body: { template_key: 'disabled_email_verification', template_type: 'email_verification', name: '停用邮箱验证码', subject: '验证码 {{code}}', body_text: '验证码：{{code}}', body_html: '<p>验证码：{{code}}</p>', status: 'disabled' },
+	})).status, 201);
 	assert.equal(directMailActions.length, directMailActionsBeforeTemplateCreate);
 	const emailTemplates = await (await request('localhost', emailTemplatesPath, { cookie })).json();
 	assert.equal(emailTemplates.table.columns.find((column) => column.dataIndex === 'body_text')?.tableDisplay, 'multiline');
@@ -300,6 +303,7 @@ try {
 	assert.deepEqual(publishTemplateAction.form.columns.map((column) => column.dataIndex), ['cloud_credential_id', 'region']);
 	const emailTemplate = emailTemplates.table.dataSource.find((item) => item.template_key === 'email_verification');
 	assert.ok(emailTemplate?.id);
+	assert.equal(emailTemplates.table.dataSource.find((item) => item.template_key === 'disabled_email_verification')?.status, 'disabled');
 	assert.equal((await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}`, {
 		method: 'PUT', cookie, body: { body_html: '<p>验证码</p>', __changedFields: ['body_html'] },
 	})).status, 400);

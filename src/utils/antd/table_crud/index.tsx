@@ -236,7 +236,9 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 									if (tags.length) return <Space size={[0, 4]} wrap>{tags}</Space>;
 								}
 								if (column.component === 'switch') {
-									return <Tag color={value ? 'green' : 'default'}>{value ? '是' : '否'}</Tag>;
+									const checked = column.checkedValue === undefined ? Boolean(value) : value === column.checkedValue;
+									const label = column.options?.find((option) => option.value === value)?.text ?? (checked ? '是' : '否');
+									return <Tag color={checked ? 'green' : 'default'}>{label}</Tag>;
 								}
 								if (tableDisplay === 'multiline') {
 									return <Typography.Paragraph

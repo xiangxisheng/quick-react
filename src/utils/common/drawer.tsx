@@ -40,7 +40,9 @@ export function useDrawer(commonApi: CommonApi): [drawerType, React.JSX.Element]
 			setTitle(props.title);
 			setColumns(props.columns);
 			setOptionsPath(props.optionsPath);
-			setRow({});
+			setRow(Object.fromEntries(props.columns
+				.filter((column) => column.dataIndex === 'status' && column.component === 'switch')
+				.map((column) => [column.dataIndex, column.checkedValue ?? true])));
 			setOpen(true);
 			if (callback) {
 				resolveRef.current = callback;
