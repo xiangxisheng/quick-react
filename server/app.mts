@@ -121,6 +121,7 @@ nodeApp.use('*', etag());
 nodeApp.use('*', serveStatic({ root: publicDir }));
 nodeApp.all('*', (c) => worker.fetch(c.req.raw, {
 	DEFAULT_DB: defaultDatabase,
+	SNOWFLAKE_WORKER_ID: env.SNOWFLAKE_WORKER_ID || '0',
 	DATABASE_RESOLVER: async (site) => {
 		if (site.databaseTarget.kind === 'default') return defaultDatabase;
 		if (site.databaseTarget.kind !== 'dsn' || !site.databaseTarget.value.startsWith('sqlite://')) {

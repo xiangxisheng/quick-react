@@ -14,6 +14,7 @@
 		"start": "node dist/server.mjs",
 		"typecheck": "node scripts/generate-worker-registry.cjs && tsc --noEmit",
 		"smoke:multi-site": "node scripts/smoke-multi-site.mjs",
+		"test:passport-identity": "node scripts/test-passport-identity.mjs",
 		"test": "node esbuild.cjs"
 	},
 	"repository": {

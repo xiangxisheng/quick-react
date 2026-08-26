@@ -33,7 +33,7 @@ class SqliteStatement implements DatabaseStatement {
 		const result = this.statement.run(...sqliteValues(this.values));
 		return {
 			success: true,
-			meta: { changes: Number(result.changes), lastRowId: Number(result.lastInsertRowid) },
+			meta: { changes: Number(result.changes), lastRowId: result.lastInsertRowid.toString() },
 		};
 	}
 }
@@ -46,6 +46,20 @@ export const createSqliteAdapter = (filename: string): SqliteDatabaseAdapter => 
 	database.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
 	return {
 		prepare: (query) => new SqliteStatement(database.prepare(query)),
+		batch: async (statements) => {
+			database.exec('BEGIN IMMEDIATE');
+			try {
+				const results = statements.map(({ query, values = [] }) => {
+					const result = database.prepare(query).run(...sqliteValues(values));
+					return { success: true, meta: { changes: Number(result.changes), lastRowId: result.lastInsertRowid.toString() } };
+				});
+				database.exec('COMMIT');
+				return results;
+			} catch (error) {
+				database.exec('ROLLBACK');
+				throw error;
+			}
+		},
 		exec: async (query) => { database.exec(query); },
 		close: () => database.close(),
 	};

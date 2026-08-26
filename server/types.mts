@@ -8,6 +8,7 @@ import type { TableColumn, TableRow } from '@shared/types/table.mjs';
 
 export type RuntimeBindings = Record<string, unknown> & {
 	DEFAULT_DB?: unknown;
+	SNOWFLAKE_WORKER_ID?: string | number;
 	DATABASE_RESOLVER?: (site: SiteRequestContext) => Promise<DatabaseAdapter>;
 	MIGRATE_SITE?: (siteKey: string) => Promise<void>;
 };

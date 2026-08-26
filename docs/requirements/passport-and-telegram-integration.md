@@ -62,7 +62,7 @@ siteDatabase
 - 新用户也必须使用与老项目完全兼容的雪花 ID 生成逻辑，绝不能使用 SQLite `AUTOINCREMENT` 或其他自增 ID。
 - 生成算法必须保持老项目的参数和位布局：自定义 Epoch `1288834974657`，时间戳占 41 位，Worker ID 占 10 位，序列号占 12 位；Worker ID 继续来自配置，序列号从 0 开始递增并按 `0xFFF` 截断。
 - 新实现必须处理同一毫秒内的并发和序列号冲突，保证新生成 ID 在 Passport 范围内唯一；多实例部署时必须为实例分配不重复的 Worker ID。
-- 数据库字段可以使用 `TEXT` 保存雪花 ID，避免 JavaScript `number` 精度丢失；API 和前端统一以字符串传输。
+- 数据库字段必须保持 64 位整数语义：SQLite 使用 `INTEGER`，MySQL 和 PostgreSQL 使用 `BIGINT`；Node 内部使用 `bigint` 或十进制字符串，API 和前端统一以字符串传输。
 - 业务站点只能保存 `passport_user_id`，不得复制用户名、密码或完整身份资料作为本地用户记录。
 
 ### 3.2 身份建立和 Passport 负责的能力
@@ -169,13 +169,30 @@ passport_user_emails
 
 passport_email_otp
   id BIGINT PRIMARY KEY
-  user_id BIGINT NOT NULL
-  email_id BIGINT NOT NULL
+  bot_id BIGINT NOT NULL
+  telegram_user_id BIGINT NOT NULL
+  chat_id BIGINT NOT NULL
+  email TEXT NOT NULL
   code_hash TEXT NOT NULL
   attempt_count INTEGER NOT NULL DEFAULT 0
   status TEXT NOT NULL DEFAULT 'pending'    -- pending / used / expired
   expires_at BIGINT NOT NULL
   created_at BIGINT NOT NULL
+
+passport_snowflake_state
+  worker_id INTEGER PRIMARY KEY
+  last_timestamp BIGINT NOT NULL
+  updated_at BIGINT NOT NULL
+
+passport_telegram_menus
+  bot_id BIGINT NOT NULL
+  telegram_user_id BIGINT NOT NULL
+  chat_id BIGINT NOT NULL
+  message_id BIGINT NOT NULL
+  mode TEXT NOT NULL
+  created_at BIGINT NOT NULL
+  updated_at BIGINT NOT NULL
+  PRIMARY KEY (bot_id, telegram_user_id)
 
 passport_user_roles
   user_id BIGINT NOT NULL
@@ -201,7 +218,11 @@ passport_group_prompts
 
 昵称从 Telegram、微信或 Google 身份资料提取，最多 12 个 Unicode 字符；若 Provider 没有可用名称，必须生成不超过 12 个字符的非空系统昵称。Telegram 的 `first_name`、`last_name` 和 `username` 不作为必需的独立字段保存，统一归一化为非空 `nickname`。所有字段必须 `NOT NULL`，可选能力通过独立关联表表达，不使用 `NULL` 或空字符串表示未设置。
 
-由于默认允许多邮箱、多外部身份和多用户关联，`passport_emails.email`、Telegram 账号组合和 OAuth 账号组合不得默认设置为全局唯一；实际登录时如匹配到多个用户，必须提供明确的用户选择或绑定流程。邮箱、Telegram 和其他 Provider 的关联限制通过 Passport 设置项控制，默认不限制。
+默认允许一个用户绑定多个邮箱和多个外部身份，但同一个已验证邮箱、同一机器人下的同一个 Telegram 用户、同一 Provider 下的同一个外部用户不能据此创建第二个 `user_id`。如果邮箱和外部身份分别命中不同的现有用户，必须让用户明确选择进入哪个账号或取消操作，不得自动合并。邮箱、Telegram 和其他 Provider 的数量上限通过 Passport 设置项控制，默认不限制。
+
+创建首个用户时还没有 `user_id` 和 `email_id`，因此 Telegram 首期的 `passport_email_otp` 直接记录机器人、Telegram 用户、Chat 和规范化邮箱。验证码通过后，才在同一事务中创建或解析 Passport 用户、邮箱及绑定关系，避免用 `NULL`、空字符串或伪造的用户 ID 表达尚未完成的注册。
+
+`passport_snowflake_state` 属于 Passport 数据，不能放入 global。生成器按 Worker ID 在 Passport 数据库中原子预留逻辑毫秒，再在该毫秒内分配 12 位序列号；这样可以处理并发、多实例、进程重启和时钟回拨。Worker ID 由运行实例配置，范围为 0–1023，不新增 `PASSPORT_DB` 一类数据库变量。
 
 ## 4. Telegram 机器人管理
 
@@ -322,7 +343,7 @@ sso
 - 所有雪花 ID 在 API 中以字符串返回；
 - 无 Token、密码或验证码被写入日志。
 
-邮箱和外部身份默认不限制一个用户的绑定数量，也默认不限制同一邮箱、Telegram 或其他外部身份关联的用户数量；相关限制应设计为 Passport 设置项，默认关闭限制。已导入但尚未完成的验证码和群组提示可以长期保留，直到过期或被业务操作清理。
+邮箱和外部身份默认不限制单个用户的绑定数量；同一个已验证邮箱或同一个 Provider 外部身份只能归属一个用户，不能用来生成新的 `user_id`。已导入但尚未完成的验证码和群组提示可以长期保留，直到过期或被业务操作清理。
 
 旧项目头像暂不迁移。后续迁移时，头像源目录为 `/opt/firadio/php-telegram-iam/wwwroot/assets/avatars`，旧文件名按 Telegram 用户 ID 保存，需根据旧 `tgfromid` 与 `userid` 关系转换为 `avatars/<user_id>.<ext>`。旧项目配置中的机器人 Token 不属于 CouchDB 备份，机器人配置应通过 global 机器人管理功能单独迁移或重新录入。
 

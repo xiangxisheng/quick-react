@@ -3,6 +3,11 @@ export type DatabaseRunResult = {
 	meta?: Record<string, unknown>;
 };
 
+export type DatabaseBatchStatement = {
+	query: string;
+	values?: unknown[];
+};
+
 export type DatabaseStatement = {
 	bind: (...values: unknown[]) => DatabaseStatement;
 	first: <T = Record<string, unknown>>() => Promise<T | null>;
@@ -12,6 +17,7 @@ export type DatabaseStatement = {
 
 export type DatabaseAdapter = {
 	prepare: (query: string) => DatabaseStatement;
+	batch?: (statements: DatabaseBatchStatement[]) => Promise<DatabaseRunResult[]>;
 	exec?: (query: string) => Promise<void>;
 };
 
