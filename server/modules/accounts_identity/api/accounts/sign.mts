@@ -6,7 +6,7 @@ import { clearPassportSessionCookie, createPassportSessionCookie, loadPassportSe
 import { clearOidcRequestCookie, oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
 import { oidcIssuer, revokeOidcSession } from '@server/accounts/provider.mjs';
 import { clearExternalPendingCookie, discardExternalEmailOtp, externalPendingCookieName, externalProviders, issueExternalEmailOtp, pendingExternalEmailOtp, pendingExternalIdentity, verifyExternalEmailOtp } from '@server/accounts/external.mjs';
-import { runSql, sql } from '@server/database/sql.mjs';
+import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
 import { sendDefaultCloudEmail } from '@server/cloud/email.mjs';
 import { sendTelegramMessage, type TelegramInlineKeyboard } from '@server/telegram/api.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
@@ -78,16 +78,10 @@ const externalCodeForm = (email: string): FormPageConfig => ({
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : '';
 const parseBody = async (c: Parameters<ApiHandler>[0]): Promise<Record<string, unknown>> => c.req.json<Record<string, unknown>>().catch(() => ({}));
 const loadTelegramOptions = async (database: DatabaseAdapter, globalDatabase: DatabaseAdapter, email: string) => {
-	const accounts = await database.prepare(`SELECT CAST(a.id AS TEXT) AS account_id, CAST(a.bot_id AS TEXT) AS bot_id,
-		CAST(a.telegram_user_id AS TEXT) AS telegram_user_id, CAST(a.chat_id AS TEXT) AS chat_id, a.nickname
-		FROM passport_emails e JOIN passport_user_emails ue ON ue.email_id = e.id
-		JOIN passport_users u ON u.user_id = ue.user_id JOIN passport_telegram_accounts a ON a.user_id = u.user_id
-		WHERE e.email = ?1 AND e.verified = 1 AND u.status = 'enabled' ORDER BY a.created_at`)
-		.bind(email).all<TelegramOption>();
-	const bots = await globalDatabase.prepare(`SELECT CAST(id AS TEXT) AS id, name, bot_username, bot_token
-		FROM global_telegram_bots WHERE status = 'enabled'`).all<Bot>();
-	const botMap = new Map(bots.results.map((bot) => [bot.id, bot]));
-	return accounts.results.flatMap((account) => {
+	const accounts = await allSql<TelegramOption>(database, sql(database).select({ table: 'passport_emails', alias: 'e', columns: { account_id: { column: 'a.id', cast: 'text' }, bot_id: { column: 'a.bot_id', cast: 'text' }, telegram_user_id: { column: 'a.telegram_user_id', cast: 'text' }, chat_id: { column: 'a.chat_id', cast: 'text' }, nickname: 'a.nickname' }, joins: [{ table: 'passport_user_emails', alias: 'ue', left: 'ue.email_id', right: 'e.id' }, { table: 'passport_users', alias: 'u', left: 'u.user_id', right: 'ue.user_id' }, { table: 'passport_telegram_accounts', alias: 'a', left: 'a.user_id', right: 'u.user_id' }], where: [{ column: 'e.email', value: email }, { column: 'e.verified', value: 1 }, { column: 'u.status', value: 'enabled' }], orderBy: [{ column: 'a.created_at' }] }));
+	const bots = await allSql<Bot>(globalDatabase, sql(globalDatabase).select({ table: 'global_telegram_bots', columns: { id: { column: 'id', cast: 'text' }, name: 'name', bot_username: 'bot_username', bot_token: 'bot_token' }, where: [{ column: 'status', value: 'enabled' }] }));
+	const botMap = new Map(bots.map((bot) => [bot.id, bot]));
+	return accounts.flatMap((account) => {
 		const bot = botMap.get(account.bot_id);
 		return bot ? [{ account, bot, option: { value: account.account_id, text: `${account.nickname} / @${bot.bot_username} / ${account.telegram_user_id}` } }] : [];
 	});
@@ -117,7 +111,7 @@ const handler: ApiHandler = async (c, next) => {
 		const pendingToken = readCookie(c.req.raw, externalPendingCookieName);
 		const [user, providers, bots, pending] = await Promise.all([
 			loadPassportSession(database, c.req.raw), externalProviders(database, true),
-			globalDatabase.prepare("SELECT 1 AS found FROM global_telegram_bots WHERE status = 'enabled' LIMIT 1").first(),
+			firstSql(globalDatabase, sql(globalDatabase).select({ table: 'global_telegram_bots', columns: { id: 'id' }, where: [{ column: 'status', value: 'enabled' }], limit: 1 })),
 			pendingToken ? pendingExternalIdentity(database, pendingToken) : null,
 		]);
 		if (pending && !user) {
@@ -197,21 +191,16 @@ const handler: ApiHandler = async (c, next) => {
 		const accountId = text(body.account_id), options = await loadTelegramOptions(database, globalDatabase, email);
 		const selected = options.find((item) => item.account.account_id === accountId);
 		if (!selected) return apiMessage(c, 400, 'Telegram 登录身份无效');
-		const owner = await database.prepare(`SELECT CAST(a.user_id AS TEXT) AS user_id FROM passport_telegram_accounts a
-			JOIN passport_users u ON u.user_id = a.user_id WHERE a.id = ?1 AND u.status = 'enabled'`).bind(accountId).first<{ user_id: string }>();
+		const owner = await firstSql<{ user_id: string }>(database, sql(database).select({ table: 'passport_telegram_accounts', alias: 'a', columns: { user_id: { column: 'a.user_id', cast: 'text' } }, joins: [{ table: 'passport_users', alias: 'u', left: 'u.user_id', right: 'a.user_id' }], where: [{ column: 'a.id', value: accountId }, { column: 'u.status', value: 'enabled' }] }));
 		if (!owner) return apiMessage(c, 409, 'Passport 用户已停用或不存在');
 		const challengeId = crypto.randomUUID(), expectedNumber = randomNumber(), now = Date.now();
-		await database.prepare(`UPDATE passport_login_challenges SET status = 'expired', updated_at = ?3
-			WHERE bot_id = ?1 AND telegram_user_id = ?2 AND status = 'pending'`).bind(selected.bot.id, selected.account.telegram_user_id, now).run();
-		await database.prepare(`INSERT INTO passport_login_challenges
-			(id, user_id, bot_id, telegram_user_id, chat_id, expected_number, status, expires_at, created_at, updated_at)
-			VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending', ?7, ?8, ?8)`).bind(challengeId, owner.user_id, selected.bot.id,
-			selected.account.telegram_user_id, selected.account.chat_id, expectedNumber, now + 10 * 60_000, now).run();
+		await runSql(database, sql(database).update('passport_login_challenges', { status: 'expired', updated_at: now }, { bot_id: selected.bot.id, telegram_user_id: selected.account.telegram_user_id, status: 'pending' }));
+		await runSql(database, sql(database).insert('passport_login_challenges', { id: challengeId, user_id: owner.user_id, bot_id: selected.bot.id, telegram_user_id: selected.account.telegram_user_id, chat_id: selected.account.chat_id, expected_number: expectedNumber, status: 'pending', expires_at: now + 10 * 60_000, created_at: now, updated_at: now }));
 		try {
 			await sendTelegramMessage(selected.bot.bot_token, selected.account.chat_id,
 				`网页登录确认：请点击网页显示的数字。若不是本人操作，请点击“这不是我的操作”。`, challengeKeyboard(challengeId, expectedNumber));
 		} catch (error) {
-			await database.prepare(`UPDATE passport_login_challenges SET status = 'expired', updated_at = ?2 WHERE id = ?1`).bind(challengeId, Date.now()).run();
+			await runSql(database, sql(database).update('passport_login_challenges', { status: 'expired', updated_at: Date.now() }, { id: challengeId }));
 			return apiMessage(c, 502, error instanceof Error ? error.message : 'Telegram 登录确认发送失败');
 		}
 		const formPage = approvalForm(challengeId, expectedNumber);
@@ -220,11 +209,10 @@ const handler: ApiHandler = async (c, next) => {
 	if (step === 'poll') {
 		const challengeId = text(body.challenge_id);
 		if (!/^[0-9a-f-]{36}$/i.test(challengeId)) return apiMessage(c, 400, '登录确认编号不合法');
-		const challenge = await database.prepare(`SELECT CAST(user_id AS TEXT) AS user_id, expected_number, status, expires_at
-			FROM passport_login_challenges WHERE id = ?1`).bind(challengeId).first<{ user_id: string; expected_number: number; status: string; expires_at: number }>();
+		const challenge = await firstSql<{ user_id: string; expected_number: number; status: string; expires_at: number }>(database, sql(database).select({ table: 'passport_login_challenges', columns: { user_id: { column: 'user_id', cast: 'text' }, expected_number: 'expected_number', status: 'status', expires_at: 'expires_at' }, where: [{ column: 'id', value: challengeId }] }));
 		if (!challenge) return apiMessage(c, 404, '登录确认不存在');
 		if (challenge.expires_at <= Date.now() && challenge.status === 'pending') {
-			await database.prepare(`UPDATE passport_login_challenges SET status = 'expired', updated_at = ?2 WHERE id = ?1 AND status = 'pending'`).bind(challengeId, Date.now()).run();
+			await runSql(database, sql(database).update('passport_login_challenges', { status: 'expired', updated_at: Date.now() }, { id: challengeId, status: 'pending' }));
 			return apiMessage(c, 409, '登录确认已过期，请重新开始');
 		}
 		if (challenge.status === 'pending') {
@@ -234,13 +222,13 @@ const handler: ApiHandler = async (c, next) => {
 		if (challenge.status !== 'approved') return apiMessage(c, 409, challenge.status === 'denied' ? '本次登录已被拒绝' : '登录确认已经失效');
 		const sessionId = crypto.randomUUID(), now = Date.now(), maxAge = 24 * 60 * 60;
 		if (!database.batch) return apiMessage(c, 500, 'Passport 数据库不支持原子登录');
+		const builder = sql(database);
 		const statements: DatabaseBatchStatement[] = [
-			{ query: `INSERT INTO passport_sessions (id, user_id, expires_at, created_at)
-				SELECT ?1, user_id, ?3, ?4 FROM passport_login_challenges WHERE id = ?2 AND status = 'approved'`, values: [sessionId, challengeId, now + maxAge * 1000, now] },
-			{ query: `UPDATE passport_login_challenges SET status = 'consumed', updated_at = ?2 WHERE id = ?1 AND status = 'approved'`, values: [challengeId, now] },
+			builder.insertFromSelect('passport_sessions', { id: sessionId, user_id: { column: 'user_id' }, expires_at: now + maxAge * 1000, created_at: now }, 'passport_login_challenges', [{ column: 'id', value: challengeId }, { column: 'status', value: 'approved' }]),
+			builder.update('passport_login_challenges', { status: 'consumed', updated_at: now }, { id: challengeId, status: 'approved' }),
 		];
 		await database.batch(statements);
-		const createdSession = await database.prepare(`SELECT id FROM passport_sessions WHERE id = ?1`).bind(sessionId).first();
+		const createdSession = await firstSql(database, builder.select({ table: 'passport_sessions', columns: { id: 'id' }, where: [{ column: 'id', value: sessionId }] }));
 		if (!createdSession) return apiMessage(c, 409, '登录确认已被使用');
 		const secure = new URL(c.req.url).protocol === 'https:';
 		c.header('Set-Cookie', createPassportSessionCookie(sessionId, secure, maxAge));

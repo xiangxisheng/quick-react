@@ -4,6 +4,7 @@ export type SqlDialect = 'sqlite' | 'mysql' | 'postgresql';
 export type SqlQuery = { query: string; values: unknown[] };
 type SqlValue = unknown;
 type Values = Record<string, SqlValue | undefined>;
+type InsertSelectValue = SqlValue | { column: string };
 
 const identifierPattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
 export const quoteIdentifier = (identifier: string, dialect: SqlDialect) => {
@@ -66,6 +67,22 @@ export abstract class SqlBuilder {
 		return {
 			query: `INSERT INTO ${quoteIdentifier(table, this.dialect)} (${entries.map(([key]) => quoteIdentifier(key, this.dialect)).join(', ')}) VALUES (${this.placeholders(entries.length).join(', ')})`,
 			values: entries.map(([, value]) => value),
+		};
+	}
+
+	insertFromSelect(table: string, values: Record<string, InsertSelectValue>, from: string, where: SqlCondition[]): SqlQuery {
+		const entries = Object.entries(values); if (!entries.length || !where.length) throw new Error('insertFromSelect values and where cannot be empty');
+		let parameterIndex = 0;
+		const selected = entries.map(([, value]) => value && typeof value === 'object' && 'column' in value
+			? quoteIdentifier(String(value.column), this.dialect)
+			: this.placeholder(++parameterIndex));
+		const conditions = where.map((condition) => {
+			const operator = condition.operator ?? '=';
+			return ['IS NULL', 'IS NOT NULL'].includes(operator) ? `${quoteIdentifier(condition.column, this.dialect)} ${operator}` : `${quoteIdentifier(condition.column, this.dialect)} ${operator} ${this.placeholder(++parameterIndex)}`;
+		});
+		return {
+			query: `INSERT INTO ${quoteIdentifier(table, this.dialect)} (${entries.map(([key]) => quoteIdentifier(key, this.dialect)).join(', ')}) SELECT ${selected.join(', ')} FROM ${quoteIdentifier(from, this.dialect)} WHERE ${conditions.join(' AND ')}`,
+			values: [...entries.filter(([, value]) => !(value && typeof value === 'object' && 'column' in value)).map(([, value]) => value), ...where.filter((condition) => !['IS NULL', 'IS NOT NULL'].includes(condition.operator ?? '')).map((condition) => condition.value)],
 		};
 	}
 
