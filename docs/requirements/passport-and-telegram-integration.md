@@ -1,6 +1,6 @@
 # Passport 与 Telegram 集成需求
 
-状态：方案已确认，待实现
+状态：核心功能已实现；旧数据迁移工具已完成，实际导入等待配置目标 Telegram 机器人
 
 本文档定义统一身份中心、Telegram 机器人管理、Telegram webhook、业务站点身份引用以及旧项目数据迁移方案。
 
@@ -388,7 +388,7 @@ Telegram 用户 ID、Chat ID 和 From ID 必须按字符串处理，避免超过
 - Telegram Chat ID；
 - 邮箱及验证状态；
 - 创建时间；
-- 尚未完成的群组授权提示及其状态。
+- 旧私聊菜单状态。
 
 已确认备份包含约 2354 条文档，主要类型包括：
 
@@ -402,7 +402,7 @@ group_prompt
 sso
 ```
 
-迁移程序必须先解析、统计和校验文档，再执行事务导入；重复执行不得产生重复用户或重复绑定。导入后必须验证：
+迁移程序必须先解析、统计和校验文档，再执行事务导入；重复执行不得产生重复用户或重复绑定。目标机器人必须先存在于 `global_telegram_bots`，并通过参数明确指定，迁移程序不得根据旧 Update 内容猜测机器人。导入后必须验证：
 
 - 每个旧 `userid` 仍能查询到；
 - CouchDB `_id` 解析出的关联关系已正确写入 Passport 表；
@@ -411,7 +411,44 @@ sso
 - 所有雪花 ID 在 API 中以字符串返回；
 - 无 Token、密码或验证码被写入日志。
 
-邮箱和外部身份默认不限制单个用户的绑定数量；同一个已验证邮箱或同一个 Provider 外部身份只能归属一个用户，不能用来生成新的 `user_id`。已导入但尚未完成的验证码和群组提示可以长期保留，直到过期或被业务操作清理。
+邮箱和外部身份默认不限制单个用户的绑定数量；同一个已验证邮箱或同一个 Provider 外部身份只能归属一个用户，不能用来生成新的 `user_id`。旧验证码不得继续用于验证。迁移时只保留发送时间、邮箱、Telegram 身份、尝试次数和终态：旧已验证记录写为 `used`，旧未验证记录在确认已超过有效期后写为 `expired`；不迁移验证码明文，也不从旧验证码生成可验证的哈希。
+
+本备份的迁移分析结果为：
+
+```text
+文档总数                         2354
+Passport 用户                    219
+Telegram 绑定                    222
+已验证邮箱关系                   222
+验证码历史                       243（225 used，18 expired）
+私聊菜单                         250
+跳过群组菜单                     1
+跳过 group_prompt                435
+跳过旧 SSO                       1
+```
+
+219 个用户中有 3 个用户分别拥有多条 Telegram 或邮箱关系，因此绑定关系数为 222。Telegram 与邮箱的 CouchDB 正反向索引已经过一致性校验。`group_prompt` 属于本期不迁移的群组/客服流程，旧 `sso` 属于不迁移的旧 SSO 流程。
+
+迁移命令：
+
+```bash
+# 只解析和校验备份，不写数据库，也不要求机器人已配置
+npm run import:legacy-passport -- --dry-run
+
+# 校验目标表、机器人和冲突，并在结束时回滚
+npm run import:legacy-passport -- --bot-id <global_bot_id> --dry-run
+
+# 事务导入到默认 SQLite
+npm run import:legacy-passport -- --bot-id <global_bot_id>
+
+# Passport 与 global 使用不同 SQLite 时
+npm run import:legacy-passport -- \
+  --database <passport.sqlite> \
+  --global-database <global.sqlite> \
+  --bot-id <global_bot_id>
+```
+
+迁移器不会保存 CouchDB `_id`，不会输出邮箱、Token、验证码或密码；发生任何冲突会回滚整个事务。重复执行时，已存在且归属一致的用户、绑定、邮箱、验证码历史和菜单不会重复插入，也不会用旧菜单或旧昵称覆盖迁移后产生的新状态。
 
 旧项目头像暂不迁移。后续迁移时，头像源目录为 `/opt/firadio/php-telegram-iam/wwwroot/assets/avatars`，旧文件名按 Telegram 用户 ID 保存，需根据旧 `tgfromid` 与 `userid` 关系转换为 `avatars/<user_id>.<ext>`。旧项目配置中的机器人 Token 不属于 CouchDB 备份，机器人配置应通过 global 机器人管理功能单独迁移或重新录入。
 
