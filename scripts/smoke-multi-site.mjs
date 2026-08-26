@@ -170,6 +170,20 @@ try {
 	assert.ok(!sitesResult.table.columns.some((column) => column.dataIndex === 'passport_sso_enabled'));
 	const hostsResult = await (await request('localhost', '/api/panel/admin/global/site/hosts.php', { cookie })).json();
 	assert.equal(hostsResult.table.columns[0]?.dataIndex, 'id');
+	const externalProvidersPath = '/api/panel/admin/accounts/external-providers.php';
+	const externalProviders = await (await request('passport.test', externalProvidersPath, { cookie })).json();
+	const createProviderAction = externalProviders.table.option.actions.toolbar.find((action) => action.key === 'create');
+	const createSecretColumn = createProviderAction.form.columns.find((column) => column.dataIndex === 'client_secret');
+	assert.equal(createSecretColumn.inputType, 'password');
+	assert.equal(createSecretColumn.rules[0].required, true);
+	assert.match(createSecretColumn.title, /微信 AppSecret/);
+	assert.equal(externalProviders.table.columns.find((column) => column.dataIndex === 'client_secret').hideInTable, true);
+	assert.equal((await request('passport.test', externalProvidersPath, {
+		method: 'POST', cookie, body: { id: 'wechat', display_name: '微信', client_id: 'wechat-app-id', client_secret: 'wechat-app-secret', status: 'enabled' },
+	})).status, 201);
+	const createdProvider = await (await request('passport.test', `${externalProvidersPath}/wechat`, { cookie })).json();
+	assert.equal(createdProvider.client_secret, '');
+	assert.equal(createdProvider.secret_configured, '已配置');
 	const localSiteSign = await (await request('site1.test', '/api/sign.php')).json();
 	assert.equal(localSiteSign.formPage.fields[0].name, 'username');
 	assert.match(await (await request('site1.test', '/')).text(), /<title>首页 \| site1<\/title>/);
