@@ -134,6 +134,7 @@ model global_cloud_email_template_publications {
   template_id          Int
   channel_id           Int
   provider_template_id String
+  content_hash         String @default("")
   status               String
   created_at           BigInt
   updated_at           BigInt

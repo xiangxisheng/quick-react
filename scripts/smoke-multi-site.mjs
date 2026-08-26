@@ -296,6 +296,22 @@ try {
 	const syncResult = await syncResponse.json();
 	assert.equal(syncResult.updated, 1);
 	assert.equal(syncResult.imported, 1);
+	const legacyPublicationDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
+	legacyPublicationDatabase.prepare(`UPDATE global_cloud_email_template_publications SET content_hash = 'legacy:' || (
+		SELECT json_array(template_key, name, subject, body_html) FROM global_cloud_email_templates WHERE id = ?1
+	) WHERE template_id = ?1 AND channel_id = ?2`).run(emailTemplate.id, emailChannel.id);
+	legacyPublicationDatabase.close();
+	const actionsBeforeUnchangedPublish = directMailActions.length;
+	const unchangedPublish = await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=publish`, { method: 'POST', cookie });
+	assert.equal(unchangedPublish.status, 200);
+	assert.equal((await unchangedPublish.json()).feedback.message, '模板内容未改动，无需重新提交审核');
+	assert.equal(directMailActions.length, actionsBeforeUnchangedPublish);
+	const normalizedPublicationDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
+	assert.match(normalizedPublicationDatabase.prepare(`SELECT content_hash FROM global_cloud_email_template_publications
+		WHERE template_id = ?1 AND channel_id = ?2`).get(emailTemplate.id, emailChannel.id).content_hash, /^[0-9a-f]{64}$/);
+	normalizedPublicationDatabase.close();
+	assert.equal((await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=publish`, { method: 'POST', cookie })).status, 200);
+	assert.equal(directMailActions.length, actionsBeforeUnchangedPublish);
 	const syncedTemplates = await (await request('localhost', emailTemplatesPath, { cookie })).json();
 	const importedTemplate = syncedTemplates.table.dataSource.find((item) => item.template_key === `aliyun_${emailCredential.id}_6002`);
 	assert.equal(importedTemplate?.template_type, 'email_verification');

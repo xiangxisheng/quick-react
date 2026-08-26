@@ -27,29 +27,53 @@ const localTemplateText = (value: string) => value.replace(/\{([A-Za-z][A-Za-z0-
 const plainText = (html: string) => html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
 	.replace(/<br\s*\/?>/gi, '\n').replace(/<\/p\s*>/gi, '\n').replace(/<[^>]+>/g, '').replace(/\n{3,}/g, '\n\n').trim() || '请查看 HTML 邮件内容';
 const importedTemplateKey = (credentialId: number, providerTemplateId: string) => `aliyun_${credentialId}_${providerTemplateId}`.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+const encoder = new TextEncoder();
+const cloudContentSnapshot = (template: CloudEmailTemplate) => JSON.stringify([
+	template.template_key,
+	template.name,
+	template.subject,
+	template.body_html,
+]);
+const cloudContentHash = async (template: CloudEmailTemplate) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(cloudContentSnapshot(template))))]
+	.map((byte) => byte.toString(16).padStart(2, '0')).join('');
 const loadTemplate = (database: DatabaseAdapter, id: number) => database.prepare(`SELECT id, template_key, template_type, name, subject, body_text, body_html, status
 	FROM global_cloud_email_templates WHERE id = ?1`).bind(id).first<CloudEmailTemplate>();
 const savePublication = async (database: DatabaseAdapter, template: CloudEmailTemplate, channelId: number) => {
 	const target = await loadCloudEmailTarget(database, channelId);
 	if (!target) throw new Error(`邮件通道 ${channelId} 不存在或已停用`);
-	const current = await database.prepare(`SELECT provider_template_id FROM global_cloud_email_template_publications WHERE template_id = ?1 AND channel_id = ?2`)
-		.bind(template.id, channelId).first<{ provider_template_id: string }>();
+	const contentHash = await cloudContentHash(template);
+	const current = await database.prepare(`SELECT provider_template_id, content_hash, status
+		FROM global_cloud_email_template_publications WHERE template_id = ?1 AND channel_id = ?2`)
+		.bind(template.id, channelId).first<{ provider_template_id: string; content_hash: string; status: string }>();
+	const unchanged = current?.status === 'ready' && (current.content_hash === contentHash
+		|| current.content_hash === `legacy:${cloudContentSnapshot(template)}`);
+	if (unchanged) {
+		if (current.content_hash !== contentHash) await database.prepare(`UPDATE global_cloud_email_template_publications SET content_hash = ?3
+			WHERE template_id = ?1 AND channel_id = ?2`).bind(template.id, channelId, contentHash).run();
+		return 'skipped' as const;
+	}
 	const publication = await publishCloudEmailTemplate(target, template, current?.provider_template_id);
 	const now = Date.now();
-	if (current) await database.prepare(`UPDATE global_cloud_email_template_publications SET provider_template_id = ?3, status = ?4, updated_at = ?5
-		WHERE template_id = ?1 AND channel_id = ?2`).bind(template.id, channelId, publication.providerTemplateId, publication.status, now).run();
+	if (current) await database.prepare(`UPDATE global_cloud_email_template_publications SET provider_template_id = ?3, content_hash = ?4, status = ?5, updated_at = ?6
+		WHERE template_id = ?1 AND channel_id = ?2`).bind(template.id, channelId, publication.providerTemplateId, contentHash, publication.status, now).run();
 	else await database.prepare(`INSERT INTO global_cloud_email_template_publications
-		(template_id, channel_id, provider_template_id, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?5)`)
-		.bind(template.id, channelId, publication.providerTemplateId, publication.status, now).run();
+		(template_id, channel_id, provider_template_id, content_hash, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)`)
+		.bind(template.id, channelId, publication.providerTemplateId, contentHash, publication.status, now).run();
+	return 'submitted' as const;
 };
 const publishToEnabledChannels = async (database: DatabaseAdapter, template: CloudEmailTemplate) => {
 	const channels = await database.prepare(`SELECT id FROM global_cloud_email_channels WHERE status = 'enabled' ORDER BY id`).all<{ id: number }>();
 	const failures: string[] = [];
+	let submitted = 0, skipped = 0;
 	for (const channel of channels.results) {
-		try { await savePublication(database, template, channel.id); }
+		try {
+			const result = await savePublication(database, template, channel.id);
+			if (result === 'submitted') submitted += 1;
+			else skipped += 1;
+		}
 		catch (error) { failures.push(error instanceof Error ? error.message : `邮件通道 ${channel.id} 发布失败`); }
 	}
-	return failures;
+	return { failures, submitted, skipped };
 };
 const syncAliyunTemplates = async (database: DatabaseAdapter, channelId: number, templateType: string) => {
 	const target = await loadCloudEmailTarget(database, channelId);
@@ -86,14 +110,17 @@ const syncAliyunTemplates = async (database: DatabaseAdapter, channelId: number,
 				if (!local) throw new Error('本地模板创建后无法读取');
 				imported += 1;
 			}
+			const synced = await loadTemplate(database, local.template_id);
+			if (!synced) throw new Error('本地模板同步后无法读取');
+			const contentHash = await cloudContentHash(synced);
 			const publication = await database.prepare(`SELECT template_id FROM global_cloud_email_template_publications
 				WHERE template_id = ?1 AND channel_id = ?2`).bind(local.template_id, channelId).first();
 			if (publication) await database.prepare(`UPDATE global_cloud_email_template_publications SET provider_template_id = ?3,
-				status = ?4, updated_at = ?5 WHERE template_id = ?1 AND channel_id = ?2`)
-				.bind(local.template_id, channelId, remote.providerTemplateId, remote.status, now).run();
+				content_hash = ?4, status = ?5, updated_at = ?6 WHERE template_id = ?1 AND channel_id = ?2`)
+				.bind(local.template_id, channelId, remote.providerTemplateId, contentHash, remote.status, now).run();
 			else await database.prepare(`INSERT INTO global_cloud_email_template_publications
-				(template_id, channel_id, provider_template_id, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?5)`)
-				.bind(local.template_id, channelId, remote.providerTemplateId, remote.status, now).run();
+				(template_id, channel_id, provider_template_id, content_hash, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)`)
+				.bind(local.template_id, channelId, remote.providerTemplateId, contentHash, remote.status, now).run();
 		} catch (error) { failures.push(`${summary.name}：${error instanceof Error ? error.message : '同步失败'}`); }
 	}
 	return { imported, updated, total: remoteTemplates.length, failures };
@@ -148,8 +175,8 @@ const handler: ApiHandler = async (c, next, params) => {
 		} catch { return apiMessage(c, 409, '模板 Key 已经存在'); }
 		const template = await database.prepare(`SELECT id, template_key, template_type, name, subject, body_text, body_html, status FROM global_cloud_email_templates WHERE template_key = ?1`).bind(templateKey).first<CloudEmailTemplate>();
 		if (!template) return apiMessage(c, 500, '模板创建后无法读取');
-		const failures = template.status === statusValues.enabled ? await publishToEnabledChannels(database, template) : [];
-		return apiMessageData(c, 201, failures.length ? `模板已创建，但有 ${failures.length} 个通道发布失败：${failures.join('；')}` : '邮件模板创建并提交云端审核成功', { id: template.id });
+		const result = template.status === statusValues.enabled ? await publishToEnabledChannels(database, template) : { failures: [], submitted: 0, skipped: 0 };
+		return apiMessageData(c, 201, result.failures.length ? `模板已创建，但有 ${result.failures.length} 个通道发布失败：${result.failures.join('；')}` : '邮件模板创建并提交云端审核成功', { id: template.id });
 	}
 	if (!params.id && c.req.method === 'DELETE') {
 		const ids = await c.req.json<unknown>().catch(() => []);
@@ -167,8 +194,12 @@ const handler: ApiHandler = async (c, next, params) => {
 	if (params.id && c.req.method === 'POST' && c.req.query('action') === 'publish') {
 		const template = await loadTemplate(database, Number(params.id));
 		if (!template || template.status !== statusValues.enabled) return apiMessage(c, 404, '邮件模板不存在或已停用');
-		const failures = await publishToEnabledChannels(database, template);
-		return failures.length ? apiMessage(c, 502, failures.join('；')) : apiMessage(c, 200, '模板已提交全部启用通道审核');
+		const result = await publishToEnabledChannels(database, template);
+		if (result.failures.length) return apiMessage(c, 502, result.failures.join('；'));
+		if (!result.submitted && result.skipped) return apiMessage(c, 200, '模板内容未改动，无需重新提交审核');
+		return apiMessage(c, 200, result.skipped
+			? `模板已提交 ${result.submitted} 个通道审核，跳过 ${result.skipped} 个未改动通道`
+			: '模板已提交全部启用通道审核');
 	}
 	if (params.id && c.req.method === 'POST' && c.req.query('action') === 'refresh') {
 		const publications = await database.prepare(`SELECT channel_id, provider_template_id FROM global_cloud_email_template_publications WHERE template_id = ?1`)
@@ -196,9 +227,9 @@ const handler: ApiHandler = async (c, next, params) => {
 		await database.prepare(`UPDATE global_cloud_email_templates SET name = ?2, subject = ?3, body_text = ?4,
 			body_html = ?5, updated_at = ?6 WHERE id = ?1`).bind(current.id, defaults.name, defaults.subject, defaults.body_text, defaults.body_html, Date.now()).run();
 		const restored = { ...current, ...defaults };
-		const failures = current.status === statusValues.enabled ? await publishToEnabledChannels(database, restored) : [];
-		return failures.length
-			? apiMessage(c, 502, `本地模板已还原，但云端更新失败：${failures.join('；')}`)
+		const result = current.status === statusValues.enabled ? await publishToEnabledChannels(database, restored) : { failures: [], submitted: 0, skipped: 0 };
+		return result.failures.length
+			? apiMessage(c, 502, `本地模板已还原，但云端更新失败：${result.failures.join('；')}`)
 			: apiMessage(c, 200, current.status === statusValues.enabled ? '模板已还原默认并提交云端审核' : '模板已还原默认');
 	}
 	if (params.id && c.req.method === 'PUT') {
@@ -223,8 +254,10 @@ const handler: ApiHandler = async (c, next, params) => {
 		} catch { return apiMessage(c, 409, '模板 Key 已经存在'); }
 		const updated = { ...current, template_key: templateKey, template_type: templateType, name, subject, body_text: bodyText, body_html: bodyHtml, status };
 		const contentChanged = ['template_key', 'template_type', 'name', 'subject', 'body_text', 'body_html'].some((field) => changed.has(field));
-		const failures = status === statusValues.enabled && (contentChanged || current.status !== status) ? await publishToEnabledChannels(database, updated) : [];
-		return failures.length ? apiMessage(c, 502, `本地模板已保存，但云端更新失败：${failures.join('；')}`) : apiMessage(c, 200, '保存成功');
+		const result = status === statusValues.enabled && (contentChanged || current.status !== status)
+			? await publishToEnabledChannels(database, updated)
+			: { failures: [], submitted: 0, skipped: 0 };
+		return result.failures.length ? apiMessage(c, 502, `本地模板已保存，但云端更新失败：${result.failures.join('；')}`) : apiMessage(c, 200, '保存成功');
 	}
 	if (params.id && c.req.method === 'DELETE') {
 		const error = await deleteTemplate(database, Number(params.id));
