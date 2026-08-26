@@ -2,26 +2,45 @@ import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
 import { parseRedirectUris, randomToken, sha256 } from '@server/accounts/oidc.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
-import { runSql, sql } from '@server/database/sql.mjs';
+import { allSql, runSql, sql } from '@server/database/sql.mjs';
 import { oidcClients } from '@server/accounts/repository.mjs';
 
 const columns = [
 	{ dataIndex: 'id', title: '客户端 ID' },
 	{ dataIndex: 'name', title: '名称', component: 'textbox', rules: [{ required: true, message: '请输入客户端名称' }] },
-	{ dataIndex: 'redirect_uris', title: '回调地址', component: 'textarea', tableDisplay: 'multiline' as const, rules: [{ required: true, message: '请输入回调地址' }] },
+	{ dataIndex: 'redirect_uris', title: '回调地址', component: 'select', multiple: true, allowCustomValue: true, placeholder: '选择业务站点域名，或输入完整 HTTPS 回调地址后回车', tableDisplay: 'multiline' as const, rules: [{ required: true, message: '请选择或输入至少一个回调地址' }] },
 	{ dataIndex: 'backchannel_logout_uri', title: '后端注销地址', component: 'url', placeholder: 'https://site.example/api/accounts/oidc/backchannel-logout' },
 	{ dataIndex: 'allowed_scopes', title: '允许 Scope', component: 'textbox' },
 	{ dataIndex: 'require_pkce', title: '要求 PKCE', component: 'switch' },
 	{ dataIndex: 'status', title: '状态', component: 'switch', checkedValue: statusValues.enabled, uncheckedValue: statusValues.disabled, options: enabledDisabledOptions },
 ];
 
+const loadRedirectUriOptions = async (c: Parameters<ApiHandler>[0]) => {
+	const database = c.get('globalDatabase');
+	const rows = await allSql<{ hostname: string; site_key: string; site_name: string }>(database, sql(database).select({
+		table: 'global_site_hosts', alias: 'h',
+		columns: { hostname: 'h.hostname', site_key: 'h.site_key', site_name: 's.name' },
+		joins: [{ table: 'global_sites', alias: 's', left: 's.site_key', right: 'h.site_key' }],
+		where: [{ column: 'h.status', value: 'enabled' }, { column: 's.status', value: 'enabled' }, { column: 's.migration_status', value: 'ready' }],
+		orderBy: [{ column: 'h.hostname' }],
+	}));
+	return rows
+		.filter((row) => row.site_key !== 'global' && row.site_key !== 'passport' && !row.hostname.startsWith('*.'))
+		.map((row) => {
+			const origin = `https://${row.hostname}`;
+			return { value: `${origin}/api/accounts/oidc/callback`, text: `${row.site_name} (${row.hostname})`, fieldValues: { backchannel_logout_uri: `${origin}/api/accounts/oidc/backchannel-logout` } };
+		});
+};
+
 const handler: ApiHandler = async (c, next, params) => {
 	const database = c.get('passportDatabase');
 	if (!database || c.get('site').siteKey !== 'passport') return apiMessage(c, 404);
 	if (!params.id && c.req.method === 'GET') {
 		const rows: Array<Record<string, unknown>> = await oidcClients(database);
-		for (const row of rows) row.redirect_uris = JSON.parse(String(row.redirect_uris || '[]')).join('\n');
-		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { toolbar: [{ key: 'create', label: '新增客户端' }], row: [{ key: 'edit', label: '编辑' }, { key: 'reset-secret', label: '重置密钥', confirm: '重置后旧密钥立即失效，确定继续吗？' }, { key: 'delete', label: '删除' }] } }, columns, dataSource: rows, totalRecords: rows.length } });
+		for (const row of rows) row.redirect_uris = JSON.parse(String(row.redirect_uris || '[]'));
+		const redirectUriOptions = await loadRedirectUriOptions(c);
+		const tableColumns = columns.map((column) => column.dataIndex === 'redirect_uris' ? { ...column, options: redirectUriOptions } : column);
+		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { toolbar: [{ key: 'create', label: '新增客户端' }], row: [{ key: 'edit', label: '编辑' }, { key: 'reset-secret', label: '重置密钥', confirm: '重置后旧密钥立即失效，确定继续吗？' }, { key: 'delete', label: '删除' }] } }, columns: tableColumns, dataSource: rows, totalRecords: rows.length } });
 	}
 	if (!params.id && c.req.method === 'POST') {
 		const body: Record<string, unknown> = await c.req.json<Record<string, unknown>>().catch(() => ({}));
