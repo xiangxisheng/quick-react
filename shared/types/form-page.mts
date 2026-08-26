@@ -9,7 +9,8 @@ export type FormPageField = {
 	maxLength?: number;
 	checkedChildren?: string;
 	unCheckedChildren?: string;
-	options?: Array<{ value: string; text: string }>;
+	options?: Array<{ value: string; text: string; fieldValues?: Record<string, unknown> }>;
+	readOnlyWhen?: { field: string; values?: string[]; notValues?: string[] };
 	rules?: { required?: boolean; message?: string }[];
 };
 

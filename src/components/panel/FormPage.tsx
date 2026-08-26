@@ -31,6 +31,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> => (
 
 export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PUT', redirectOnFeedback = false, onSaved }: FormProps) {
 	const [form] = Form.useForm<Record<string, unknown>>();
+	const formValues = Form.useWatch([], form) as Record<string, unknown> | undefined;
 	const [messageApi, messageContextHolder] = message.useMessage();
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
@@ -163,6 +164,13 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 			initialValues={formConfig?.initialValues}
 			onValuesChange={(changedValues) => {
 				for (const field of Object.keys(changedValues)) changedFields.current.add(field);
+				for (const [name, value] of Object.entries(changedValues)) {
+					const option = formConfig?.fields.find((field) => field.name === name)?.options?.find((item) => item.value === String(value));
+					if (option?.fieldValues) {
+						form.setFieldsValue(option.fieldValues);
+						for (const field of Object.keys(option.fieldValues)) changedFields.current.add(field);
+					}
+				}
 				setDirty(changedFields.current.size > 0);
 			}}
 		>
@@ -207,7 +215,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 						? <Switch checkedChildren={field.checkedChildren} unCheckedChildren={field.unCheckedChildren} />
 						: field.type === 'select'
 							? <Select options={field.options?.map((option) => ({ value: option.value, label: option.text }))} placeholder={field.placeholder} />
-						: <Input type={field.type === 'password' ? 'password' : 'text'} placeholder={field.placeholder} maxLength={field.maxLength} />}
+						: <Input type={field.type === 'password' ? 'password' : 'text'} placeholder={field.placeholder} maxLength={field.maxLength} readOnly={field.readOnlyWhen ? (field.readOnlyWhen.values ? field.readOnlyWhen.values.includes(String(formValues?.[field.readOnlyWhen.field] ?? '')) : !field.readOnlyWhen.notValues?.includes(String(formValues?.[field.readOnlyWhen.field] ?? ''))) : false} />}
 				</Form.Item>
 			))}
 			<Space>
