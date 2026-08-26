@@ -15,7 +15,6 @@ CREATE TABLE IF NOT EXISTS global_cloud_email_channels (
 CREATE TABLE IF NOT EXISTS global_cloud_email_templates (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	template_key TEXT NOT NULL UNIQUE CHECK (template_key GLOB '[a-z]*' AND template_key NOT GLOB '*[^a-z0-9_]*'),
-	template_type TEXT NOT NULL CHECK (template_type IN ('email_verification')),
 	name TEXT NOT NULL CHECK (length(trim(name)) > 0),
 	subject TEXT NOT NULL CHECK (length(trim(subject)) > 0),
 	body_text TEXT NOT NULL CHECK (length(trim(body_text)) > 0),
