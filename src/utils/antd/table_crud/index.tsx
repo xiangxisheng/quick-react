@@ -245,10 +245,10 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 						title: '操作',
 						key: 'operation',
 						fixed: 'right',
-						width: 100,
-						render: (value: any, record: DataType, index: number) => <Space>
+						width: 160,
+						render: (value: any, record: DataType, index: number) => <Space wrap size={[8, 4]}>
 							{(resJsonTableOption.actions?.row ?? []).map((action) => rowActionHandlers[action.key]?.(action, value, record, index)
-								?? <a key={action.key} aria-disabled={action.disabled} onClick={() => onSimpleRowAction(action, record)}>{action.label}</a>)}
+								?? <a key={action.key} aria-disabled={action.disabled} onClick={() => action.form ? onRowFormAction(action, record) : onSimpleRowAction(action, record)}>{action.label}</a>)}
 						</Space>,
 					});
 					setTableColumns(tableColumns);
@@ -409,6 +409,34 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 		if (action.confirm && !await commonApi.modalConfirm([action.confirm])) return;
 		await commonApi.apiFetch(`${apiPath}/${encodeURIComponent(rowId)}?action=${encodeURIComponent(action.key)}`, { method: 'POST' });
 		await fetchData();
+	};
+	const onRowFormAction = async (action: TableAction, record: DataType) => {
+		if (!action.form || action.disabled) return;
+		const rowId = String(record[resJsonTableOption.rowKey] ?? '');
+		if (!rowId) return;
+		if (action.confirm && !await commonApi.modalConfirm([action.confirm])) return;
+		const drawerForm = drawer.drawerForm({
+			title: action.label,
+			columns: action.form.columns,
+			optionsPath: `${apiPath}/${encodeURIComponent(rowId)}`,
+		}, async (values) => {
+			if (!values) return;
+			drawerForm.setSubmitting‌(true);
+			try {
+				const response = await commonApi.apiFetch(`${apiPath}/${encodeURIComponent(rowId)}?action=${encodeURIComponent(action.key)}`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(values),
+				});
+				if (!response.ok) return;
+				drawer.drawerClose();
+				await fetchData();
+			} catch (error) {
+				console.error(error);
+			} finally {
+				drawerForm.setSubmitting‌(false);
+			}
+		});
 	};
 
 	const rowActionHandlers: Record<string, (action: TableAction, value: any, record: DataType, index: number) => React.ReactNode> = {
