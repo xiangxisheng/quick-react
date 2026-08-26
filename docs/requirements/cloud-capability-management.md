@@ -1,6 +1,6 @@
 # 云能力管理架构需求
 
-状态：Bucket 一期代码已同步，腾讯云凭据、Bucket 测试和对象列表已完成真实联调
+状态：Bucket 一期与阿里云邮件推送一期已实现；腾讯云凭据、Bucket 测试和对象列表已完成真实联调
 
 ## 1. 核心原则
 
@@ -30,11 +30,16 @@
     Bucket 管理
     站点绑定
     对象管理
-  邮件推送（后续）
+  邮件推送
+    通道管理
+    模板管理
+    站点绑定
   短信服务（后续）
 ```
 
-对象存储提供 Bucket 发现、文件列表、上传、下载和删除；邮件推送提供发信域名、发件人和发送测试。能力模块可以共享底层协议工具，但不能通过无关字段污染彼此的表单和数据表。
+对象存储提供 Bucket 发现、文件列表、上传、下载和删除；邮件推送提供发信身份、本地模板、云端模板发布状态和站点用途绑定。能力模块可以共享底层协议工具，但不能通过无关字段污染彼此的表单和数据表。
+
+本项目不实现 SMTP 客户端，也不在后台暴露 SMTP Host、端口、用户名或密码。邮件只能通过已注册的云厂商 HTTP API 发送；未来如需自建 SMTP，由独立 Go 推送服务封装为通用 HTTP Provider 后接入。
 
 ## 3. 凭据模型
 
@@ -75,13 +80,20 @@ global_cloud_object_storage_buckets
   created_at
   updated_at
 
-global_cloud_email_channels        # 后续独立设计
+global_cloud_email_channels
+global_cloud_email_templates
+global_cloud_email_template_publications
+global_cloud_email_bindings
 global_cloud_sms_channels          # 后续独立设计
 ```
 
 Bucket 不保存人工名称，也不保存 `provider` 或 `service`。管理界面和站点绑定使用“凭据名称 + 产品名称 + Bucket”生成展示文本，例如“腾讯云生产凭据 / COS / example-1250000000”。
 
 同一凭据可以接入多个 Bucket。默认以 `cloud_credential_id + endpoint + bucket` 标识接入记录，避免同一个 Bucket 被重复添加。Endpoint 是 Bucket 接入配置而不是凭据字段：已知云厂商由 Provider 根据 Bucket 地域推导并自动回填，同时允许在 Bucket 表单中覆盖；自建或其他 S3 兼容 Provider 在 Bucket 表单中填写。
+
+邮件模板以 `template_key` 稳定标识，本地表直接保存当前主题、纯文本正文和 HTML 正文，变量统一写为 `{{variable_name}}`。一期不建立模板版本表；编辑时更新同一条本地模板，并更新各通道对应的云端模板。支持云端模板的 Provider 通过 `global_cloud_email_template_publications` 保存 Provider Template ID 和审核状态；只有状态为 `ready` 的模板才能启用站点绑定。不支持云端模板的 Provider 后续由适配器直接发送本地渲染后的正文，不创建伪造的云端模板记录。
+
+阿里云 DirectMail 一期支持 `CreateTemplate`、`ModifyTemplate`、`DescTemplate` 和带 Template Data 的 `SingleSendMail`。新增或修改模板后状态回到 `reviewing`，管理员刷新远端状态，审核通过后才能设为站点默认模板。模板变量在发布时由内部双花括号语法转换为阿里云语法，日志和 API 响应不得包含 AccessKey Secret、验证码或完整签名参数。
 
 ## 5. Provider 与处理模块
 
@@ -95,7 +107,7 @@ Provider 可以选择性实现独立的凭据测试。凭据管理统一显示�
 
 ## 6. 站点绑定
 
-对象存储站点绑定引用 `global_cloud_object_storage_buckets.id`。绑定只决定哪个站点以什么用途使用哪个已接入 Bucket，不复制凭据和 Bucket 配置。其他能力在实现时建立自己的资源和绑定模型，不通过通用服务表制造跨能力耦合。
+对象存储站点绑定引用 `global_cloud_object_storage_buckets.id`。绑定只决定哪个站点以什么用途使用哪个已接入 Bucket，不复制凭据和 Bucket 配置。邮件站点绑定引用邮件通道与本地模板，首期用途为 `email_verification`；每个站点和用途最多一个启用的默认绑定。其他能力建立自己的资源和绑定模型，不通过通用服务表制造跨能力耦合。
 
 同一绑定可以多选用途和默认用途；默认用途必须是用途的子集。每个站点、每个用途最多有一个启用的默认绑定。
 
@@ -107,5 +119,7 @@ Provider 可以选择性实现独立的凭据测试。凭据管理统一显示�
 - AWS、Cloudflare、阿里云、腾讯云已注册独立凭据测试；`other` 返回明确的不支持反馈。
 - 运行时既可以按绑定 ID 加载 Bucket，也可以按站点和默认用途解析 Bucket。
 - 自动烟测使用 `other` 验证空库迁移、Secret 不回显、凭据测试反馈、Bucket CRUD、绑定多用途和对象页初始加载。
+- 邮件推送已实现阿里云通道、本地模板自动发布、云端审核状态刷新、站点绑定和运行时模板发送；没有 `global_cloud_email_template_versions`。
+- 邮件烟测模拟阿里云模板 API，验证变量转换、审核前禁止启用绑定、审核通过后允许默认绑定，以及先停用再删除的生命周期约束。
 
 不把签名代码通过编译或本地烟测等同于厂商联调成功。腾讯云已使用真实凭据验证 CAM `GetUserAppId`、COS Bucket 测试和 ListObjectsV2 对象列表；预签名上传、下载和删除仍需结合实际对象验证。AWS、Cloudflare 和阿里云仍需分别使用最小权限真实凭据完成凭据测试、Bucket 发现、Bucket 测试、对象分页和预签名上传下载验证。

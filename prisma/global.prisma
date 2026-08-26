@@ -88,3 +88,54 @@ model global_telegram_bots {
 
   @@index([webhook_hostname])
 }
+
+model global_cloud_email_channels {
+  id                  Int    @id @default(autoincrement())
+  cloud_credential_id Int
+  region              String
+  account_name        String
+  from_alias          String
+  reply_to_address    Int    @default(0)
+  status              String @default("enabled")
+  created_at          BigInt
+  updated_at          BigInt
+
+  @@unique([cloud_credential_id, region, account_name])
+}
+
+model global_cloud_email_templates {
+  id           Int    @id @default(autoincrement())
+  template_key String @unique
+  name         String
+  subject      String
+  body_text    String
+  body_html    String
+  status       String @default("enabled")
+  created_at   BigInt
+  updated_at   BigInt
+}
+
+model global_cloud_email_bindings {
+  id         Int    @id @default(autoincrement())
+  site_key   String
+  channel_id Int
+  template_id Int
+  purpose    String
+  is_default Int    @default(0)
+  status     String @default("enabled")
+  created_at BigInt
+  updated_at BigInt
+
+  @@unique([site_key, channel_id, template_id, purpose])
+}
+
+model global_cloud_email_template_publications {
+  template_id          Int
+  channel_id           Int
+  provider_template_id String
+  status               String
+  created_at           BigInt
+  updated_at           BigInt
+
+  @@id([template_id, channel_id])
+}

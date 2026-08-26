@@ -9,8 +9,19 @@ process.env.DEFAULT_DATABASE_FILE = join(temporaryDirectory, 'default.sqlite');
 process.env.SKIP_SERVER_LISTEN = '1';
 const originalFetch = globalThis.fetch;
 let telegramWebhookUrl = '';
+const directMailActions = [];
 globalThis.fetch = async (input, init) => {
 	const url = String(input);
+	if (url === 'https://dm.aliyuncs.com/' || url === 'https://dm.ap-southeast-1.aliyuncs.com/') {
+		const parameters = new URLSearchParams(String(init?.body ?? ''));
+		const action = parameters.get('Action');
+		directMailActions.push({ action, parameters });
+		if (action === 'CreateTemplate') return Response.json({ RequestId: 'dm-create', TemplateId: 5001 });
+		if (action === 'ModifyTemplate') return Response.json({ RequestId: 'dm-modify' });
+		if (action === 'DescTemplate') return Response.json({ RequestId: 'dm-describe', TemplateStatus: 2 });
+		if (action === 'SingleSendMail') return Response.json({ RequestId: 'dm-send', EnvId: 'dm-message' });
+		return Response.json({ RequestId: 'dm-unsupported', Code: 'Unsupported', Message: String(action) }, { status: 400 });
+	}
 	if (!url.startsWith('https://api.telegram.org/bot')) return originalFetch(input, init);
 	const method = url.slice(url.lastIndexOf('/') + 1);
 	const body = init?.body ? JSON.parse(String(init.body)) : {};
@@ -175,10 +186,69 @@ try {
 	assert.deepEqual(bindingsResult.table.dataSource[0].default_purposes, ['uploads']);
 	assert.equal((await request('localhost', '/api/panel/admin/global/cloud/object-storage/objects.php', { cookie })).status, 200);
 
+	assert.equal((await request('localhost', credentialsPath, {
+		method: 'POST', cookie, body: { name: 'smoke-aliyun-mail', provider: 'aliyun', access_key_id: 'aliyun-key', access_key_secret: 'aliyun-secret' },
+	})).status, 201);
+	const emailCredentialsResult = await (await request('localhost', credentialsPath, { cookie })).json();
+	const emailCredential = emailCredentialsResult.table.dataSource.find((item) => item.name === 'smoke-aliyun-mail');
+	assert.ok(emailCredential?.id);
+	const emailChannelsPath = '/api/panel/admin/global/cloud/email/channels.php';
+	assert.equal((await request('localhost', emailChannelsPath, {
+		method: 'POST', cookie, body: { cloud_credential_id: emailCredential.id, region: 'cn-hangzhou', account_name: 'noreply@example.com', from_alias: 'Smoke Passport' },
+	})).status, 201);
+	const emailChannels = await (await request('localhost', emailChannelsPath, { cookie })).json();
+	const emailChannel = emailChannels.table.dataSource.find((item) => item.account_name === 'noreply@example.com');
+	assert.ok(emailChannel?.id);
+	const emailTemplatesPath = '/api/panel/admin/global/cloud/email/templates.php';
+	assert.equal((await request('localhost', emailTemplatesPath, {
+		method: 'POST', cookie, body: { template_key: 'email_verification', name: '邮箱验证码', subject: '验证码 {{code}}', body_text: '验证码：{{code}}', body_html: '<p>验证码：{{code}}</p>' },
+	})).status, 201);
+	assert.equal(directMailActions.at(-1)?.action, 'CreateTemplate');
+	assert.equal(directMailActions.at(-1)?.parameters.get('TemplateSubject'), '验证码 {code}');
+	const emailTemplates = await (await request('localhost', emailTemplatesPath, { cookie })).json();
+	const emailTemplate = emailTemplates.table.dataSource.find((item) => item.template_key === 'email_verification');
+	assert.ok(emailTemplate?.id);
+	const emailBindingsPath = '/api/panel/admin/global/cloud/email/bindings.php';
+	assert.equal((await request('localhost', emailBindingsPath, {
+		method: 'POST', cookie, body: { site_key: 'passport', channel_id: emailChannel.id, template_id: emailTemplate.id, purpose: 'email_verification', is_default: true },
+	})).status, 400);
+	assert.equal((await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}?action=refresh`, { method: 'POST', cookie })).status, 200);
+	assert.equal(directMailActions.at(-1)?.action, 'DescTemplate');
+	assert.equal((await request('localhost', emailBindingsPath, {
+		method: 'POST', cookie, body: { site_key: 'passport', channel_id: emailChannel.id, template_id: emailTemplate.id, purpose: 'email_verification', is_default: true },
+	})).status, 201);
+	const emailBindings = await (await request('localhost', emailBindingsPath, { cookie })).json();
+	const emailBinding = emailBindings.table.dataSource[0];
+	assert.equal(emailBinding.is_default, 1);
+	assert.equal((await request('localhost', `${emailBindingsPath}/${emailBinding.id}`, { method: 'DELETE', cookie })).status, 409);
+	assert.equal((await request('localhost', `${emailBindingsPath}/${emailBinding.id}`, {
+		method: 'PUT', cookie, body: { status: 'disabled', __changedFields: ['status'] },
+	})).status, 200);
+	assert.equal((await request('localhost', `${emailBindingsPath}/${emailBinding.id}`, { method: 'DELETE', cookie })).status, 200);
+	assert.equal((await request('localhost', `${emailTemplatesPath}/${emailTemplate.id}`, { method: 'DELETE', cookie })).status, 409);
+	assert.equal((await request('localhost', `${emailChannelsPath}/${emailChannel.id}`, { method: 'DELETE', cookie })).status, 409);
+	assert.equal((await request('localhost', `${credentialsPath}/${emailCredential.id}`, {
+		method: 'PUT', cookie, body: { provider: 'aws', __changedFields: ['provider'] },
+	})).status, 409);
+	const { createAliyunDirectMailAdapter } = await import('../server/cloud/providers/aliyun-direct-mail.mts');
+	const emailSendResult = await createAliyunDirectMailAdapter({
+		id: emailChannel.id, provider: 'aliyun', cloud_credential_id: emailCredential.id, region: 'cn-hangzhou',
+		account_name: 'noreply@example.com', from_alias: 'Smoke Passport', reply_to_address: 0,
+		access_key_id: 'aliyun-key', access_key_secret: 'aliyun-secret',
+	}).send({
+		to: 'recipient@example.com', subject: '验证码 123456', text: '验证码：123456', html: '<p>验证码：123456</p>',
+		template: { providerTemplateId: '5001', variables: { code: '123456' } },
+	});
+	assert.equal(emailSendResult.messageId, 'dm-message');
+	assert.equal(directMailActions.at(-1)?.action, 'SingleSendMail');
+	assert.deepEqual(JSON.parse(directMailActions.at(-1)?.parameters.get('Template')), { TemplateId: '5001', TemplateData: { code: '123456' } });
+	assert.equal(directMailActions.at(-1)?.parameters.has('HtmlBody'), false);
+
 	const publicDocument = await (await request('localhost', '/')).text();
 	assert.equal(publicDocument.includes('站点管理'), false);
 	const adminDocument = await (await request('localhost', '/', { cookie })).text();
 	assert.equal(adminDocument.includes('站点管理'), true);
+	assert.equal(adminDocument.includes('邮件推送'), true);
 	console.log('multi-site smoke test passed');
 } finally {
 	globalThis.fetch = originalFetch;

@@ -28,6 +28,54 @@ export type CloudBucket = {
 	region?: string;
 };
 
+export type CloudEmailTarget = {
+	id: number;
+	provider: string;
+	cloud_credential_id: number;
+	region: string;
+	account_name: string;
+	from_alias: string;
+	reply_to_address: number;
+	access_key_id: string;
+	access_key_secret: string;
+};
+
+export type CloudEmailMessage = {
+	to: string;
+	subject: string;
+	text: string;
+	html: string;
+	template?: {
+		providerTemplateId: string;
+		variables: Record<string, string>;
+	};
+};
+
+export type CloudEmailResult = {
+	requestId: string;
+	messageId: string;
+};
+
+export type CloudEmailAdapter = {
+	send: (message: CloudEmailMessage) => Promise<CloudEmailResult>;
+};
+
+export type CloudEmailTemplate = {
+	id: number;
+	template_key: string;
+	name: string;
+	subject: string;
+	body_text: string;
+	body_html: string;
+	status: string;
+};
+
+export type CloudEmailTemplatePublication = {
+	providerTemplateId: string;
+	status: 'reviewing' | 'ready' | 'rejected';
+	requestId: string;
+};
+
 export type CloudObject = {
 	key: string;
 	size: number;

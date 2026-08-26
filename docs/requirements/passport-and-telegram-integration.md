@@ -89,6 +89,8 @@ Passport 统一负责：
 - 全局身份角色；
 - 后续 OAuth/OIDC 授权能力。
 
+邮箱验证码由 Passport 生成和校验，但发送通道、模板与云凭据属于 global 控制面。Passport 按 `site_key = passport` 和 `purpose = email_verification` 解析启用的默认邮件绑定，通过云厂商 HTTP API 发送；本项目不实现 SMTP 协议。验证码值只作为模板变量在单次发送时传递，不写入 global 数据库或普通日志。
+
 允许配置多个外部身份绑定到同一个 Passport 用户。一个用户绑定多个 Telegram 机器人时仍然只对应一个 `user_id`，不得因为机器人不同而创建新用户。
 
 头像二进制文件后续存储在现有对象存储绑定中，文件路径由 `user_id` 推导；头像上传和头像迁移不属于本期实施范围。

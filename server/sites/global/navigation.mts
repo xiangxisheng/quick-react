@@ -43,6 +43,16 @@ const navigation: MenuNode[] = [{
 								{ label: '对象管理', key: 'objects', icon: 'appstore', component: 'table', title: '对象管理', description: '浏览和管理已绑定 Bucket 中的对象' },
 							],
 						},
+						{
+							label: '邮件推送',
+							key: 'email',
+							icon: 'appstore',
+							children: [
+								{ label: '通道管理', key: 'channels', icon: 'appstore', component: 'table', title: '邮件推送通道', description: '管理云邮件服务发信身份' },
+								{ label: '模板管理', key: 'templates', icon: 'appstore', component: 'table', title: '邮件模板', description: '管理本地模板并发布到云服务审核' },
+								{ label: '站点绑定', key: 'bindings', icon: 'appstore', component: 'table', title: '邮件推送站点绑定', description: '按用途为站点选择已审核的邮件模板和通道' },
+							],
+						},
 					],
 				},
 			],

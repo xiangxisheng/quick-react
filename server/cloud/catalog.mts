@@ -1,7 +1,7 @@
 export const cloudProviders = [
 	{ key: 'aws', text: 'AWS', credentialTest: 'aws', objectStorage: { product: 'S3', adapter: 's3' } },
 	{ key: 'cloudflare', text: 'Cloudflare', credentialTest: 'cloudflare', credentialFields: ['account_id'], objectStorage: { product: 'R2', adapter: 's3' } },
-	{ key: 'aliyun', text: '阿里云', credentialTest: 'aliyun', objectStorage: { product: 'OSS', adapter: 's3' } },
+	{ key: 'aliyun', text: '阿里云', credentialTest: 'aliyun', objectStorage: { product: 'OSS', adapter: 's3' }, emailPush: { product: 'DirectMail', adapter: 'aliyun-direct-mail', regions: ['cn-hangzhou', 'ap-southeast-1'] } },
 	{ key: 'tencent', text: '腾讯云', credentialTest: 'tencent', objectStorage: { product: 'COS', adapter: 's3' } },
 	{ key: 'other', text: '其他（S3 兼容）', objectStorage: { product: 'S3 Compatible', adapter: 's3' } },
 ] as const;
@@ -14,6 +14,14 @@ export const getCloudProvider = (provider: string) => cloudProviders.find((item)
 export const providerSupportsObjectStorage = (provider: string) => Boolean(getCloudProvider(provider)?.objectStorage);
 export const getCloudStorageAdapter = (provider: string) => getCloudProvider(provider)?.objectStorage.adapter;
 export const getCloudStorageProduct = (provider: string) => getCloudProvider(provider)?.objectStorage.product ?? 'Object Storage';
+const getEmailPush = (provider: string) => {
+	const definition = getCloudProvider(provider);
+	return definition && 'emailPush' in definition ? definition.emailPush : undefined;
+};
+export const providerSupportsEmailPush = (provider: string) => Boolean(getEmailPush(provider));
+export const getCloudEmailAdapter = (provider: string) => getEmailPush(provider)?.adapter;
+export const getCloudEmailProduct = (provider: string) => getEmailPush(provider)?.product ?? 'Email Push';
+export const getCloudEmailRegions = (provider: string): readonly string[] => getEmailPush(provider)?.regions ?? [];
 export const getCredentialTest = (provider: string) => {
 	const definition = getCloudProvider(provider);
 	return definition && 'credentialTest' in definition ? definition.credentialTest : undefined;

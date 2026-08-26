@@ -4,6 +4,7 @@ import { accountIdProviderKeys, cloudProviderKeys, cloudProviderOptions, isCrede
 import { testCloudCredential } from '@server/cloud/credential-test.mjs';
 import type { CloudCredential } from '@server/cloud/index.mjs';
 import { getChangedFields } from '@server/changed-fields.mjs';
+import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 
 const columns = [
@@ -20,6 +21,15 @@ const text = (value: unknown) => typeof value === 'string' ? value.trim() : '';
 const publicRow = (row: Record<string, unknown>) => {
 	const { access_key_secret: _secret, ...safe } = row;
 	return safe;
+};
+const deleteCredential = async (database: DatabaseAdapter, id: number) => {
+	const credential = await database.prepare('SELECT id, status FROM global_cloud_credentials WHERE id = ?1').bind(id).first<{ id: number; status: string }>();
+	if (!credential) return '云凭据不存在';
+	if (credential.status !== statusValues.disabled) return '云凭据必须先停用才能删除';
+	const association = await database.prepare(`SELECT cloud_credential_id FROM global_cloud_object_storage_buckets WHERE cloud_credential_id = ?1
+		UNION ALL SELECT cloud_credential_id FROM global_cloud_email_channels WHERE cloud_credential_id = ?1 LIMIT 1`).bind(id).first();
+	if (association) return '云凭据仍被 Bucket 或邮件通道使用，不能删除';
+	await database.prepare('DELETE FROM global_cloud_credentials WHERE id = ?1').bind(id).run();
 };
 
 const handler: ApiHandler = async (c, next, params) => {
@@ -47,8 +57,8 @@ const handler: ApiHandler = async (c, next, params) => {
 	if (!params.id && c.req.method === 'DELETE') {
 		const ids = await c.req.json<unknown>().catch(() => []);
 		for (const id of Array.isArray(ids) ? ids : []) {
-			try { await database.prepare('DELETE FROM global_cloud_credentials WHERE id = ?1').bind(Number(id)).run(); }
-			catch { return apiMessage(c, 409, '凭据正在被 Bucket 使用，不能删除'); }
+			const error = await deleteCredential(database, Number(id));
+			if (error) return apiMessage(c, 409, error);
 		}
 		return apiMessage(c, 200, '删除成功');
 	}
@@ -85,8 +95,9 @@ const handler: ApiHandler = async (c, next, params) => {
 		const accessKeyId = changed.has('access_key_id') ? text(body.access_key_id) : String(current.access_key_id);
 		if (!name || !cloudProviderKeys.has(provider) || !accessKeyId || !isCredentialContextValid(provider, accountId)) return apiMessage(c, 400, '名称、供应商、账号上下文或访问密钥不合法');
 		if (changed.has('provider') && provider !== current.provider) {
-			const inUse = await database.prepare('SELECT id FROM global_cloud_object_storage_buckets WHERE cloud_credential_id = ?1 LIMIT 1').bind(Number(params.id)).first();
-			if (inUse) return apiMessage(c, 409, '凭据已被 Bucket 使用，不能修改供应商');
+			const inUse = await database.prepare(`SELECT cloud_credential_id FROM global_cloud_object_storage_buckets WHERE cloud_credential_id = ?1
+				UNION ALL SELECT cloud_credential_id FROM global_cloud_email_channels WHERE cloud_credential_id = ?1 LIMIT 1`).bind(Number(params.id)).first();
+			if (inUse) return apiMessage(c, 409, '凭据已被 Bucket 或邮件通道使用，不能修改供应商');
 		}
 		const secret = changed.has('access_key_secret') && text(body.access_key_secret) ? text(body.access_key_secret) : String(current.access_key_secret ?? '');
 		try {
@@ -98,9 +109,8 @@ const handler: ApiHandler = async (c, next, params) => {
 		return apiMessage(c, 200, '保存成功');
 	}
 	if (params.id && c.req.method === 'DELETE') {
-		try { await database.prepare('DELETE FROM global_cloud_credentials WHERE id = ?1').bind(Number(params.id)).run(); }
-		catch { return apiMessage(c, 409, '凭据正在被 Bucket 使用，不能删除'); }
-		return apiMessage(c, 200, '删除成功');
+		const error = await deleteCredential(database, Number(params.id));
+		return error ? apiMessage(c, 409, error) : apiMessage(c, 200, '删除成功');
 	}
 	return next();
 };
