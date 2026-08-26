@@ -170,6 +170,7 @@ export default ({
 
 	const [form] = Form.useForm();
 	const formValues = Form.useWatch([], form);
+	const redirectUriSource = Form.useWatch('redirect_uri_source', form);
 	const changedFields = useRef(new Set<string>());
 	const [remoteOptions, setRemoteOptions] = useState<Record<string, TableSelectOption[]>>({});
 	const [loadingOptions, setLoadingOptions] = useState<Record<string, boolean>>({});
@@ -329,7 +330,7 @@ export default ({
 						}
 						if (item.dependsOn && item.parentValues && !item.parentValues.includes(formValues?.[item.dependsOn] as string | number | boolean)) return;
 						const options = remoteOptions[item.dataIndex] ?? item.options;
-						const component = getFormItemComponent(item, { ...row, ...formValues }, item.dependsOn ? formValues?.[item.dependsOn] : undefined, remoteOptions[item.dataIndex], loadingOptions[item.dataIndex],
+						const component = getFormItemComponent(item, { ...row, ...formValues, redirect_uri_source: redirectUriSource }, item.dependsOn ? formValues?.[item.dependsOn] : undefined, remoteOptions[item.dataIndex], loadingOptions[item.dataIndex],
 							(value) => applyOptionFieldValues(item, value, options));
 						if (!component) {
 							return;
