@@ -91,9 +91,9 @@ try {
 	assert.equal(parsed.otps.find((item) => item.email === 'pending@example.com').status, 'expired');
 	assert.deepEqual(parsed.menus.map((item) => item.mode).sort(), ['email', 'menu', 'otp']);
 
-	const first = importLegacyPassportData({ parsed, databaseFile, botId: '7' });
+	const first = await importLegacyPassportData({ parsed, databaseFile, botId: '7' });
 	assert.deepEqual(first.imported, { users: 2, telegramAccounts: 3, emails: 3, userEmails: 3, otps: 4, menus: 3 });
-	const second = importLegacyPassportData({ parsed, databaseFile, botId: '7' });
+	const second = await importLegacyPassportData({ parsed, databaseFile, botId: '7' });
 	assert.deepEqual(second.imported, { users: 0, telegramAccounts: 0, emails: 0, userEmails: 0, otps: 0, menus: 0 });
 
 	const resultDatabase = new DatabaseSync(databaseFile, { readOnly: true });
@@ -110,7 +110,7 @@ try {
 		(user_id, bot_id, telegram_user_id, chat_id, nickname, created_at, updated_at)
 		VALUES (?, 8, ?, ?, 'conflict', 1, 1)`).run(BigInt(userTwo), BigInt(telegramOne), BigInt(telegramOne));
 	conflictDatabase.close();
-	assert.throws(() => importLegacyPassportData({ parsed, databaseFile, botId: '8', dryRun: true }), /already owned by another user/);
+	await assert.rejects(() => importLegacyPassportData({ parsed, databaseFile, botId: '8', dryRun: true }), /already owned by another user/);
 
 	console.log('passport migration test passed');
 } finally {
