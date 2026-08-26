@@ -1,17 +1,12 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
+import { handlePassportTelegramUpdate, type PassportTelegramUpdate } from '@server/passport/telegram-webhook.mjs';
 
 type TelegramBot = {
 	id: number | bigint;
 	bot_token: string;
 	secret_token: string;
 	webhook_hostname: string;
-};
-
-type TelegramUpdate = {
-	update_id: number;
-	message?: unknown;
-	callback_query?: unknown;
 };
 
 const jsonStatus = (c: Parameters<ApiHandler>[0], status: number, value: string) => c.json({ status: value }, status as 200 | 400 | 403 | 404 | 405 | 500);
@@ -30,11 +25,11 @@ const constantTimeEqual = async (actual: string, expected: string) => {
 	return difference === 0;
 };
 
-const parseUpdate = (value: unknown): TelegramUpdate | undefined => {
+const parseUpdate = (value: unknown): PassportTelegramUpdate | undefined => {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
 	const updateId = (value as Record<string, unknown>).update_id;
 	if (!Number.isSafeInteger(updateId) || Number(updateId) < 0) return undefined;
-	return value as TelegramUpdate;
+	return value as PassportTelegramUpdate;
 };
 
 const claimUpdate = async (database: DatabaseAdapter, botId: string, updateId: number) => {
@@ -71,7 +66,10 @@ const handler: ApiHandler = async (c) => {
 	if (!database) return jsonStatus(c, 500, 'error');
 	if (!await claimUpdate(database, botId, update.update_id)) return jsonStatus(c, 200, 'ok');
 	try {
-		// Telegram message and callback business handling is attached in the next implementation stage.
+		await handlePassportTelegramUpdate(database, c.get('globalDatabase'), c.env.SNOWFLAKE_WORKER_ID, {
+			id: String(bot.id),
+			botToken: bot.bot_token,
+		}, update);
 		await database.prepare(`UPDATE passport_telegram_updates SET status = 'completed', updated_at = ?3
 			WHERE bot_id = ?1 AND update_id = ?2`).bind(botId, update.update_id, Date.now()).run();
 		return jsonStatus(c, 200, 'ok');

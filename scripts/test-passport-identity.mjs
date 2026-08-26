@@ -13,7 +13,7 @@ try {
 		stdin: {
 			contents: `export { createSqliteAdapter } from './server/database/sqlite.mts';
 				export { getPassportSnowflakeGenerator, PASSPORT_SNOWFLAKE_EPOCH } from './server/passport/snowflake.mts';
-				export { issueTelegramEmailOtp, normalizePassportNickname, setPassportPassword, verifyPassportPasswordHistory, verifyTelegramEmailOtp } from './server/passport/identity.mts';`,
+					export { confirmTelegramIdentityChoice, createTelegramIdentityChoice, issueTelegramEmailOtp, normalizePassportNickname, setPassportPassword, verifyPassportPasswordHistory, verifyTelegramEmailOtp } from './server/passport/identity.mts';`,
 			resolveDir: projectDirectory,
 			sourcefile: 'passport-identity-test-entry.mts',
 			loader: 'ts',
@@ -29,7 +29,7 @@ try {
 	const passport = await import(`${pathToFileURL(modulePath).href}?test=${Date.now()}`);
 	const databaseFile = join(temporaryDirectory, 'passport.sqlite');
 	let database = passport.createSqliteAdapter(databaseFile);
-	for (const migration of ['0001_passport_identity.sql', '0002_telegram_onboarding.sql']) {
+	for (const migration of ['0001_passport_identity.sql', '0002_telegram_onboarding.sql', '0003_telegram_webhook_updates.sql', '0004_telegram_identity_choices.sql']) {
 		await database.exec(await readFile(join(projectDirectory, 'migrations/passport', migration), 'utf8'));
 	}
 
@@ -55,15 +55,22 @@ try {
 	assert.equal(created.status, 'created');
 	assert.match(created.userId, /^\d+$/);
 
+	await assert.rejects(passport.issueTelegramEmailOtp(database, firstIdentity, 'second@example.com'), (error) => error?.waitSeconds > 0);
+	await database.prepare(`UPDATE passport_email_otp SET created_at = created_at - 61000 WHERE bot_id = ?1 AND telegram_user_id = ?2`)
+		.bind(firstIdentity.botId, firstIdentity.telegramUserId).run();
 	const secondEmailOtp = await passport.issueTelegramEmailOtp(database, firstIdentity, 'second@example.com');
 	const linked = await passport.verifyTelegramEmailOtp(database, 7, firstIdentity, secondEmailOtp.code);
 	assert.deepEqual(linked, { status: 'linked', userId: created.userId });
 
-	const conflictingIdentity = { botId: '1', telegramUserId: '9000000002', chatId: '-1009000000002', nickname: '' };
+	const conflictingIdentity = { botId: '1', telegramUserId: '9000000002', chatId: '9000000002', nickname: '' };
 	const conflictingOtp = await passport.issueTelegramEmailOtp(database, conflictingIdentity, 'first@example.com');
 	const conflict = await passport.verifyTelegramEmailOtp(database, 7, conflictingIdentity, conflictingOtp.code);
 	assert.deepEqual(conflict, { status: 'conflict', emailUserId: created.userId });
 	assert.equal((await database.prepare('SELECT COUNT(*) AS count FROM passport_users').first()).count, 1);
+	const choice = await passport.createTelegramIdentityChoice(database, conflictingIdentity, created.userId, 'first@example.com');
+	const confirmed = await passport.confirmTelegramIdentityChoice(database, 7, conflictingIdentity, choice.id);
+	assert.deepEqual(confirmed, { status: 'linked', userId: created.userId });
+	assert.equal((await database.prepare('SELECT COUNT(*) AS count FROM passport_telegram_accounts WHERE user_id = ?1').bind(created.userId).first()).count, 2);
 
 	await passport.setPassportPassword(database, created.userId, 'first-password');
 	await passport.setPassportPassword(database, created.userId, 'second-password');

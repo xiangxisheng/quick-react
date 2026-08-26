@@ -17,7 +17,7 @@ type TelegramResponse<T> = {
 	description?: string;
 };
 
-const telegramRequest = async <T,>(token: string, method: string, parameters: Record<string, unknown> = {}) => {
+export const telegramRequest = async <T,>(token: string, method: string, parameters: Record<string, unknown> = {}) => {
 	let response: Response;
 	try {
 		response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
@@ -36,6 +36,34 @@ const telegramRequest = async <T,>(token: string, method: string, parameters: Re
 	}
 	return result.result;
 };
+
+export type TelegramInlineKeyboard = { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> };
+
+export const sendTelegramMessage = async (token: string, chatId: string, text: string, replyMarkup?: TelegramInlineKeyboard) => {
+	const result = await telegramRequest<{ message_id: number | string }>(token, 'sendMessage', {
+		chat_id: chatId,
+		text,
+		...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+	});
+	return { messageId: String(result.message_id) };
+};
+
+export const editTelegramMessage = (token: string, chatId: string, messageId: string, text: string, replyMarkup?: TelegramInlineKeyboard) => telegramRequest<unknown>(token, 'editMessageText', {
+	chat_id: chatId,
+	message_id: messageId,
+	text,
+	...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+});
+
+export const deleteTelegramMessage = (token: string, chatId: string, messageId: string) => telegramRequest<boolean>(token, 'deleteMessage', {
+	chat_id: chatId,
+	message_id: messageId,
+});
+
+export const answerTelegramCallback = (token: string, callbackQueryId: string, text = '') => telegramRequest<boolean>(token, 'answerCallbackQuery', {
+	callback_query_id: callbackQueryId,
+	...(text ? { text } : {}),
+});
 
 export const getTelegramBotIdentity = async (token: string): Promise<TelegramBotIdentity> => {
 	const result = await telegramRequest<{ id: number | string; username?: string; first_name?: string }>(token, 'getMe');

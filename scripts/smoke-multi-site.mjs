@@ -10,6 +10,8 @@ process.env.SKIP_SERVER_LISTEN = '1';
 const originalFetch = globalThis.fetch;
 let telegramWebhookUrl = '';
 const directMailActions = [];
+const telegramActions = [];
+let telegramMessageId = 8000;
 globalThis.fetch = async (input, init) => {
 	const url = String(input);
 	if (url === 'https://dm.aliyuncs.com/' || url === 'https://dm.ap-southeast-1.aliyuncs.com/') {
@@ -19,12 +21,16 @@ globalThis.fetch = async (input, init) => {
 		if (action === 'CreateTemplate') return Response.json({ RequestId: 'dm-create', TemplateId: 5001 });
 		if (action === 'ModifyTemplate') return Response.json({ RequestId: 'dm-modify' });
 		if (action === 'DescTemplate') return Response.json({ RequestId: 'dm-describe', TemplateStatus: 2 });
+		if (action === 'QueryMailAddressByParam') return Response.json({ RequestId: 'dm-addresses', TotalCount: 1, data: { mailAddress: [{
+			AccountName: 'noreply@example.com', AccountStatus: 0, DomainStatus: 0, ReplyAddress: 'reply@example.com', ReplyStatus: 0, Sendtype: 'trigger',
+		}] } });
 		if (action === 'SingleSendMail') return Response.json({ RequestId: 'dm-send', EnvId: 'dm-message' });
 		return Response.json({ RequestId: 'dm-unsupported', Code: 'Unsupported', Message: String(action) }, { status: 400 });
 	}
 	if (!url.startsWith('https://api.telegram.org/bot')) return originalFetch(input, init);
 	const method = url.slice(url.lastIndexOf('/') + 1);
 	const body = init?.body ? JSON.parse(String(init.body)) : {};
+	telegramActions.push({ method, body });
 	if (method === 'getMe') return Response.json({ ok: true, result: { id: 10001, username: 'smoke_passport_bot', first_name: 'Smoke Bot' } });
 	if (method === 'setWebhook') {
 		telegramWebhookUrl = String(body.url ?? '');
@@ -35,6 +41,9 @@ globalThis.fetch = async (input, init) => {
 		return Response.json({ ok: true, result: true });
 	}
 	if (method === 'getWebhookInfo') return Response.json({ ok: true, result: { url: telegramWebhookUrl, pending_update_count: 0 } });
+	if (method === 'sendMessage') return Response.json({ ok: true, result: { message_id: ++telegramMessageId } });
+	if (method === 'editMessageText') return Response.json({ ok: true, result: { message_id: body.message_id } });
+	if (method === 'deleteMessage' || method === 'answerCallbackQuery') return Response.json({ ok: true, result: true });
 	return Response.json({ ok: false, description: 'unsupported smoke method' }, { status: 400 });
 };
 
@@ -220,6 +229,8 @@ try {
 	const emailCredential = emailCredentialsResult.table.dataSource.find((item) => item.name === 'smoke-aliyun-mail');
 	assert.ok(emailCredential?.id);
 	const emailChannelsPath = '/api/panel/admin/global/cloud/email/channels.php';
+	const discoveredMailAddresses = await (await request('localhost', `${emailChannelsPath}?action=discover&field=account_name&cloud_credential_id=${emailCredential.id}&region=cn-hangzhou`, { cookie })).json();
+	assert.deepEqual(discoveredMailAddresses.options, [{ value: 'noreply@example.com', text: 'noreply@example.com', fieldValues: { reply_to_address: true } }]);
 	assert.equal((await request('localhost', emailChannelsPath, {
 		method: 'POST', cookie, body: { cloud_credential_id: emailCredential.id, region: 'cn-hangzhou', account_name: 'noreply@example.com', from_alias: 'Smoke Passport' },
 	})).status, 201);
@@ -270,6 +281,72 @@ try {
 	assert.equal(directMailActions.at(-1)?.action, 'SingleSendMail');
 	assert.deepEqual(JSON.parse(directMailActions.at(-1)?.parameters.get('Template')), { TemplateId: '5001', TemplateData: { code: '123456' } });
 	assert.equal(directMailActions.at(-1)?.parameters.has('HtmlBody'), false);
+	assert.equal((await request('localhost', emailBindingsPath, {
+		method: 'POST', cookie, body: { site_key: 'passport', channel_id: emailChannel.id, template_id: emailTemplate.id, purpose: 'email_verification', is_default: true },
+	})).status, 201);
+	assert.equal((await request('localhost', `${botsPath}/${webhookBot.id}`, {
+		method: 'PUT', cookie, body: { status: 'enabled', __changedFields: ['status'] },
+	})).status, 200);
+	const postTelegramUpdate = (body) => request('passport-alt.test', webhookPath, {
+		method: 'POST', headers: { 'x-telegram-bot-api-secret-token': 'smoke-webhook-secret' }, body,
+	});
+	assert.equal((await postTelegramUpdate({ update_id: 7002, message: {
+		message_id: 10, chat: { id: 9001, type: 'private' }, from: { id: 9001, first_name: 'Smoke User' }, text: '/start',
+	} })).status, 200);
+	assert.equal(telegramActions.at(-1)?.method, 'sendMessage');
+	const firstMenuMessageId = telegramActions.at(-1)?.body ? telegramMessageId : 0;
+	assert.equal((await postTelegramUpdate({ update_id: 7003, callback_query: {
+		id: 'callback-bind', from: { id: 9001, first_name: 'Smoke User' }, data: 'menu:bind_email',
+		message: { message_id: firstMenuMessageId, chat: { id: 9001, type: 'private' } },
+	} })).status, 200);
+	assert.equal((await postTelegramUpdate({ update_id: 7004, message: {
+		message_id: 11, chat: { id: 9001, type: 'private' }, from: { id: 9001, first_name: 'Smoke User' }, text: 'user@example.com',
+	} })).status, 200);
+	const firstOtpTemplate = JSON.parse(directMailActions.filter((item) => item.action === 'SingleSendMail').at(-1)?.parameters.get('Template'));
+	const firstOtp = firstOtpTemplate.TemplateData.code;
+	assert.match(firstOtp, /^\d{6}$/);
+	const actionsBeforeVerification = telegramActions.length;
+	const verificationUpdate = { update_id: 7005, message: {
+		message_id: 12, chat: { id: 9001, type: 'private' }, from: { id: 9001, first_name: 'Smoke User' }, text: firstOtp,
+	} };
+	assert.equal((await postTelegramUpdate(verificationUpdate)).status, 200);
+	assert.equal((await postTelegramUpdate(verificationUpdate)).status, 200);
+	assert.equal(telegramActions.length, actionsBeforeVerification + 2);
+	const identityDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
+	const firstIdentity = identityDatabase.prepare(`SELECT CAST(a.user_id AS TEXT) AS user_id, e.email FROM passport_telegram_accounts a
+		JOIN passport_user_emails ue ON ue.user_id = a.user_id JOIN passport_emails e ON e.id = ue.email_id
+		WHERE a.bot_id = ? AND a.telegram_user_id = ?`).get(webhookBot.id, 9001);
+	assert.equal(firstIdentity?.email, 'user@example.com');
+	assert.match(firstIdentity?.user_id ?? '', /^\d+$/);
+	identityDatabase.close();
+
+	assert.equal((await postTelegramUpdate({ update_id: 7006, message: {
+		message_id: 20, chat: { id: 9002, type: 'private' }, from: { id: 9002, first_name: 'Second User' }, text: '/start',
+	} })).status, 200);
+	const secondMenuMessageId = telegramMessageId;
+	assert.equal((await postTelegramUpdate({ update_id: 7007, callback_query: {
+		id: 'callback-bind-second', from: { id: 9002, first_name: 'Second User' }, data: 'menu:bind_email',
+		message: { message_id: secondMenuMessageId, chat: { id: 9002, type: 'private' } },
+	} })).status, 200);
+	assert.equal((await postTelegramUpdate({ update_id: 7008, message: {
+		message_id: 21, chat: { id: 9002, type: 'private' }, from: { id: 9002, first_name: 'Second User' }, text: 'user@example.com',
+	} })).status, 200);
+	const secondOtpTemplate = JSON.parse(directMailActions.filter((item) => item.action === 'SingleSendMail').at(-1)?.parameters.get('Template'));
+	assert.equal((await postTelegramUpdate({ update_id: 7009, message: {
+		message_id: 22, chat: { id: 9002, type: 'private' }, from: { id: 9002, first_name: 'Second User' }, text: secondOtpTemplate.TemplateData.code,
+	} })).status, 200);
+	const choiceEdit = telegramActions.filter((item) => item.method === 'editMessageText').at(-1);
+	const linkChoice = choiceEdit?.body.reply_markup.inline_keyboard.flat().find((item) => String(item.callback_data).startsWith('identity:link:'));
+	assert.ok(linkChoice?.callback_data);
+	assert.equal((await postTelegramUpdate({ update_id: 7010, callback_query: {
+		id: 'callback-link-second', from: { id: 9002, first_name: 'Second User' }, data: linkChoice.callback_data,
+		message: { message_id: secondMenuMessageId, chat: { id: 9002, type: 'private' } },
+	} })).status, 200);
+	const linkedDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
+	const linkedUsers = linkedDatabase.prepare(`SELECT CAST(user_id AS TEXT) AS user_id FROM passport_telegram_accounts WHERE bot_id = ? ORDER BY telegram_user_id`).all(webhookBot.id);
+	assert.equal(linkedUsers.length, 2);
+	assert.equal(linkedUsers[0].user_id, linkedUsers[1].user_id);
+	linkedDatabase.close();
 
 	const publicDocument = await (await request('localhost', '/')).text();
 	assert.equal(publicDocument.includes('站点管理'), false);

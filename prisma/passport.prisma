@@ -118,6 +118,21 @@ model passport_telegram_updates {
   @@index([status, updated_at])
 }
 
+model passport_telegram_identity_choices {
+  id               BigInt @id @default(autoincrement())
+  bot_id           BigInt
+  telegram_user_id BigInt
+  chat_id          BigInt
+  target_user_id   BigInt
+  email            String
+  status           String
+  expires_at       BigInt
+  created_at       BigInt
+  updated_at       BigInt
+
+  @@index([bot_id, telegram_user_id, status, created_at])
+}
+
 model passport_user_roles {
   user_id    BigInt
   role       String

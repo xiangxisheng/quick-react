@@ -204,6 +204,18 @@ passport_telegram_updates
   updated_at BIGINT NOT NULL
   PRIMARY KEY (bot_id, update_id)
 
+passport_telegram_identity_choices
+  id BIGINT PRIMARY KEY
+  bot_id BIGINT NOT NULL
+  telegram_user_id BIGINT NOT NULL
+  chat_id BIGINT NOT NULL
+  target_user_id BIGINT NOT NULL
+  email TEXT NOT NULL
+  status TEXT NOT NULL                 -- pending / confirmed / cancelled / expired
+  expires_at BIGINT NOT NULL
+  created_at BIGINT NOT NULL
+  updated_at BIGINT NOT NULL
+
 passport_user_roles
   user_id BIGINT NOT NULL
   role TEXT NOT NULL
@@ -229,6 +241,8 @@ passport_group_prompts
 昵称从 Telegram、微信或 Google 身份资料提取，最多 12 个 Unicode 字符；若 Provider 没有可用名称，必须生成不超过 12 个字符的非空系统昵称。Telegram 的 `first_name`、`last_name` 和 `username` 不作为必需的独立字段保存，统一归一化为非空 `nickname`。所有字段必须 `NOT NULL`，可选能力通过独立关联表表达，不使用 `NULL` 或空字符串表示未设置。
 
 默认允许一个用户绑定多个邮箱和多个外部身份，但同一个已验证邮箱、同一机器人下的同一个 Telegram 用户、同一 Provider 下的同一个外部用户不能据此创建第二个 `user_id`。如果邮箱和外部身份分别命中不同的现有用户，必须让用户明确选择进入哪个账号或取消操作，不得自动合并。邮箱、Telegram 和其他 Provider 的数量上限通过 Passport 设置项控制，默认不限制。
+
+当已验证邮箱属于现有用户、但当前 Telegram 外部身份尚未归属用户时，验证码通过后创建有时效的 `passport_telegram_identity_choices`，由用户在 Telegram 菜单中明确确认绑定或取消。只有确认操作才能新增 Telegram 账号关系；选择记录长期保留终态以说明关联来源。若当前 Telegram 外部身份和邮箱已经分别属于不同用户，只报告冲突，不自动迁移或合并任一身份。
 
 创建首个用户时还没有 `user_id` 和 `email_id`，因此 Telegram 首期的 `passport_email_otp` 直接记录机器人、Telegram 用户、Chat 和规范化邮箱。验证码通过后，才在同一事务中创建或解析 Passport 用户、邮箱及绑定关系，避免用 `NULL`、空字符串或伪造的用户 ID 表达尚未完成的注册。
 

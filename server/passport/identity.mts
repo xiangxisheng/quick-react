@@ -33,6 +33,12 @@ const generateOtpCode = () => {
 	return String(values[0] % 1_000_000).padStart(6, '0');
 };
 
+export class TelegramOtpRateLimitError extends Error {
+	constructor(public readonly waitSeconds: number) {
+		super(`请 ${waitSeconds} 秒后重试`);
+	}
+}
+
 export type TelegramIdentity = {
 	botId: string | number | bigint;
 	telegramUserId: string | number | bigint;
@@ -47,6 +53,13 @@ export const issueTelegramEmailOtp = async (database: DatabaseAdapter, identity:
 	const email = normalizePassportEmail(rawEmail);
 	const code = generateOtpCode();
 	const now = Date.now();
+	const recent = await database.prepare(`SELECT MIN(created_at) AS first_created_at, MAX(created_at) AS last_created_at, COUNT(*) AS send_count
+		FROM passport_email_otp WHERE bot_id = ?1 AND telegram_user_id = ?2
+			AND created_at >= ?3`).bind(botId, telegramUserId, now - 60 * 60_000).first<{
+			first_created_at: number | null; last_created_at: number | null; send_count: number;
+		}>();
+	if (recent?.last_created_at && now - recent.last_created_at < 60_000) throw new TelegramOtpRateLimitError(Math.ceil((60_000 - (now - recent.last_created_at)) / 1000));
+	if (Number(recent?.send_count ?? 0) >= 10) throw new TelegramOtpRateLimitError(Math.max(1, Math.ceil((Number(recent?.first_created_at ?? now) + 60 * 60_000 - now) / 1000)));
 	await database.prepare(`UPDATE passport_email_otp SET status = 'expired'
 		WHERE bot_id = ?1 AND telegram_user_id = ?2 AND status = 'pending'`).bind(botId, telegramUserId).run();
 	await database.prepare(`INSERT INTO passport_email_otp
@@ -54,6 +67,12 @@ export const issueTelegramEmailOtp = async (database: DatabaseAdapter, identity:
 		VALUES (?1, ?2, ?3, ?4, ?5, 0, 'pending', ?6, ?7)`)
 		.bind(botId, telegramUserId, chatId, email, await hashPassword(code), now + lifetimeMs, now).run();
 	return { code, email, expiresAt: now + lifetimeMs };
+};
+
+export const expireTelegramEmailOtp = async (database: DatabaseAdapter, identity: TelegramIdentity) => {
+	const botId = decimalId(identity.botId, true), telegramUserId = decimalId(identity.telegramUserId, true);
+	await database.prepare(`UPDATE passport_email_otp SET status = 'expired'
+		WHERE bot_id = ?1 AND telegram_user_id = ?2 AND status = 'pending'`).bind(botId, telegramUserId).run();
 };
 
 type AccountOwner = { user_id: string; status: string };
@@ -162,6 +181,73 @@ export const verifyTelegramEmailOtp = async (
 	if (!database.batch) throw new Error('Passport database does not support atomic batch writes');
 	await database.batch(statements);
 	return { status: resultStatus, userId };
+};
+
+export const createTelegramIdentityChoice = async (
+	database: DatabaseAdapter,
+	identity: TelegramIdentity,
+	targetUserIdValue: string | number | bigint,
+	rawEmail: string,
+	lifetimeMs = 10 * 60_000,
+) => {
+	const botId = decimalId(identity.botId, true), telegramUserId = decimalId(identity.telegramUserId, true), chatId = decimalId(identity.chatId, false);
+	const targetUserId = decimalId(targetUserIdValue, true), email = normalizePassportEmail(rawEmail), now = Date.now();
+	const owner = await emailOwner(database, email);
+	if (!owner || owner.user_id !== targetUserId || owner.status !== 'enabled') throw new Error('目标账户或邮箱状态已变化');
+	await database.prepare(`UPDATE passport_telegram_identity_choices SET status = 'cancelled', updated_at = ?3
+		WHERE bot_id = ?1 AND telegram_user_id = ?2 AND status = 'pending'`).bind(botId, telegramUserId, now).run();
+	await database.prepare(`INSERT INTO passport_telegram_identity_choices
+		(bot_id, telegram_user_id, chat_id, target_user_id, email, status, expires_at, created_at, updated_at)
+		VALUES (?1, ?2, ?3, ?4, ?5, 'pending', ?6, ?7, ?7)`).bind(botId, telegramUserId, chatId, targetUserId, email, now + lifetimeMs, now).run();
+	const choice = await database.prepare(`SELECT id FROM passport_telegram_identity_choices
+		WHERE bot_id = ?1 AND telegram_user_id = ?2 AND status = 'pending' ORDER BY created_at DESC, id DESC LIMIT 1`)
+		.bind(botId, telegramUserId).first<{ id: number }>();
+	if (!choice) throw new Error('账户选择创建后无法读取');
+	return { id: String(choice.id), targetUserId, email, expiresAt: now + lifetimeMs };
+};
+
+export const confirmTelegramIdentityChoice = async (
+	database: DatabaseAdapter,
+	configuredWorkerId: unknown,
+	identity: TelegramIdentity,
+	choiceIdValue: string | number | bigint,
+) => {
+	const botId = decimalId(identity.botId, true), telegramUserId = decimalId(identity.telegramUserId, true), chatId = decimalId(identity.chatId, false);
+	const choiceId = decimalId(choiceIdValue, true);
+	const choice = await database.prepare(`SELECT CAST(c.target_user_id AS TEXT) AS target_user_id, c.email, c.expires_at, u.status
+		FROM passport_telegram_identity_choices c JOIN passport_users u ON u.user_id = c.target_user_id
+		WHERE c.id = ?1 AND c.bot_id = ?2 AND c.telegram_user_id = ?3 AND c.status = 'pending'`)
+		.bind(choiceId, botId, telegramUserId).first<{ target_user_id: string; email: string; expires_at: number; status: string }>();
+	if (!choice) return { status: 'invalid' as const };
+	if (choice.expires_at <= Date.now()) {
+		await database.prepare(`UPDATE passport_telegram_identity_choices SET status = 'expired', updated_at = ?2 WHERE id = ?1 AND status = 'pending'`)
+			.bind(choiceId, Date.now()).run();
+		return { status: 'expired' as const };
+	}
+	if (choice.status !== 'enabled') return { status: 'disabled' as const };
+	const [external, owner] = await Promise.all([telegramOwner(database, botId, telegramUserId), emailOwner(database, choice.email)]);
+	if (!owner || owner.user_id !== choice.target_user_id) return { status: 'conflict' as const };
+	if (external) {
+		if (external.user_id !== choice.target_user_id) return { status: 'conflict' as const };
+		await database.prepare(`UPDATE passport_telegram_identity_choices SET status = 'confirmed', updated_at = ?2 WHERE id = ?1 AND status = 'pending'`)
+			.bind(choiceId, Date.now()).run();
+		return { status: 'existing' as const, userId: external.user_id };
+	}
+	const now = Date.now(), accountId = (await getPassportSnowflakeGenerator(database, configuredWorkerId).next()).toString();
+	if (!database.batch) throw new Error('Passport database does not support atomic batch writes');
+	await database.batch([
+		{ query: `INSERT INTO passport_telegram_accounts
+			(id, user_id, bot_id, telegram_user_id, chat_id, nickname, created_at, updated_at)
+			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)`, values: [accountId, choice.target_user_id, botId, telegramUserId, chatId, normalizePassportNickname(identity.nickname, telegramUserId), now] },
+		{ query: `UPDATE passport_telegram_identity_choices SET status = 'confirmed', updated_at = ?2 WHERE id = ?1 AND status = 'pending'`, values: [choiceId, now] },
+	]);
+	return { status: 'linked' as const, userId: choice.target_user_id };
+};
+
+export const cancelTelegramIdentityChoice = async (database: DatabaseAdapter, identity: TelegramIdentity, choiceIdValue: string | number | bigint) => {
+	const botId = decimalId(identity.botId, true), telegramUserId = decimalId(identity.telegramUserId, true), choiceId = decimalId(choiceIdValue, true);
+	await database.prepare(`UPDATE passport_telegram_identity_choices SET status = 'cancelled', updated_at = ?4
+		WHERE id = ?1 AND bot_id = ?2 AND telegram_user_id = ?3 AND status = 'pending'`).bind(choiceId, botId, telegramUserId, Date.now()).run();
 };
 
 export const setPassportPassword = async (database: DatabaseAdapter, userIdValue: string | number | bigint, password: string) => {
