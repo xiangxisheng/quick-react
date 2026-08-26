@@ -5,6 +5,9 @@ import { normalizePassportEmail } from '@server/passport/identity.mjs';
 import { clearPassportSessionCookie, createPassportSessionCookie, loadPassportSession, readPassportSessionId } from '@server/passport/session.mjs';
 import { clearOidcRequestCookie, oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
 import { oidcIssuer, revokeOidcSession } from '@server/accounts/provider.mjs';
+import { clearExternalPendingCookie, discardExternalEmailOtp, externalPendingCookieName, externalProviders, issueExternalEmailOtp, pendingExternalEmailOtp, pendingExternalIdentity, verifyExternalEmailOtp } from '@server/accounts/external.mjs';
+import { runSql, sql } from '@server/database/sql.mjs';
+import { sendDefaultCloudEmail } from '@server/cloud/email.mjs';
 import { sendTelegramMessage, type TelegramInlineKeyboard } from '@server/telegram/api.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 
@@ -17,6 +20,15 @@ type TelegramOption = {
 };
 type Bot = { id: string; name: string; bot_username: string; bot_token: string };
 
+const methodForm = (options: Array<{ value: string; text: string }>, linking: boolean): FormPageConfig => ({
+	description: linking ? '选择外部身份源，将身份绑定到当前 Accounts 用户。' : '选择一种方式登录 Accounts。',
+	submitLabel: linking ? '绑定身份' : '继续登录',
+	initialValues: { step: 'method', method: options[0]?.value ?? '' },
+	fields: [
+		{ name: 'step', label: '', type: 'hidden' },
+		{ name: 'method', label: '登录方式', type: 'select', options, rules: [{ required: true, message: '请选择登录方式' }] },
+	],
+});
 const emailForm = (): FormPageConfig => ({
 	description: '输入已验证邮箱，随后选择已绑定的 Telegram 账号批准登录。',
 	submitLabel: '下一步',
@@ -43,6 +55,24 @@ const approvalForm = (challengeId: string, expectedNumber: number): FormPageConf
 	fields: [
 		{ name: 'step', label: '', type: 'hidden' },
 		{ name: 'challenge_id', label: '', type: 'hidden' },
+	],
+});
+const externalEmailForm = (provider: string): FormPageConfig => ({
+	description: `${provider}没有提供可直接用于创建 Accounts 用户的已验证邮箱。请输入邮箱并完成验证后再创建账户。`,
+	submitLabel: '发送邮箱验证码',
+	initialValues: { step: 'external_email', email: '' },
+	fields: [
+		{ name: 'step', label: '', type: 'hidden' },
+		{ name: 'email', label: '邮箱', maxLength: 254, rules: [{ required: true, message: '请输入邮箱' }] },
+	],
+});
+const externalCodeForm = (email: string): FormPageConfig => ({
+	description: `验证码已发送到 ${email}，验证成功后才会创建 Accounts 用户。`,
+	submitLabel: '验证并创建账户',
+	initialValues: { step: 'external_verify', code: '' },
+	fields: [
+		{ name: 'step', label: '', type: 'hidden' },
+		{ name: 'code', label: '6 位验证码', maxLength: 6, rules: [{ required: true, message: '请输入验证码' }] },
 	],
 });
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : '';
@@ -83,7 +113,24 @@ const handler: ApiHandler = async (c, next) => {
 	if (c.get('site').siteKey !== 'passport') return apiMessage(c, 404, 'Passport 身份登录仅在 Passport 站点可用');
 	const database = c.get('passportDatabase'), globalDatabase = c.get('globalDatabase');
 	if (!database) return apiMessage(c, 503, 'Passport 数据库不可用');
-	if (c.req.method === 'GET') return apiResponse(c, 200, { user: await loadPassportSession(database, c.req.raw) ?? null, registrationAvailable: false, formPage: emailForm() });
+	if (c.req.method === 'GET') {
+		const pendingToken = readCookie(c.req.raw, externalPendingCookieName);
+		const [user, providers, bots, pending] = await Promise.all([
+			loadPassportSession(database, c.req.raw), externalProviders(database, true),
+			globalDatabase.prepare("SELECT 1 AS found FROM global_telegram_bots WHERE status = 'enabled' LIMIT 1").first(),
+			pendingToken ? pendingExternalIdentity(database, pendingToken) : null,
+		]);
+		if (pending && !user) {
+			const otp = await pendingExternalEmailOtp(database, pending.id_hash);
+			const formPage = otp ? externalCodeForm(otp.email) : externalEmailForm(pending.provider === 'wechat' ? '微信' : '外部身份源');
+			return apiResponse(c, 200, { user: null, registrationAvailable: true, formPage, currentValues: formPage.initialValues });
+		}
+		const options = [
+			...(!user && bots ? [{ value: 'telegram', text: 'Telegram 消息批准' }] : []),
+			...providers.map((provider) => ({ value: provider.id, text: provider.display_name })),
+		];
+		return apiResponse(c, 200, { user: user ?? null, registrationAvailable: options.length > 0, formPage: methodForm(options, Boolean(user)) });
+	}
 	if (c.req.method === 'DELETE') {
 		const sessionId = readPassportSessionId(c.req.raw);
 		if (sessionId) await revokeOidcSession(database, sessionId, oidcIssuer(c), c.env.OIDC_FETCH ?? fetch);
@@ -92,6 +139,49 @@ const handler: ApiHandler = async (c, next) => {
 	}
 	if (c.req.method !== 'POST') return next();
 	const body = await parseBody(c), step = text(body.step) || 'email';
+	if (step === 'external_email' || step === 'external_verify') {
+		const pendingToken = readCookie(c.req.raw, externalPendingCookieName);
+		const pending = pendingToken ? await pendingExternalIdentity(database, pendingToken) : null;
+		if (!pending) return apiMessage(c, 409, '外部身份验证已过期，请重新扫码授权');
+		if (step === 'external_email') {
+			let issued: Awaited<ReturnType<typeof issueExternalEmailOtp>>;
+			try { issued = await issueExternalEmailOtp(database, pending, text(body.email)); }
+			catch (error) { return apiMessage(c, 400, error instanceof Error ? error.message : '邮箱或发送频率不合法'); }
+			try {
+				await sendDefaultCloudEmail(globalDatabase, 'passport', 'email_verification', issued.email, { code: issued.code, email: issued.email, expires_minutes: '10' });
+			} catch (error) {
+				await discardExternalEmailOtp(database, pending.id_hash);
+				return apiMessage(c, 502, error instanceof Error ? error.message : '邮箱验证码发送失败');
+			}
+			const formPage = externalCodeForm(issued.email);
+			return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues, feedback: { component: 'inline', type: 'success', message: '验证码已发送' } });
+		}
+		const verified = await verifyExternalEmailOtp(database, c.env.SNOWFLAKE_WORKER_ID, pending, text(body.code));
+		if (verified.status !== 'created') {
+			const message = verified.status === 'conflict' ? verified.message : verified.status === 'expired' ? '验证码已过期，请重新发送' : verified.status === 'locked' ? '验证码错误次数过多，请重新发送' : '验证码不正确';
+			return apiMessage(c, 409, message);
+		}
+		const sessionId = crypto.randomUUID(), now = Date.now(), maxAge = 24 * 60 * 60, secure = new URL(c.req.url).protocol === 'https:';
+		await runSql(database, sql(database).insert('passport_sessions', { id: sessionId, user_id: verified.userId, expires_at: now + maxAge * 1000, created_at: now }));
+		c.header('Set-Cookie', createPassportSessionCookie(sessionId, secure, maxAge));
+		c.header('Set-Cookie', clearExternalPendingCookie(secure), { append: true });
+		const oidcRequestId = readCookie(c.req.raw, oidcRequestCookieName);
+		if (oidcRequestId) c.header('Set-Cookie', clearOidcRequestCookie(secure), { append: true });
+		return apiMessageData(c, 200, 'Accounts 用户已创建并登录', { user: { id: verified.userId }, ...(oidcRequestId ? { redirectTo: `/api/oidc/authorize?request_id=${encodeURIComponent(oidcRequestId)}` } : { redirectTo: '/' }) }, { redirectAfter: 0 });
+	}
+	if (step === 'method') {
+		const method = text(body.method);
+		if (method === 'telegram') {
+			const formPage = emailForm();
+			return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues });
+		}
+		if (method === 'google' || method === 'wechat') {
+			const provider = await externalProviders(database, true).then((items) => items.find((item) => item.id === method));
+			if (!provider) return apiMessage(c, 400, `${method === 'google' ? 'Google' : '微信'}登录尚未启用`);
+			return apiResponse(c, 200, { redirectTo: `/api/accounts/external/${method}`, feedback: { component: 'message', type: 'success', message: `正在前往${provider.display_name}`, redirectAfter: 0 } });
+		}
+		return apiMessage(c, 400, '请选择有效的登录方式');
+	}
 	if (step === 'email') {
 		let email: string;
 		try { email = normalizePassportEmail(text(body.email)); }

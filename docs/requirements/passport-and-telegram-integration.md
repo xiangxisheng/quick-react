@@ -1,12 +1,12 @@
 # Passport 与 Telegram 集成需求
 
-状态：核心功能已实现；旧数据迁移工具已完成，实际导入等待配置目标 Telegram 机器人
+状态：Telegram 核心功能、旧数据迁移工具和 Accounts OIDC Provider 已实现；Google、微信外部身份接入进行中
 
 本文档定义统一身份中心、Telegram 机器人管理、Telegram webhook、业务站点身份引用以及旧项目数据迁移方案。
 
 ## 1. 总体架构
 
-系统使用 `passport` 作为统一身份中心。业务站点不再维护自己的用户账号、密码或登录态，只保存 Passport 用户 ID 和本站点业务数据。
+系统使用 `passport` 作为统一身份中心，产品界面称为 Accounts（账号中心）。业务站点不维护独立密码或完整身份资料；业务站点作为标准 OIDC Client，只保存 Accounts 的稳定 `issuer + sub` 映射、本站角色和 Host-only Session。
 
 ```text
 global
@@ -17,8 +17,9 @@ passport
   /api/tgwebhook           Telegram Update 入口及业务处理
 
 业务站点
-  <site>_*                 站点业务数据
-  passport_user_id         引用 Passport 用户
+  base_oidc_accounts       Accounts issuer + subject 的最小映射
+  base_system_sessions     本站 Host-only Session
+  <site>_*                 站点业务数据及本站角色
 ```
 
 `base` 仍是通用代码基础层，不是身份数据归属层。登录、用户管理和个人中心等通用能力后续应覆盖为 Passport 实现，避免业务站点独立数据库中出现用户表。
@@ -40,7 +41,7 @@ passportDatabase
 
 siteDatabase
   -> 当前业务站点独立 SQLite、D1 或共享数据库中的站点表
-  -> 只保存本站业务数据及 passport_user_id
+  -> 保存本站业务数据、OIDC 主体映射和本站 Session，不保存 Passport 密码或完整身份资料
 ```
 
 每个站点继续遵循现有数据库路由规则：未配置独立 DSN 时直接使用 `default.sqlite` 或默认 D1；配置独立 DSN 或 Binding 后才使用独立数据库。因此 Passport 不新增固定的 `PASSPORT_DB` 变量。
@@ -51,11 +52,13 @@ siteDatabase
 
 请求上下文应显式提供 `globalDatabase` 和当前 `database`，业务代码不得依赖变量名称猜测数据库用途。
 
-跨站点登录统一使用 Passport Session。Session 存储在 Passport 数据库，业务站点通过统一身份上下文解析当前 `passport_user_id`，再查询本站点的成员和角色关系；业务站点不得建立自己的身份 Session。跨站登录使用 Passport 的登录跳转和一次性登录票据，由目标站点建立自己的安全 Cookie，避免依赖单个全局 Cookie 域。更换域名后旧域名 Cookie 可以失效，用户在新域名重新登录即可恢复，不能因为某个域名失效导致整个身份系统不可用。
+跨站点登录使用标准 OpenID Connect Authorization Code + PKCE。Passport/Accounts 是 OIDC Provider，业务站点是 OIDC Client；业务站点不得读取 Passport 数据库。Accounts 登录成功后签发短期授权码、ID Token 和访问令牌，业务站点验证 Issuer、Audience、签名、Nonce 和 PKCE 后建立自己的 Host-only Session。更换域名后旧域名 Cookie 可以失效，用户在新域名重新走 OIDC 登录即可恢复，不能依赖共享 Cookie Domain。
 
 Passport 网页首次登录采用邮箱与 Telegram 数字批准流程：用户输入已验证邮箱，选择该用户已绑定且机器人处于启用状态的 Telegram 外部身份；Passport 创建十分钟有效的登录挑战，并向对应 Telegram Chat 发送八个候选数字。只有点击网页显示的正确数字后，网页轮询才能原子消费挑战并建立 `passport_sessions`。错误数字不批准，拒绝按钮立即终止挑战；挑战和 Session 都不依赖 Redis、共享 Cookie Domain 或单一 Passport 域名。
 
-业务站点登录页不得提供本地注册或本地密码登录，只列出 global 中 Passport 站点的可用精确域名供用户选择。Passport 域名收到跳转后创建十分钟有效的 SSO 请求；已有 Passport Session 时直接签发票据，否则在数字批准登录完成后签发。一次性票据有效期一分钟，数据库只保存 SHA-256，不保存 URL 中的原始票据，并同时绑定目标 `site_key` 和当前 `hostname`。目标站点原子消费票据后在 Passport 数据库建立 `passport_site_sessions`，Cookie 保持 Host-only；票据不可重放，也不能换站点或换域名使用。
+业务站点启用 Accounts 登录后不得提供本地注册或本地密码登录，只跳转到配置的 Accounts Issuer。OIDC 客户端密钥保存在业务站点自己的数据库中；授权码只允许消费一次，令牌必须绑定客户端、用户和 Accounts Session。Accounts 全局退出通过 OIDC Back-Channel Logout 通知已经建立会话的业务站点按 `sid` 删除本地 Session。
+
+登录配置属于 Base 数据能力：配置表和 migration 位于业务站点继承的 Base schema，每个业务站点在自己的数据库中独立保存 `enabled`、Issuer、Client ID 和 Client Secret。处理逻辑保持为独立 `accounts_oidc_client` 模块，只注入普通业务站点；开关关闭时模块把 `/api/sign` 交还 Base 用户名密码登录，开启时才覆盖 Base。`global` 和 `passport` 不注入该客户端模块。
 
 ## 3. Passport 用户模型
 
@@ -67,15 +70,11 @@ Passport 网页首次登录采用邮箱与 Telegram 数字批准流程：用户�
 - 生成算法必须保持老项目的参数和位布局：自定义 Epoch `1288834974657`，时间戳占 41 位，Worker ID 占 10 位，序列号占 12 位；Worker ID 继续来自配置，序列号从 0 开始递增并按 `0xFFF` 截断。
 - 新实现必须处理同一毫秒内的并发和序列号冲突，保证新生成 ID 在 Passport 范围内唯一；多实例部署时必须为实例分配不重复的 Worker ID。
 - 数据库字段必须保持 64 位整数语义：SQLite 使用 `INTEGER`，MySQL 和 PostgreSQL 使用 `BIGINT`；Node 内部使用 `bigint` 或十进制字符串，API 和前端统一以字符串传输。
-- 业务站点只能保存 `passport_user_id`，不得复制用户名、密码或完整身份资料作为本地用户记录。
+- 业务站点只能保存 Accounts `issuer + sub` 与本站本地主体的映射，不得复制密码或完整身份资料。由于数据库独立部署，业务数据库不建立指向 Passport 数据库的外键。
 
 ### 3.2 身份建立和 Passport 负责的能力
 
-Passport 用户必须先通过受信任的外部身份建立初始身份，再绑定邮箱。首期实现：
-
-- Telegram 身份；
-
-微信扫码和 Google 身份作为后续外部身份接入，首期预留数据结构但不实现登录流程。
+Passport 用户必须先通过受信任的外部身份建立初始身份，再绑定邮箱。当前实现 Telegram、Google 和微信三种外部身份：Google 使用标准 OAuth 2.0/OIDC 授权，微信开放平台使用扫码 OAuth，Telegram 继续使用机器人消息批准，不把 Telegram 错称为 OAuth Provider。
 
 用户名和密码只能在身份建立后作为附加登录方式设置，不能作为首次注册入口。手机登录和手机绑定暂不实现。
 
@@ -106,20 +105,20 @@ Passport 统一负责：
 ```text
 site_members
   id
-  passport_user_id
+  local_user_id
   site_role
   status
   created_at
   updated_at
 ```
 
-站点表中的 `passport_user_id` 必须引用 Passport 用户 ID。站点可以拥有自己的业务角色，但不能因此创建第二套登录账号。
+`local_user_id` 通过 `base_oidc_accounts(issuer, subject)` 解析。站点可以拥有自己的业务角色和 Session，但不能创建第二套密码账号，也不能通过数据库直连读取 Passport 身份表。
 
 ### 3.4 规范化表结构
 
 以下结构用于替代旧 CouchDB 的索引文档。所有数据库中的身份 ID、Telegram ID、Chat ID 和时间字段使用 64 位整数类型：SQLite 使用 `INTEGER`，MySQL 和 PostgreSQL 使用 `BIGINT`。Node 内部使用 `bigint` 或字符串，API JSON 始终使用字符串，禁止转换为 JavaScript `number`。
 
-Passport 新增表的字段统一使用 `NOT NULL`；不使用 `NULL` 或空字符串表达未设置。可选能力使用独立关联表，字符串字段必须在写入前得到有效值，枚举字段必须使用明确的状态值。
+Passport 身份主体和关联键统一使用 `NOT NULL`；不使用空字符串表达未设置。可选能力优先使用独立关联表，生命周期中的 `consumed_at`、`revoked_at` 等“事件尚未发生”时间允许使用 `NULL`。字符串字段必须在写入前得到有效值，枚举字段必须使用明确的状态值。
 
 ```text
 passport_users
@@ -153,32 +152,40 @@ passport_login_challenges
   created_at BIGINT NOT NULL
   updated_at BIGINT NOT NULL
 
-passport_sso_requests
+passport_oidc_clients
   id TEXT PRIMARY KEY
-  target_site_key TEXT NOT NULL
-  target_hostname TEXT NOT NULL
-  status TEXT NOT NULL                 -- pending / consumed / expired
-  expires_at BIGINT NOT NULL
-  created_at BIGINT NOT NULL
-  updated_at BIGINT NOT NULL
+  secret_hash TEXT NOT NULL
+  redirect_uris TEXT NOT NULL
+  backchannel_logout_uri TEXT NOT NULL
+  allowed_scopes TEXT NOT NULL
+  require_pkce INTEGER NOT NULL
+  status TEXT NOT NULL
 
-passport_login_tickets
-  token_hash TEXT PRIMARY KEY          -- 只保存一次性票据 SHA-256
-  user_id BIGINT NOT NULL
-  target_site_key TEXT NOT NULL
-  target_hostname TEXT NOT NULL
-  status TEXT NOT NULL                 -- pending / consumed / expired
-  expires_at BIGINT NOT NULL
-  created_at BIGINT NOT NULL
-  updated_at BIGINT NOT NULL
-
-passport_site_sessions
+passport_oidc_authorization_requests
   id TEXT PRIMARY KEY
-  user_id BIGINT NOT NULL
-  site_key TEXT NOT NULL
-  hostname TEXT NOT NULL
+  client_id TEXT NOT NULL
+  redirect_uri TEXT NOT NULL
+  state TEXT NOT NULL
+  nonce TEXT NOT NULL
+  code_challenge TEXT NOT NULL
   expires_at BIGINT NOT NULL
-  created_at BIGINT NOT NULL
+
+passport_oidc_authorization_codes
+  code_hash TEXT PRIMARY KEY            -- 不保存原始授权码
+  client_id TEXT NOT NULL
+  user_id BIGINT NOT NULL
+  session_id TEXT NOT NULL
+  expires_at BIGINT NOT NULL
+  consumed_at BIGINT
+
+passport_oidc_access_tokens
+  token_hash TEXT PRIMARY KEY           -- 不保存原始访问令牌
+  client_id TEXT NOT NULL
+  user_id BIGINT NOT NULL
+  session_id TEXT NOT NULL
+  authorization_code_hash TEXT           -- 唯一认领授权码，防止并发重复消费
+  expires_at BIGINT NOT NULL
+  revoked_at BIGINT
 
 passport_telegram_accounts
   id BIGINT PRIMARY KEY
@@ -190,13 +197,39 @@ passport_telegram_accounts
   created_at BIGINT NOT NULL
   updated_at BIGINT NOT NULL
 
-passport_oauth_accounts
+passport_external_identities
   id BIGINT PRIMARY KEY
   user_id BIGINT NOT NULL
-  provider TEXT NOT NULL                 -- wechat / google
-  provider_user_id TEXT NOT NULL         -- Provider 侧稳定用户 ID
+  provider TEXT NOT NULL                 -- wechat / google；Telegram 使用专用关系表
+  subject TEXT NOT NULL                  -- Provider 侧稳定用户 ID
+  profile TEXT NOT NULL
   created_at BIGINT NOT NULL
   updated_at BIGINT NOT NULL
+
+passport_external_providers
+  id TEXT PRIMARY KEY                   -- google / wechat
+  display_name TEXT NOT NULL
+  client_id TEXT NOT NULL
+  client_secret TEXT NOT NULL
+  status TEXT NOT NULL
+
+passport_external_pending_identities
+  id_hash TEXT PRIMARY KEY              -- 微信授权后的浏览器临时流程
+  provider TEXT NOT NULL
+  subject TEXT NOT NULL
+  nickname TEXT NOT NULL
+  profile TEXT NOT NULL
+  status TEXT NOT NULL                  -- pending / completed / expired
+  expires_at BIGINT NOT NULL
+
+passport_external_email_otps
+  id TEXT PRIMARY KEY
+  pending_identity_hash TEXT NOT NULL
+  email TEXT NOT NULL
+  code_hash TEXT NOT NULL
+  attempt_count INTEGER NOT NULL
+  status TEXT NOT NULL                  -- pending / used / expired
+  expires_at BIGINT NOT NULL
 
 passport_emails
   id BIGINT PRIMARY KEY
@@ -462,23 +495,24 @@ npm run import:legacy-passport -- \
 - 机器人必须先停用，且确认没有关联数据后才能删除；历史来源不得被破坏。
 - 新用户使用修复后的老项目兼容雪花 ID 生成器，不能使用用户表自增 ID。
 - 站点权限由业务站点维护，身份由 Passport 维护。
-- 首期实现 Telegram 身份、邮箱绑定和邮箱验证码，迁移菜单、邮箱关系和 Telegram 账号绑定；微信扫码、Google、头像、客服功能、Discourse SSO 和其它 SSO 集成后续实现。
+- 已实现 Telegram 身份、邮箱绑定、邮箱验证码和标准 OIDC；当前主线实现 Google、微信外部身份。头像、客服功能和 DiscourseConnect 不实现，Discourse 如需接入应使用其标准 OIDC 插件。
 - 所有数据实体统一遵循“先启用/停用，再确认无关联数据，最后允许删除”的生命周期原则；有历史来源或关联数据时只能停用，不能物理删除。
 
 ## 8. 实施顺序
 
 1. 建立 Passport 站点代码目录、Passport 数据库 migration 和运行时身份数据库访问上下文。
-2. 将 Telegram + 邮箱身份建立、Passport Session 和跨站一次性登录票据迁移到 Passport。
+2. 将 Telegram + 邮箱身份建立和 Passport Session 迁移到 Passport。
 3. 建立 `global_telegram_bots` 及 global 机器人 CRUD 页面和 API。
 4. 实现 Passport `/api/tgwebhook`，接入 global 机器人配置和 Passport 数据库。
 5. 实现旧 webhook 的菜单、Telegram 账号绑定、邮箱绑定、邮箱验证码和 callback 业务。
 6. 编写 CouchDB 到 Passport SQLite 的事务迁移程序。
-7. 实现跨站登录、换域名重新登录和业务站点角色校验测试。
-8. 执行类型检查、Worker 构建、多站点 Smoke 测试和迁移专项校验。
+7. 实现 Accounts OIDC Provider、业务站点 OIDC Client、PKCE、签名验证和 Back-Channel Logout。
+8. 实现 Google、微信外部身份登录；微信在创建新用户前必须完成邮箱验证码。
+9. 执行类型检查、Worker 构建、多站点 Smoke 测试和迁移专项校验。
 
 ## 9. 明确不做
 
-- 不在业务站点创建 `site_users`、`site_sessions` 或复制密码。
+- 不在业务站点创建第二套密码账号或复制 Passport 完整身份资料；允许 OIDC Client 保存最小主体映射和本站 Host-only Session。
 - 不把机器人 Token 存入 Passport 数据库。
 - 不把 OAuth 协议名称当作身份中心站点名称；站点名称统一使用 `passport`。
 - 不重新生成旧用户的雪花 ID。

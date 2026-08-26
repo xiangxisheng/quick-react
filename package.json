@@ -18,6 +18,7 @@
 		"test:passport-login": "node scripts/test-passport-login.mjs",
 		"test:passport-migration": "node scripts/test-passport-migration.mjs",
 		"test:accounts-oidc": "node scripts/test-accounts-oidc.mjs",
+		"test:accounts-external": "node scripts/test-accounts-external.mjs",
 		"test:sql-builder": "node scripts/test-sql-builder.mjs",
 		"import:legacy-passport": "node scripts/import-legacy-passport.mjs",
 		"test": "node esbuild.cjs"

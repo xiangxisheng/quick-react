@@ -52,7 +52,10 @@ try {
 	const localSign = await (await request('/api/sign.php')).json();
 	assert.equal(localSign.formPage.fields[0].name, 'username');
 	const initial = await (await request('/api/accounts/sign.php')).json();
-	assert.equal(initial.formPage.initialValues.step, 'email');
+	assert.equal(initial.formPage.initialValues.step, 'method');
+	assert.equal(initial.formPage.fields.find((field) => field.name === 'method').options[0].value, 'telegram');
+	const emailStep = await (await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'method', method: 'telegram' } })).json();
+	assert.equal(emailStep.formPage.initialValues.step, 'email');
 	const telegramSelection = await (await request('/api/accounts/sign.php', {
 		method: 'POST', body: { step: 'email', email: 'USER@example.com' },
 	})).json();

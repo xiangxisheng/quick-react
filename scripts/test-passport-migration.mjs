@@ -63,7 +63,7 @@ try {
 	const database = new DatabaseSync(databaseFile);
 	database.exec(await readFile(join(projectDirectory, 'migrations/global/0001_global_sites.sql'), 'utf8'));
 	database.exec(await readFile(join(projectDirectory, 'migrations/global/0002_telegram_bots.sql'), 'utf8'));
-	for (const migration of ['0001_passport_identity.sql', '0002_telegram_onboarding.sql', '0003_telegram_webhook_updates.sql', '0004_telegram_identity_choices.sql', '0005_passport_login.sql', '0006_passport_sso.sql', '0007_accounts_oidc.sql', '0008_accounts_oidc_logout.sql', '0009_accounts_oidc_code_claim.sql']) {
+	for (const migration of ['0001_passport_identity.sql', '0002_telegram_onboarding.sql', '0003_telegram_webhook_updates.sql', '0004_telegram_identity_choices.sql', '0005_passport_login.sql', '0006_passport_sso.sql', '0007_accounts_oidc.sql', '0008_accounts_oidc_logout.sql', '0009_accounts_oidc_code_claim.sql', '0010_accounts_external_login.sql']) {
 		database.exec(await readFile(join(projectDirectory, 'migrations/passport', migration), 'utf8'));
 	}
 	database.prepare(`INSERT INTO global_sites (site_key, name, base_site_key, dsn, status, migration_status, is_default, is_system)
