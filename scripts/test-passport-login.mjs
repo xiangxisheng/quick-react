@@ -28,8 +28,8 @@ try {
 	const now = Date.now();
 	database.prepare(`INSERT INTO global_site_hosts (hostname, site_key, status, created_at) VALUES (?, 'passport', 'enabled', ?)`).run('passport.test', now);
 	database.prepare(`INSERT INTO global_sites
-		(site_key, name, base_site_key, dsn, database_binding, status, migration_status, is_default, is_system)
-		VALUES ('site1', 'Site 1', 'base', '', '', 'enabled', 'ready', 0, 0)`).run();
+		(site_key, name, base_site_key, dsn, database_binding, status, passport_sso_enabled, migration_status, is_default, is_system)
+		VALUES ('site1', 'Site 1', 'base', '', '', 'enabled', 1, 'ready', 0, 0)`).run();
 	database.prepare(`INSERT INTO global_site_hosts (hostname, site_key, status, created_at) VALUES ('site1.test', 'site1', 'enabled', ?)`).run(now);
 	database.prepare(`INSERT INTO global_telegram_bots
 		(id, name, bot_token, bot_username, secret_token, webhook_hostname, status, created_at, updated_at)

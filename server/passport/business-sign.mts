@@ -5,6 +5,7 @@ import type { FormPageConfig } from '@shared/types/form-page.mjs';
 
 const handler: ApiHandler = async (c, next) => {
 	const site = c.get('site'), database = c.get('passportDatabase');
+	if (!site.passportSsoEnabled) return apiMessage(c, 404, '该站点未启用 Passport SSO 登录');
 	if (!database) return apiMessage(c, 503, 'Passport 数据库不可用');
 	if (c.req.method === 'GET') {
 		const hosts = await c.get('globalDatabase').prepare(`SELECT hostname FROM global_site_hosts

@@ -8,7 +8,7 @@ const handler: ApiHandler = async (c) => {
 	const targetHostname = c.req.query('target_hostname')?.trim().toLowerCase() ?? '';
 	const target = await c.get('globalDatabase').prepare(`SELECT h.site_key, h.hostname FROM global_site_hosts h
 		JOIN global_sites s ON s.site_key = h.site_key WHERE h.hostname = ?1 AND h.status = 'enabled'
-			AND s.status = 'enabled' AND s.migration_status = 'ready' AND h.site_key NOT IN ('global', 'passport')`).bind(targetHostname)
+			AND s.status = 'enabled' AND s.migration_status = 'ready' AND s.passport_sso_enabled = 1 AND h.site_key NOT IN ('global', 'passport')`).bind(targetHostname)
 		.first<{ site_key: string; hostname: string }>();
 	if (!target) return apiMessage(c, 400, '目标站点域名未注册或不可登录');
 	const database = c.get('passportDatabase');

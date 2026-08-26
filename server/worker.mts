@@ -94,9 +94,10 @@ const configureForRequest = async (c: Context<WorkerEnv>) => {
 	c.set('configStore', configStore);
 	c.set('systemConfig', configuration.systemConfig);
 	c.set('techStackConfig', configuration.techStackConfig);
-	const currentUser = site.siteKey === 'global'
-		? await loadCurrentUser(database, c.req.raw)
-		: passportDatabase ? await loadPassportSession(passportDatabase, c.req.raw, site.siteKey, site.hostname) : undefined;
+	const usesPassportSso = site.siteKey === 'passport' || site.passportSsoEnabled;
+	const currentUser = usesPassportSso
+		? passportDatabase ? await loadPassportSession(passportDatabase, c.req.raw, site.siteKey, site.hostname) : undefined
+		: await loadCurrentUser(database, c.req.raw);
 	if (currentUser) c.set('currentUser', currentUser);
 	c.set('effectiveRoles', currentUser ? ['public', 'user', ...currentUser.roles] : ['public']);
 	return true;

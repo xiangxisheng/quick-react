@@ -167,8 +167,18 @@ try {
 	}
 	const sitesResult = await (await request('localhost', '/api/panel/admin/global/site/sites.php', { cookie })).json();
 	assert.equal(sitesResult.table.columns[0]?.dataIndex, 'id');
+	assert.ok(sitesResult.table.columns.some((column) => column.dataIndex === 'passport_sso_enabled'));
 	const hostsResult = await (await request('localhost', '/api/panel/admin/global/site/hosts.php', { cookie })).json();
 	assert.equal(hostsResult.table.columns[0]?.dataIndex, 'id');
+	const localSiteSign = await (await request('site1.test', '/api/sign.php')).json();
+	assert.equal(localSiteSign.formPage.fields[0].name, 'username');
+	assert.equal((await request('passport.test', '/api/passport/sso/start?target_hostname=site1.test')).status, 400);
+	assert.equal((await request('localhost', '/api/panel/admin/global/site/sites.php/site1', {
+		method: 'PUT', cookie, body: { passport_sso_enabled: true, __changedFields: ['passport_sso_enabled'] },
+	})).status, 200);
+	const passportSiteSign = await (await request('site1.test', '/api/sign.php')).json();
+	assert.equal(passportSiteSign.formPage.fields[0].name, 'passport_hostname');
+	assert.equal((await request('passport.test', '/api/passport/sso/start?target_hostname=site1.test')).status, 302);
 	const botsPath = '/api/panel/admin/global/telegram/bots.php';
 	assert.equal((await request('localhost', botsPath, {
 		method: 'POST', cookie, body: { name: 'smoke-passport-bot', bot_token: '10001:smoke-token', webhook_hostname: 'passport.test' },
@@ -230,9 +240,9 @@ try {
 	const isolatedRegistration = await request('site2.test', '/api/sign.php');
 	const isolatedRegistrationResult = await isolatedRegistration.json();
 	assert.equal(isolatedRegistrationResult.user, null);
-	assert.equal(isolatedRegistrationResult.registrationAvailable, false);
+	assert.equal(isolatedRegistrationResult.registrationAvailable, true);
 	assert.ok(isolatedRegistrationResult.formPage);
-	assert.equal(isolatedRegistrationResult.formPage.fields[0].name, 'passport_hostname');
+	assert.equal(isolatedRegistrationResult.formPage.fields[0].name, 'username');
 
 	const credentialsPath = '/api/panel/admin/global/cloud/credentials.php';
 	assert.equal((await request('localhost', credentialsPath, {

@@ -22,7 +22,7 @@ const registrationAvailable = async (database: DatabaseAdapter) => {
 };
 
 const handler: ApiHandler = async (c, next) => {
-	if (c.get('site').siteKey !== 'global') return businessPassportSign(c, next, {});
+	if (c.get('site').passportSsoEnabled) return businessPassportSign(c, next, {});
 	const database = c.get('database');
 	if (c.req.method === 'GET') {
 		const isSignUp = new URL(c.req.url).searchParams.get('mode') === 'sign-up';

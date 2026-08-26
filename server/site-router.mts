@@ -8,6 +8,7 @@ export type SiteRecord = {
 	databaseBinding: string;
 	status: string;
 	migrationStatus: string;
+	passportSsoEnabled: boolean;
 	isDefault: boolean;
 	isSystem: boolean;
 };
@@ -26,6 +27,7 @@ type SiteRow = {
 	database_binding: string;
 	status: string;
 	migration_status: string;
+	passport_sso_enabled: number;
 	is_default: number;
 	is_system: number;
 };
@@ -68,6 +70,7 @@ const createSiteRecord = (row: SiteRow): SiteRecord => ({
 	databaseBinding: row.database_binding,
 	status: row.status,
 	migrationStatus: row.migration_status,
+	passportSsoEnabled: row.passport_sso_enabled === 1,
 	isDefault: row.is_default === 1,
 	isSystem: row.is_system === 1,
 });
@@ -99,7 +102,7 @@ export class SiteRouter {
 
 	private async loadSnapshot() {
 		const siteRows = await this.database.prepare(`SELECT site_key, name, base_site_key, dsn, database_binding,
-		status, migration_status, is_default, is_system FROM global_sites
+		status, migration_status, passport_sso_enabled, is_default, is_system FROM global_sites
 		WHERE status = 'enabled' AND migration_status = 'ready'`).all<SiteRow>();
 		const sites = new Map(siteRows.results.filter((row) => siteKeyPattern.test(row.site_key)).map((row) => [row.site_key, createSiteRecord(row)]));
 		for (const site of sites.values()) buildSiteChain(site, sites);
