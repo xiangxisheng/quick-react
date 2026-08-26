@@ -53,7 +53,7 @@ function getFormItemComponent(item: ResJsonTableColumn, row: DataType, parentVal
 				<Select
 					showSearch
 					allowClear
-					mode={item.multiple ? 'multiple' : item.allowCustomValue ? 'tags' : undefined}
+					mode={item.allowCustomValue ? 'tags' : item.multiple ? 'multiple' : undefined}
 					maxCount={!item.multiple && item.allowCustomValue ? 1 : undefined}
 					loading={optionsLoading}
 					placeholder={item.placeholder}

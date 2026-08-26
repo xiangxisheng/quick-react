@@ -97,7 +97,7 @@ const buildEffectiveSiteChain = (site: SiteRecord, sites: Map<string, SiteRecord
 	if (site.siteKey === 'passport') {
 		const baseIndex = chain.lastIndexOf('base');
 		chain.splice(baseIndex < 0 ? chain.length : baseIndex, 0, 'accounts_oidc', 'accounts_identity');
-	} else if (site.siteKey !== 'global') {
+	} else {
 		const baseIndex = chain.lastIndexOf('base');
 		chain.splice(baseIndex < 0 ? chain.length : baseIndex, 0, 'accounts_oidc_client');
 	}
