@@ -4,20 +4,23 @@ import { createCloudStorageAdapter } from './resolve.mjs';
 import { testAwsCredential } from './providers/aws-sts.mjs';
 import { testAliyunCredential } from './providers/aliyun-sts.mjs';
 import { testTencentCredential } from './providers/tencent-cam.mjs';
+import type { AliyunCredentialIdentity } from './providers/aliyun-sts.mjs';
+import type { TencentCredentialIdentity } from './providers/tencent-cam.mjs';
 
 export type CloudCredentialTestResult = {
 	bucketCount?: number;
-	details?: { uin: string; ownerUin: string; appId: number };
+	aliyunIdentity?: AliyunCredentialIdentity;
+	tencentIdentity?: TencentCredentialIdentity;
 };
 
 export const testCloudCredential = async (credential: CloudCredential): Promise<CloudCredentialTestResult | null> => {
 	const test = getCredentialTest(credential.provider);
 	if (!test) return null;
 	if (test === 'aws') { await testAwsCredential(credential); return {}; }
-	if (test === 'aliyun') { await testAliyunCredential(credential); return {}; }
+	if (test === 'aliyun') return { aliyunIdentity: await testAliyunCredential(credential) };
 	if (test === 'tencent') {
 		const identity = await testTencentCredential(credential);
-		return { details: { uin: identity.uin, ownerUin: identity.ownerUin, appId: identity.appId } };
+		return { tencentIdentity: identity };
 	}
 	const defaults = getCloudDiscoveryDefaults(credential.provider, credential.account_id);
 	const endpoint = defaults.endpoints[0];

@@ -76,9 +76,14 @@ const handler: ApiHandler = async (c, next, params) => {
 		try {
 			const result = await testCloudCredential(credential);
 			if (result === null) return apiMessage(c, 200, '该自定义凭据暂不支持独立测试，请在 Bucket 配置中测试');
-			if (result.details) {
-				const { uin, ownerUin, appId } = result.details;
-				return apiMessageData(c, 200, `凭据测试成功：UIN ${uin}；OwnerUin ${ownerUin}；AppId ${appId}`, { identity: result.details }, { component: 'modal', title: '腾讯云凭据测试成功' });
+			if (result.aliyunIdentity) {
+				const { accountId, identityType, principalId, arn, userId, roleId } = result.aliyunIdentity;
+				const detail = [`账号 ID ${accountId}`, `身份类型 ${identityType}`, `主体 ID ${principalId}`, `ARN ${arn}`, userId ? `用户 ID ${userId}` : '', roleId ? `角色 ID ${roleId}` : ''].filter(Boolean).join('；');
+				return apiMessageData(c, 200, `阿里云凭据测试成功：${detail}`, { identity: result.aliyunIdentity }, { component: 'modal', title: '阿里云凭据测试成功' });
+			}
+			if (result.tencentIdentity) {
+				const { uin, ownerUin, appId } = result.tencentIdentity;
+				return apiMessageData(c, 200, `腾讯云凭据测试成功：UIN ${uin}；OwnerUin ${ownerUin}；AppId ${appId}`, { identity: result.tencentIdentity }, { component: 'modal', title: '腾讯云凭据测试成功' });
 			}
 			return apiMessage(c, 200, result.bucketCount === undefined ? '凭据测试成功' : `凭据测试成功，发现 ${result.bucketCount} 个 Bucket`);
 		} catch (error) { return apiMessage(c, 502, error instanceof Error ? error.message : '凭据测试失败'); }

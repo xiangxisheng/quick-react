@@ -1,13 +1,22 @@
 import type { CloudCredential } from '../index.mjs';
 
+export type AliyunCredentialIdentity = {
+	accountId: string;
+	identityType: string;
+	principalId: string;
+	arn: string;
+	userId?: string;
+	roleId?: string;
+};
+
 const encoder = new TextEncoder();
 const toHex = (buffer: ArrayBuffer) => [...new Uint8Array(buffer)].map((value) => value.toString(16).padStart(2, '0')).join('');
 const sha256 = async (value: string) => toHex(await crypto.subtle.digest('SHA-256', encoder.encode(value)));
 const hmacHex = async (key: string, value: string) => toHex(await crypto.subtle.sign('HMAC', await crypto.subtle.importKey('raw', encoder.encode(key), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']), encoder.encode(value)));
 
-export const testAliyunCredential = async (credential: CloudCredential) => {
+export const testAliyunCredential = async (credential: CloudCredential): Promise<AliyunCredentialIdentity> => {
 	if (!credential.access_key_id || !credential.access_key_secret) throw new Error('阿里云凭据缺少 Access Key ID 或 Access Key Secret');
-	const host = 'sts.cn-hangzhou.aliyuncs.com';
+	const host = 'sts.aliyuncs.com';
 	const payload = '';
 	const payloadHash = await sha256(payload);
 	const headers = {
@@ -29,5 +38,15 @@ export const testAliyunCredential = async (credential: CloudCredential) => {
 			Authorization: `ACS3-HMAC-SHA256 Credential=${credential.access_key_id},SignedHeaders=${signedHeaders},Signature=${signature}`,
 		},
 	});
-	if (!response.ok) throw new Error(`阿里云凭据测试失败：HTTP ${response.status}`);
+	const result = await response.json().catch(() => ({})) as { AccountId?: string; IdentityType?: string; PrincipalId?: string; Arn?: string; UserId?: string; RoleId?: string; Code?: string; Message?: string };
+	if (!response.ok || result.Code) throw new Error(`阿里云凭据测试失败：${result.Message ?? `HTTP ${response.status}`}${result.Code ? `（${result.Code}）` : ''}`);
+	if (!result.AccountId || !result.IdentityType || !result.PrincipalId || !result.Arn) throw new Error('阿里云凭据测试失败：响应缺少账号身份信息');
+	return {
+		accountId: result.AccountId,
+		identityType: result.IdentityType,
+		principalId: result.PrincipalId,
+		arn: result.Arn,
+		userId: result.UserId,
+		roleId: result.RoleId,
+	};
 };

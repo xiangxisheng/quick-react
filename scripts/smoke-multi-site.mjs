@@ -38,6 +38,10 @@ globalThis.fetch = async (input, init) => {
 		if (action === 'SingleSendMail') return Response.json({ RequestId: 'dm-send', EnvId: 'dm-message' });
 		return Response.json({ RequestId: 'dm-unsupported', Code: 'Unsupported', Message: String(action) }, { status: 400 });
 	}
+	if (url === 'https://sts.aliyuncs.com/') {
+		assert.equal(new Headers(init?.headers).get('x-acs-action'), 'GetCallerIdentity');
+		return Response.json({ AccountId: '1688000000000000', IdentityType: 'RAMUser', PrincipalId: '2812345678901234', UserId: '2812345678901234', Arn: 'acs:ram::1688000000000000:user/smoke', RequestId: 'aliyun-sts-request' });
+	}
 	if (url === 'https://cam.tencentcloudapi.com/') {
 		const action = new Headers(init?.headers).get('x-tc-action');
 		if (action === 'GetUserAppId') return Response.json({ Response: { Uin: '10001', OwnerUin: '10001', AppId: 1250000001, RequestId: 'cam-request' } });
@@ -273,6 +277,11 @@ try {
 	const emailCredentialsResult = await (await request('localhost', credentialsPath, { cookie })).json();
 	const emailCredential = emailCredentialsResult.table.dataSource.find((item) => item.name === 'smoke-aliyun-mail');
 	assert.ok(emailCredential?.id);
+	const aliyunCredentialTest = await request('localhost', `${credentialsPath}/${emailCredential.id}?action=test`, { method: 'POST', cookie });
+	assert.equal(aliyunCredentialTest.status, 200);
+	const aliyunCredentialTestResult = await aliyunCredentialTest.json();
+	assert.equal(aliyunCredentialTestResult.identity.accountId, '1688000000000000');
+	assert.match(aliyunCredentialTestResult.feedback.message, /账号 ID 1688000000000000/);
 	const emailChannelsPath = '/api/panel/admin/global/cloud/email/channels.php';
 	const discoveredMailAddresses = await (await request('localhost', `${emailChannelsPath}?action=discover&field=account_name&cloud_credential_id=${emailCredential.id}&region=cn-hangzhou`, { cookie })).json();
 	assert.deepEqual(discoveredMailAddresses.options, [{ value: 'noreply@example.com', text: 'noreply@example.com', fieldValues: { reply_to_address: true } }]);
