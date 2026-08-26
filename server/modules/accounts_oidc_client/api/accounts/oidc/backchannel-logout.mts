@@ -2,7 +2,7 @@ import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage } from '@server/api-response.mjs';
 import { loadAccountsOidcConfig, loadDiscovery, oidcFetch, verifyIdToken } from '@server/accounts/client.mjs';
 import { parseFormBody } from '@server/accounts/oidc.mjs';
-import { runSql, sql } from '@server/database/sql.mjs';
+import { firstSql, runSql, sql } from '@server/database/sql.mjs';
 
 const handler: ApiHandler = async (c) => {
 	if (c.req.method !== 'POST') return apiMessage(c, 405, '只允许 POST 请求');
@@ -15,7 +15,7 @@ const handler: ApiHandler = async (c) => {
 		const events = claims.events as Record<string, unknown> | undefined, sid = String(claims.sid ?? '');
 		if (!sid || !events?.['http://schemas.openid.net/event/backchannel-logout']) throw new Error('Logout Token 声明不合法');
 		const database = c.get('database');
-		const session = await database.prepare(`SELECT session_id FROM base_oidc_sessions WHERE issuer = ?1 AND sid = ?2`).bind(config.issuer, sid).first<{ session_id: string }>();
+		const session = await firstSql<{ session_id: string }>(database, sql(database).select({ table: 'base_oidc_sessions', columns: { session_id: 'session_id' }, where: [{ column: 'issuer', value: config.issuer }, { column: 'sid', value: sid }] }));
 		if (session) { await runSql(database, sql(database).delete('base_system_sessions', { id: session.session_id })); await runSql(database, sql(database).delete('base_oidc_sessions', { issuer: config.issuer, sid })); }
 		return apiMessage(c, 200, '会话已注销');
 	} catch (error) { return apiMessage(c, 400, error instanceof Error ? error.message : 'Logout Token 不合法'); }

@@ -1,4 +1,5 @@
 import type { DatabaseAdapter } from './database/index.mjs';
+import { firstSql, sql } from './database/sql.mjs';
 
 const encoder = new TextEncoder();
 const iterations = 210_000;
@@ -98,10 +99,7 @@ export const clearSessionCookie = (secure: boolean) =>
 export const loadCurrentUser = async (database: DatabaseAdapter, request: Request) => {
 	const sessionId = readSessionId(request);
 	if (!sessionId) return undefined;
-	const row = await database.prepare(`SELECT u.id, u.username, u.roles
-		FROM base_system_sessions s JOIN base_system_users u ON u.id = s.user_id
-		WHERE s.id = ?1 AND s.expires_at > ?2 AND u.status = 'enabled'`)
-		.bind(sessionId, Date.now()).first<{ id: number; username: string; roles: string }>();
+	const row = await firstSql<{ id: number; username: string; roles: string }>(database, sql(database).select({ table: 'base_system_sessions', alias: 's', columns: { id: 'u.id', username: 'u.username', roles: 'u.roles' }, joins: [{ table: 'base_system_users', alias: 'u', left: 'u.id', right: 's.user_id' }], where: [{ column: 's.id', value: sessionId }, { column: 's.expires_at', operator: '>', value: Date.now() }, { column: 'u.status', value: 'enabled' }] }));
 	if (!row) return undefined;
 	let roles: string[] = [];
 	try {

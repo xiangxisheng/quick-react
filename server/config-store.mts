@@ -12,7 +12,7 @@ export const memoryConfigStore: ConfigStore = {
 
 export const createDatabaseConfigStore = (database: DatabaseAdapter): ConfigStore => ({
 	get: async (key) => {
-		const row = await database.prepare('SELECT value FROM base_system_configs WHERE key = ?1').bind(key).first<{ value: string }>();
+		const row = await firstSql<{ value: string }>(database, sql(database).select({ table: 'base_system_configs', columns: { value: 'value' }, where: [{ column: 'key', value: key }] }));
 		if (!row) return undefined;
 		try {
 			return JSON.parse(row.value);
@@ -21,12 +21,10 @@ export const createDatabaseConfigStore = (database: DatabaseAdapter): ConfigStor
 		}
 	},
 	put: async (key, value) => {
-		await database
-			.prepare('INSERT INTO base_system_configs (key, value, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at')
-			.bind(key, JSON.stringify(value), Date.now())
-			.run();
+		await runSql(database, sql(database).upsert('base_system_configs', ['key'], { key, value: JSON.stringify(value), updated_at: Date.now() }, ['value', 'updated_at']));
 	},
 });
 
 export const createD1ConfigStore = createDatabaseConfigStore;
 import type { DatabaseAdapter } from './database/index.mjs';
+import { firstSql, runSql, sql } from './database/sql.mjs';

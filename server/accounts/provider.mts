@@ -4,6 +4,7 @@ import { apiMessage, apiResponse } from '@server/api-response.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { signIdToken } from '@server/accounts/oidc.mjs';
 import { backchannelClients, passportSessionUser } from '@server/accounts/repository.mjs';
+import { runSql, sql } from '@server/database/sql.mjs';
 
 export const oidcIssuer = (c: Context<AppEnv>) => new URL(c.req.url).origin;
 
@@ -34,8 +35,8 @@ export const revokeOidcSession = async (database: DatabaseAdapter, sessionId: st
 	if (!session) return;
 	const clients = await backchannelClients(database, sessionId);
 	const now = Date.now();
-	await database.prepare(`UPDATE passport_oidc_access_tokens SET revoked_at = ?2 WHERE session_id = ?1 AND revoked_at IS NULL`).bind(sessionId, now).run();
-	await database.prepare('DELETE FROM passport_sessions WHERE id = ?1').bind(sessionId).run();
+	await runSql(database, sql(database).update('passport_oidc_access_tokens', { revoked_at: now }, [{ column: 'session_id', value: sessionId }, { column: 'revoked_at', operator: 'IS NULL' }]));
+	await runSql(database, sql(database).delete('passport_sessions', { id: sessionId }));
 	await Promise.allSettled(clients.map(async (client) => {
 		const logoutToken = await signIdToken(database, { iss: issuer, sub: session.user_id, aud: client.id, iat: Math.floor(now / 1000), exp: Math.floor(now / 1000) + 120, jti: crypto.randomUUID(), sid: sessionId, events: { 'http://schemas.openid.net/event/backchannel-logout': {} } });
 		const response = await requester(client.backchannel_logout_uri, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ logout_token: logoutToken }) });

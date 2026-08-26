@@ -3,6 +3,7 @@ import { clearSessionCookie, createSessionCookie, createStoredPassword, readSess
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
+import { firstSql, runSql, sql } from '@server/database/sql.mjs';
 
 const parseCredentials = async (c: Parameters<ApiHandler>[0]) => {
 	let body: Record<string, unknown> = {};
@@ -16,7 +17,7 @@ const parseCredentials = async (c: Parameters<ApiHandler>[0]) => {
 };
 
 const registrationAvailable = async (database: DatabaseAdapter) => {
-	const row = await database.prepare(`SELECT value FROM base_system_bootstrap WHERE key = 'initial_admin'`).first<{ value: string }>();
+	const row = await firstSql<{ value: string }>(database, sql(database).select({ table: 'base_system_bootstrap', columns: { value: 'value' }, where: [{ column: 'key', value: 'initial_admin' }] }));
 	return row?.value === 'open';
 };
 
@@ -48,36 +49,30 @@ const handler: ApiHandler = async (c, next) => {
 		}
 		const now = Date.now();
 		const storedPassword = await createStoredPassword(credentials.password);
-		const claimed = await database.prepare(`UPDATE base_system_bootstrap SET value = 'claimed'
-			WHERE key = 'initial_admin' AND value = 'open'`).run();
+		const claimed = await runSql(database, sql(database).update('base_system_bootstrap', { value: 'claimed' }, [{ column: 'key', value: 'initial_admin' }, { column: 'value', value: 'open' }]));
 		if (Number(claimed.meta?.changes ?? 0) !== 1) return apiMessage(c, 409, '初始管理员已经存在');
 		try {
-			await database.prepare(`INSERT INTO base_system_users
-				(username, password, roles, status, created_at, updated_at) VALUES (?1, ?2, '["admin"]', 'enabled', ?3, ?3)`)
-				.bind(credentials.username, storedPassword, now).run();
+			await runSql(database, sql(database).insert('base_system_users', { username: credentials.username, password: storedPassword, roles: '["admin"]', status: 'enabled', created_at: now, updated_at: now }));
 		} catch (error) {
-			await database.prepare(`UPDATE base_system_bootstrap SET value = 'open' WHERE key = 'initial_admin' AND value = 'claimed'`).run();
+			await runSql(database, sql(database).update('base_system_bootstrap', { value: 'open' }, [{ column: 'key', value: 'initial_admin' }, { column: 'value', value: 'claimed' }]));
 			throw error;
 		}
 		return apiMessage(c, 201, '初始管理员创建成功，请登录');
 	}
 	if (c.req.method === 'POST') {
 		const credentials = await parseCredentials(c);
-		const user = await database.prepare(`SELECT id, username, password, roles FROM base_system_users
-			WHERE username = ?1 AND status = 'enabled'`).bind(credentials.username)
-			.first<{ id: number; username: string; password: string; roles: string }>();
+		const user = await firstSql<{ id: number; username: string; password: string; roles: string }>(database, sql(database).select({ table: 'base_system_users', columns: { id: 'id', username: 'username', password: 'password', roles: 'roles' }, where: [{ column: 'username', value: credentials.username }, { column: 'status', value: 'enabled' }] }));
 		if (!user || !await verifyStoredPassword(credentials.password, user.password)) return apiMessage(c, 401, '用户名或密码错误', { component: 'modal', type: 'error' });
 		const sessionId = crypto.randomUUID();
 		const maxAge = credentials.remember ? 30 * 24 * 60 * 60 : 24 * 60 * 60;
 		const now = Date.now();
-		await database.prepare(`INSERT INTO base_system_sessions (id, user_id, expires_at, created_at)
-			VALUES (?1, ?2, ?3, ?4)`).bind(sessionId, user.id, now + maxAge * 1000, now).run();
+		await runSql(database, sql(database).insert('base_system_sessions', { id: sessionId, user_id: user.id, expires_at: now + maxAge * 1000, created_at: now }));
 		c.header('Set-Cookie', createSessionCookie(sessionId, new URL(c.req.url).protocol === 'https:', maxAge));
 		return apiMessageData(c, 200, '登录成功', { user: { id: user.id, username: user.username } });
 	}
 	if (c.req.method === 'DELETE') {
 		const sessionId = readSessionId(c.req.raw);
-		if (sessionId) await database.prepare('DELETE FROM base_system_sessions WHERE id = ?1').bind(sessionId).run();
+		if (sessionId) await runSql(database, sql(database).delete('base_system_sessions', { id: sessionId }));
 		c.header('Set-Cookie', clearSessionCookie(new URL(c.req.url).protocol === 'https:'));
 		return apiMessage(c, 200, '已退出登录');
 	}
