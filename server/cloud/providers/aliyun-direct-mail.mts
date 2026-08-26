@@ -106,7 +106,7 @@ export const listAliyunDirectMailAddresses = async (target: Pick<CloudEmailTarge
 };
 
 export const listAliyunDirectMailTemplates = async (target: Pick<CloudEmailTarget, 'region' | 'access_key_id' | 'access_key_secret'>) => {
-	const pageSize = 100;
+	const pageSize = 20;
 	const templates: AliyunTemplateSummary[] = [];
 	for (let page = 1; ; page += 1) {
 		const result = await callDirectMail(target, 'QueryTemplateByParam', { PageNo: String(page), PageSize: String(pageSize) });

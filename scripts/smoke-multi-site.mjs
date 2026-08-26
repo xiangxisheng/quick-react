@@ -24,10 +24,13 @@ globalThis.fetch = async (input, init) => {
 			TemplateSubject: '云端验证码 {code}', TemplateText: '<p>云端验证码：{code}</p>', TemplateStatus: 2 });
 		if (action === 'DescTemplate') return Response.json({ RequestId: 'dm-describe', TemplateId: 5001, TemplateName: 'email_verification_1_1',
 			TemplateSubject: '验证码 {code}', TemplateText: '<p>验证码：{code}</p>', TemplateStatus: 2 });
-		if (action === 'QueryTemplateByParam') return Response.json({ RequestId: 'dm-templates', TotalCount: 2, data: { template: [
+		if (action === 'QueryTemplateByParam') {
+			assert.equal(parameters.get('PageSize'), '20');
+			return Response.json({ RequestId: 'dm-templates', TotalCount: 2, data: { template: [
 			{ TemplateId: 5001, TemplateName: 'email_verification_1_1', TemplateStatus: 2 },
 			{ TemplateId: 6002, TemplateName: 'cloud_otp', TemplateStatus: 2 },
-		] } });
+			] } });
+		}
 		if (action === 'QueryMailAddressByParam') return Response.json({ RequestId: 'dm-addresses', TotalCount: 1, data: { mailAddress: [{
 			AccountName: 'noreply@example.com', AccountStatus: 0, DomainStatus: 0, ReplyAddress: 'reply@example.com', ReplyStatus: 0, Sendtype: 'trigger',
 		}] } });
