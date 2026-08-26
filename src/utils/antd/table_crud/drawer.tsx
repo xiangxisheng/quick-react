@@ -37,8 +37,8 @@ function getFormItemComponent(item: ResJsonTableColumn, row: DataType, parentVal
 		case ('textbox'):
 			return (
 				item.inputType === 'password'
-					? <Input.Password placeholder={item.placeholder} readOnly={readOnly} />
-					: <Input placeholder={item.placeholder} readOnly={readOnly} />
+					? <Input.Password placeholder={item.placeholder} readOnly={readOnly} disabled={readOnly} />
+					: <Input placeholder={item.placeholder} readOnly={readOnly} disabled={readOnly} />
 			);
 		case ('url'):
 			return (
@@ -70,7 +70,7 @@ function getFormItemComponent(item: ResJsonTableColumn, row: DataType, parentVal
 			return <Switch checkedChildren="启用" unCheckedChildren="禁用" />;
 		case ('textarea'):
 			return (
-				<Input.TextArea rows={4} placeholder={item.placeholder} readOnly={readOnly} />
+				<Input.TextArea rows={4} placeholder={item.placeholder} readOnly={readOnly} disabled={readOnly} />
 			);
 		case ('datepicker'):
 			return (

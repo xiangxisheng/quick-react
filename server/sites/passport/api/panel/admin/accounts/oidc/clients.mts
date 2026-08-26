@@ -11,7 +11,7 @@ const columns = [
 	{ dataIndex: 'id', title: '客户端 ID' },
 	{ dataIndex: 'name', title: '名称', component: 'textbox', rules: [{ required: true, message: '请输入客户端名称' }] },
 	{ dataIndex: 'redirect_uri_source', title: '业务站点域名', component: 'select', hideInTable: true, placeholder: '选择业务站点域名或自定义' },
-	{ dataIndex: 'redirect_uris', title: '回调地址', component: 'textarea', readOnlyWhen: { field: 'redirect_uri_source', notValues: ['__custom__'] }, tableDisplay: 'multiline' as const, placeholder: '每行一个完整 HTTPS 回调地址', rules: [{ required: true, message: '请输入至少一个回调地址' }] },
+	{ dataIndex: 'redirect_uris', title: '回调地址', component: 'textbox', readOnlyWhen: { field: 'redirect_uri_source', notValues: ['__custom__'] }, placeholder: '完整 HTTPS 回调地址', rules: [{ required: true, message: '请输入回调地址' }] },
 	{ dataIndex: 'backchannel_logout_path', title: '后端注销路径', component: 'textbox', readOnlyWhen: { field: 'redirect_uri_source', notValues: ['__custom__'] }, placeholder: defaultBackchannelLogoutPath, rules: [{ required: true, message: '请输入注销路径' }] },
 	{ dataIndex: 'allowed_scopes', title: '允许 Scope', component: 'textbox' },
 	{ dataIndex: 'require_pkce', title: '要求 PKCE', component: 'switch' },
@@ -31,7 +31,7 @@ const loadRedirectUriOptions = async (c: Parameters<ApiHandler>[0]): Promise<Arr
 		.filter((row) => row.site_key !== 'global' && row.site_key !== 'passport' && !row.hostname.startsWith('*.'))
 		.map((row) => {
 			const origin = `https://${row.hostname}`;
-			return { value: `${origin}/api/accounts/oidc/callback`, text: `${row.site_name} (${row.hostname})`, fieldValues: { redirect_uris: [`${origin}/api/accounts/oidc/callback`], backchannel_logout_path: defaultBackchannelLogoutPath } };
+			return { value: `${origin}/api/accounts/oidc/callback`, text: `${row.site_name} (${row.hostname})`, fieldValues: { redirect_uris: `${origin}/api/accounts/oidc/callback`, backchannel_logout_path: defaultBackchannelLogoutPath } };
 		});
 };
 
@@ -58,7 +58,7 @@ const handler: ApiHandler = async (c, next, params) => {
 		const rows: Array<Record<string, unknown>> = await oidcClients(database);
 		const redirectUriOptions = await loadRedirectUriOptions(c);
 		for (const row of rows) {
-			row.redirect_uris = JSON.parse(String(row.redirect_uris || '[]'));
+			row.redirect_uris = JSON.parse(String(row.redirect_uris || '[]')).join(', ');
 			row.backchannel_logout_path = pathFromUri(row.backchannel_logout_uri);
 			row.redirect_uri_source = redirectUriOptions.some((option) => option.value === (row.redirect_uris as string[])[0]) ? (row.redirect_uris as string[])[0] : '__custom__';
 			delete row.backchannel_logout_uri;
