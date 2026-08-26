@@ -14,9 +14,18 @@ const hmacSha1Base64 = async (key: string, value: string) => toBase64(await cryp
 	encoder.encode(value),
 ));
 
-const endpoint = (region: string) => region === 'ap-southeast-1'
-	? 'https://dm.ap-southeast-1.aliyuncs.com/'
-	: 'https://dm.aliyuncs.com/';
+const endpoints: Record<string, string> = {
+	'cn-hangzhou': 'https://dm.aliyuncs.com/',
+	'ap-southeast-1': 'https://dm.ap-southeast-1.aliyuncs.com/',
+	'us-east-1': 'https://dm.us-east-1.aliyuncs.com/',
+	'eu-central-1': 'https://dm.eu-central-1.aliyuncs.com/',
+};
+
+export const getAliyunDirectMailEndpoint = (region: string) => {
+	const value = endpoints[region];
+	if (!value) throw new Error(`不支持的阿里云邮件推送 Region：${region}`);
+	return value;
+};
 
 type AliyunMailAddress = {
 	AccountName?: string;
@@ -72,7 +81,7 @@ const callDirectMail = async (target: Pick<CloudEmailTarget, 'region' | 'access_
 	const canonicalQuery = Object.entries(parameters).sort(([left], [right]) => left.localeCompare(right))
 		.map(([key, value]) => `${percentEncode(key)}=${percentEncode(value)}`).join('&');
 	const signature = await hmacSha1Base64(`${target.access_key_secret}&`, `POST&%2F&${percentEncode(canonicalQuery)}`);
-	const response = await fetch(endpoint(target.region), {
+	const response = await fetch(getAliyunDirectMailEndpoint(target.region), {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' },
 		body: `Signature=${percentEncode(signature)}&${canonicalQuery}`,

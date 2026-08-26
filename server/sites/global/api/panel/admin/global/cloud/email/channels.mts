@@ -1,6 +1,6 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
-import { cloudProviderOptions, getCloudEmailProduct, getCloudEmailRegions, providerSupportsEmailPush } from '@server/cloud/catalog.mjs';
+import { cloudProviderOptions, getCloudEmailProduct, getCloudEmailRegionOptions, getCloudEmailRegions, providerSupportsEmailPush } from '@server/cloud/catalog.mjs';
 import { listAliyunDirectMailAddresses } from '@server/cloud/providers/aliyun-direct-mail.mjs';
 import { createCloudEmailAdapter, loadCloudEmailTarget, renderCloudEmailTemplate } from '@server/cloud/email.mjs';
 import { validateCloudEmailTemplateVariables } from '@server/cloud/email-purposes.mjs';
@@ -11,7 +11,7 @@ import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 
 const columns = [
 	{ dataIndex: 'cloud_credential_id', title: '云凭据', component: 'select', rules: [{ required: true, message: '请选择云凭据' }] },
-	{ dataIndex: 'region', title: 'Region', component: 'select', options: getCloudEmailRegions('aliyun').map((value) => ({ value, text: value })), rules: [{ required: true, message: '请选择 Region' }] },
+	{ dataIndex: 'region', title: 'Region', component: 'select', options: getCloudEmailRegionOptions('aliyun').map((item) => ({ ...item, text: `${item.text}（${item.value}）` })), rules: [{ required: true, message: '请选择 Region' }] },
 	{ dataIndex: 'account_name', title: '发信地址', component: 'select', remoteOptions: { action: 'discover', dependencies: ['cloud_credential_id', 'region'], clearFields: ['reply_to_address'] }, rules: [{ required: true, message: '请选择发信地址' }] },
 	{ dataIndex: 'from_alias', title: '发信人名称', component: 'textbox', rules: [{ required: true, message: '请输入发信人名称' }] },
 	{ dataIndex: 'reply_to_address', title: '启用回信地址', component: 'switch' },

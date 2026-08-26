@@ -1,7 +1,12 @@
 export const cloudProviders = [
 	{ key: 'aws', text: 'AWS', credentialTest: 'aws', objectStorage: { product: 'S3', adapter: 's3' } },
 	{ key: 'cloudflare', text: 'Cloudflare', credentialTest: 'cloudflare', credentialFields: ['account_id'], objectStorage: { product: 'R2', adapter: 's3' } },
-	{ key: 'aliyun', text: '阿里云', credentialTest: 'aliyun', objectStorage: { product: 'OSS', adapter: 's3' }, emailPush: { product: 'DirectMail', adapter: 'aliyun-direct-mail', regions: ['cn-hangzhou', 'ap-southeast-1'] } },
+	{ key: 'aliyun', text: '阿里云', credentialTest: 'aliyun', objectStorage: { product: 'OSS', adapter: 's3' }, emailPush: { product: 'DirectMail', adapter: 'aliyun-direct-mail', regions: [
+		{ value: 'cn-hangzhou', text: '华东1（杭州）' },
+		{ value: 'ap-southeast-1', text: '新加坡' },
+		{ value: 'us-east-1', text: '美国（弗吉尼亚）' },
+		{ value: 'eu-central-1', text: '德国（法兰克福）' },
+	] } },
 	{ key: 'tencent', text: '腾讯云', credentialTest: 'tencent', objectStorage: { product: 'COS', adapter: 's3' } },
 	{ key: 'other', text: '其他（S3 兼容）', objectStorage: { product: 'S3 Compatible', adapter: 's3' } },
 ] as const;
@@ -21,7 +26,9 @@ const getEmailPush = (provider: string) => {
 export const providerSupportsEmailPush = (provider: string) => Boolean(getEmailPush(provider));
 export const getCloudEmailAdapter = (provider: string) => getEmailPush(provider)?.adapter;
 export const getCloudEmailProduct = (provider: string) => getEmailPush(provider)?.product ?? 'Email Push';
-export const getCloudEmailRegions = (provider: string): readonly string[] => getEmailPush(provider)?.regions ?? [];
+export const getCloudEmailRegionOptions = (provider: string): ReadonlyArray<{ value: string; text: string }> => getEmailPush(provider)?.regions ?? [];
+export const getCloudEmailRegions = (provider: string): readonly string[] => getCloudEmailRegionOptions(provider).map((item) => item.value);
+export const getCloudEmailRegionLabel = (provider: string, region: string) => getCloudEmailRegionOptions(provider).find((item) => item.value === region)?.text ?? region;
 export const getCredentialTest = (provider: string) => {
 	const definition = getCloudProvider(provider);
 	return definition && 'credentialTest' in definition ? definition.credentialTest : undefined;

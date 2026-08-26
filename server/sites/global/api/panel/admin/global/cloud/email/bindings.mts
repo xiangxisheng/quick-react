@@ -1,6 +1,6 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
-import { getCloudEmailProduct } from '@server/cloud/catalog.mjs';
+import { getCloudEmailProduct, getCloudEmailRegionLabel } from '@server/cloud/catalog.mjs';
 import { cloudEmailPurposeOptions } from '@server/cloud/email-purposes.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { getChangedFields } from '@server/changed-fields.mjs';
@@ -28,7 +28,7 @@ const listOptions = async (database: DatabaseAdapter) => {
 	]);
 	return {
 		sites: sites.results.map((item) => ({ value: item.site_key, text: `${item.name} (${item.site_key})` })),
-		channels: channels.results.map((item) => ({ value: String(item.id), text: `${item.credential_name} / ${getCloudEmailProduct(item.provider)} / ${item.account_name} (${item.region})` })),
+		channels: channels.results.map((item) => ({ value: String(item.id), text: `${item.credential_name} / ${getCloudEmailProduct(item.provider)} / ${item.account_name} / ${getCloudEmailRegionLabel(item.provider, item.region)}（${item.region}）` })),
 		templates: templates.results.map((item) => ({ value: String(item.id), text: `${cloudEmailPurposeOptions.find((purpose) => purpose.value === item.template_type)?.text ?? item.template_type} / ${item.name} (${item.template_key})` })),
 	};
 };

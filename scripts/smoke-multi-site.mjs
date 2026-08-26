@@ -246,6 +246,13 @@ try {
 		method: 'POST', cookie, body: { cloud_credential_id: emailCredential.id, region: 'cn-hangzhou', account_name: 'noreply@example.com', from_alias: 'Smoke Passport' },
 	})).status, 201);
 	const emailChannels = await (await request('localhost', emailChannelsPath, { cookie })).json();
+	const emailRegionColumn = emailChannels.table.columns.find((column) => column.dataIndex === 'region');
+	assert.deepEqual(emailRegionColumn.options, [
+		{ value: 'cn-hangzhou', text: '华东1（杭州）（cn-hangzhou）' },
+		{ value: 'ap-southeast-1', text: '新加坡（ap-southeast-1）' },
+		{ value: 'us-east-1', text: '美国（弗吉尼亚）（us-east-1）' },
+		{ value: 'eu-central-1', text: '德国（法兰克福）（eu-central-1）' },
+	]);
 	const emailChannel = emailChannels.table.dataSource.find((item) => item.account_name === 'noreply@example.com');
 	assert.ok(emailChannel?.id);
 	const emailTemplatesPath = '/api/panel/admin/global/cloud/email/templates.php';
@@ -309,7 +316,11 @@ try {
 	assert.equal((await request('localhost', `${credentialsPath}/${emailCredential.id}`, {
 		method: 'PUT', cookie, body: { provider: 'aws', __changedFields: ['provider'] },
 	})).status, 409);
-	const { createAliyunDirectMailAdapter } = await import('../server/cloud/providers/aliyun-direct-mail.mts');
+	const { createAliyunDirectMailAdapter, getAliyunDirectMailEndpoint } = await import('../server/cloud/providers/aliyun-direct-mail.mts');
+	assert.equal(getAliyunDirectMailEndpoint('cn-hangzhou'), 'https://dm.aliyuncs.com/');
+	assert.equal(getAliyunDirectMailEndpoint('ap-southeast-1'), 'https://dm.ap-southeast-1.aliyuncs.com/');
+	assert.equal(getAliyunDirectMailEndpoint('us-east-1'), 'https://dm.us-east-1.aliyuncs.com/');
+	assert.equal(getAliyunDirectMailEndpoint('eu-central-1'), 'https://dm.eu-central-1.aliyuncs.com/');
 	const emailSendResult = await createAliyunDirectMailAdapter({
 		id: emailChannel.id, provider: 'aliyun', cloud_credential_id: emailCredential.id, region: 'cn-hangzhou',
 		account_name: 'noreply@example.com', from_alias: 'Smoke Passport', reply_to_address: 0,

@@ -7,6 +7,7 @@ import type { CloudEmailTemplate } from '@server/cloud/index.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { getChangedFields } from '@server/changed-fields.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
+import { getCloudEmailRegionLabel } from '@server/cloud/catalog.mjs';
 
 const columns = [
 	{ dataIndex: 'template_key', title: '模板 Key', component: 'textbox', placeholder: 'email_verification', rules: [{ required: true, message: '请输入模板 Key' }] },
@@ -115,13 +116,13 @@ const handler: ApiHandler = async (c, next, params) => {
 				t.created_at, t.updated_at, COALESCE(GROUP_CONCAT(p.status), '未发布') AS publication_status
 				FROM global_cloud_email_templates t LEFT JOIN global_cloud_email_template_publications p ON p.template_id = t.id
 				GROUP BY t.id, t.template_key, t.template_type, t.name, t.subject, t.body_text, t.body_html, t.status, t.created_at, t.updated_at ORDER BY t.id DESC`).all<Record<string, unknown>>(),
-			database.prepare(`SELECT ch.id, ch.account_name, ch.region, c.name AS credential_name FROM global_cloud_email_channels ch
+			database.prepare(`SELECT ch.id, ch.account_name, ch.region, c.name AS credential_name, c.provider FROM global_cloud_email_channels ch
 				JOIN global_cloud_credentials c ON c.id = ch.cloud_credential_id
 				WHERE ch.status = 'enabled' AND c.status = 'enabled' AND c.provider = 'aliyun' ORDER BY c.name, ch.region, ch.account_name`)
-				.all<{ id: number; account_name: string; region: string; credential_name: string }>(),
+				.all<{ id: number; account_name: string; region: string; credential_name: string; provider: string }>(),
 		]);
 		const syncColumns = [
-			{ dataIndex: 'channel_id', title: '阿里云邮件通道', component: 'select', options: channels.results.map((item) => ({ value: String(item.id), text: `${item.credential_name} / ${item.account_name} (${item.region})` })), rules: [{ required: true, message: '请选择阿里云邮件通道' }] },
+			{ dataIndex: 'channel_id', title: '阿里云邮件通道', component: 'select', options: channels.results.map((item) => ({ value: String(item.id), text: `${item.credential_name} / ${item.account_name} / ${getCloudEmailRegionLabel(item.provider, item.region)}（${item.region}）` })), rules: [{ required: true, message: '请选择阿里云邮件通道' }] },
 			{ dataIndex: 'template_type', title: '导入为模板类型', component: 'select', options: cloudEmailPurposeOptions, rules: [{ required: true, message: '请选择模板类型' }] },
 		];
 		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { query: [{ key: 'search', label: '搜索' }], toolbar: [{ key: 'create', label: '新增' }, { key: 'sync', label: '同步阿里云模板', form: { columns: syncColumns } }, { key: 'delete', label: '删除' }], row: [{ key: 'restore', label: '还原默认', confirm: '确认用后端默认模板覆盖当前名称、主题和正文吗？' }, { key: 'publish', label: '发布/更新' }, { key: 'refresh', label: '刷新状态' }, { key: 'edit', label: '编辑' }, { key: 'delete', label: '删除' }] } }, columns, dataSource: rows.results, totalRecords: rows.results.length } });
