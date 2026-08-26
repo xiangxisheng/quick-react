@@ -87,6 +87,15 @@ export abstract class SqlBuilder {
 		return { query: `DELETE FROM ${quoteIdentifier(table, this.dialect)} WHERE ${conditions.map(([key], index) => `${quoteIdentifier(key, this.dialect)} = ${this.placeholder(index + 1)}`).join(' AND ')}`, values: conditions.map(([, value]) => value) };
 	}
 
+	advanceNumber(table: string, column: string, floor: number, updatedAt: number, where: Values): SqlQuery {
+		const conditions = definedEntries(where); if (!conditions.length) throw new Error('advanceNumber where cannot be empty');
+		const target = quoteIdentifier(column, this.dialect), greatest = this.dialect === 'sqlite' ? 'MAX' : 'GREATEST';
+		return {
+			query: `UPDATE ${quoteIdentifier(table, this.dialect)} SET ${target} = ${greatest}(${target} + 1, ${this.placeholder(1)}), ${quoteIdentifier('updated_at', this.dialect)} = ${this.placeholder(2)} WHERE ${conditions.map(([key], index) => `${quoteIdentifier(key, this.dialect)} = ${this.placeholder(index + 3)}`).join(' AND ')}`,
+			values: [floor, updatedAt, ...conditions.map(([, value]) => value)],
+		};
+	}
+
 	upsert(table: string, conflictKeys: string[], values: Values, updateKeys: string[]): SqlQuery {
 		const inserted = this.insert(table, values), quotedUpdates = updateKeys.map((key) => quoteIdentifier(key, this.dialect));
 		if (!conflictKeys.length || !quotedUpdates.length) throw new Error('UPSERT conflict and update keys cannot be empty');

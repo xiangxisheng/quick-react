@@ -1,4 +1,5 @@
 import type { DatabaseAdapter } from '@server/database/index.mjs';
+import { allSql, firstSql, sql } from '@server/database/sql.mjs';
 
 export const passportSessionCookieName = 'passport_session';
 
@@ -19,13 +20,9 @@ export const loadPassportSession = async (database: DatabaseAdapter, request: Re
 	const sessionId = readPassportSessionId(request);
 	if (!sessionId) return undefined;
 	const user = siteKey === 'passport'
-		? await database.prepare(`SELECT CAST(u.user_id AS TEXT) AS user_id, u.nickname FROM passport_sessions s
-			JOIN passport_users u ON u.user_id = s.user_id WHERE s.id = ?1 AND s.expires_at > ?2 AND u.status = 'enabled'`)
-			.bind(sessionId, Date.now()).first<{ user_id: string; nickname: string }>()
-		: await database.prepare(`SELECT CAST(u.user_id AS TEXT) AS user_id, u.nickname FROM passport_site_sessions s
-			JOIN passport_users u ON u.user_id = s.user_id WHERE s.id = ?1 AND s.site_key = ?2 AND s.hostname = ?3
-				AND s.expires_at > ?4 AND u.status = 'enabled'`).bind(sessionId, siteKey, hostname, Date.now()).first<{ user_id: string; nickname: string }>();
+		? await firstSql<{ user_id: string; nickname: string }>(database, sql(database).select({ table: 'passport_sessions', alias: 's', columns: { user_id: { column: 'u.user_id', cast: 'text' }, nickname: 'u.nickname' }, joins: [{ table: 'passport_users', alias: 'u', left: 'u.user_id', right: 's.user_id' }], where: [{ column: 's.id', value: sessionId }, { column: 's.expires_at', operator: '>', value: Date.now() }, { column: 'u.status', value: 'enabled' }] }))
+		: await firstSql<{ user_id: string; nickname: string }>(database, sql(database).select({ table: 'passport_site_sessions', alias: 's', columns: { user_id: { column: 'u.user_id', cast: 'text' }, nickname: 'u.nickname' }, joins: [{ table: 'passport_users', alias: 'u', left: 'u.user_id', right: 's.user_id' }], where: [{ column: 's.id', value: sessionId }, { column: 's.site_key', value: siteKey }, { column: 's.hostname', value: hostname }, { column: 's.expires_at', operator: '>', value: Date.now() }, { column: 'u.status', value: 'enabled' }] }));
 	if (!user) return undefined;
-	const roles = await database.prepare(`SELECT role FROM passport_user_roles WHERE user_id = ?1 ORDER BY role`).bind(user.user_id).all<{ role: string }>();
-	return { id: user.user_id, username: user.nickname, roles: roles.results.map((item) => item.role) };
+	const roles = await allSql<{ role: string }>(database, sql(database).select({ table: 'passport_user_roles', columns: { role: 'role' }, where: [{ column: 'user_id', value: user.user_id }], orderBy: [{ column: 'role' }] }));
+	return { id: user.user_id, username: user.nickname, roles: roles.map((item) => item.role) };
 };

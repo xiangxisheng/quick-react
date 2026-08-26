@@ -24,6 +24,8 @@ try {
 	assert.deepEqual(addColumn({ dialect: 'postgresql' }, 'users', 'score', 'numeric', false, 0), { query: 'ALTER TABLE "users" ADD COLUMN "score" NUMERIC DEFAULT 0', values: [] });
 	assert.deepEqual(renameColumn({ dialect: 'sqlite' }, 'users', 'name', 'display_name'), { query: 'ALTER TABLE "users" RENAME COLUMN "name" TO "display_name"', values: [] });
 	assert.throws(() => addColumn({ dialect: 'postgresql' }, 'users', 'score', 'UNSAFE TYPE', false), /支持的字段类型/);
+	assert.deepEqual(mysql.advanceNumber('snowflake_state', 'last_timestamp', 100, 101, { worker_id: 7 }), { query: 'UPDATE `snowflake_state` SET `last_timestamp` = GREATEST(`last_timestamp` + 1, ?), `updated_at` = ? WHERE `worker_id` = ?', values: [100, 101, 7] });
+	assert.match(sqlite.advanceNumber('snowflake_state', 'last_timestamp', 100, 101, { worker_id: 7 }).query, /MAX\("last_timestamp" \+ 1, \?\)/);
 	assert.match(postgres.upsert('sessions', ['issuer', 'sid'], { issuer: 'i', sid: 's', session_id: 'x' }, ['session_id']).query, /ON CONFLICT \("issuer", "sid"\) DO UPDATE/);
 	assert.equal(sqlite.castText('user_id'), 'CAST("user_id" AS TEXT)'); assert.equal(mysql.castText('user_id'), 'CAST(`user_id` AS CHAR)');
 	assert.throws(() => sqlite.insert('users; DROP TABLE users', { name: 'x' }), /Unsafe SQL identifier/);

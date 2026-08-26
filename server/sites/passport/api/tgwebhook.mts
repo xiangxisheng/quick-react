@@ -1,6 +1,7 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { handlePassportTelegramUpdate, type PassportTelegramUpdate } from '@server/passport/telegram-webhook.mjs';
+import { firstSql, runSql, sql } from '@server/database/sql.mjs';
 
 type TelegramBot = {
 	id: number | bigint;
@@ -11,8 +12,7 @@ type TelegramBot = {
 
 const jsonStatus = (c: Parameters<ApiHandler>[0], status: number, value: string) => c.json({ status: value }, status as 200 | 400 | 403 | 404 | 405 | 500);
 const decimalPattern = /^[1-9]\d*$/;
-const loadBot = (database: DatabaseAdapter, botId: string, hostname: string) => database.prepare(`SELECT id, bot_token, secret_token, webhook_hostname
-	FROM global_telegram_bots WHERE id = ?1 AND webhook_hostname = ?2 AND status = 'enabled'`).bind(botId, hostname).first<TelegramBot>();
+const loadBot = (database: DatabaseAdapter, botId: string, hostname: string) => firstSql<TelegramBot>(database, sql(database).select({ table: 'global_telegram_bots', columns: { id: 'id', bot_token: 'bot_token', secret_token: 'secret_token', webhook_hostname: 'webhook_hostname' }, where: [{ column: 'id', value: botId }, { column: 'webhook_hostname', value: hostname }, { column: 'status', value: 'enabled' }] }));
 
 const constantTimeEqual = async (actual: string, expected: string) => {
 	const [actualHash, expectedHash] = await Promise.all([
@@ -35,15 +35,12 @@ const parseUpdate = (value: unknown): PassportTelegramUpdate | undefined => {
 const claimUpdate = async (database: DatabaseAdapter, botId: string, updateId: number) => {
 	const now = Date.now();
 	try {
-		await database.prepare(`INSERT INTO passport_telegram_updates (bot_id, update_id, status, created_at, updated_at)
-			VALUES (?1, ?2, 'processing', ?3, ?3)`).bind(botId, updateId, now).run();
+		await runSql(database, sql(database).insert('passport_telegram_updates', { bot_id: botId, update_id: updateId, status: 'processing', created_at: now, updated_at: now }));
 		return true;
 	} catch {
-		const existing = await database.prepare(`SELECT status FROM passport_telegram_updates WHERE bot_id = ?1 AND update_id = ?2`)
-			.bind(botId, updateId).first<{ status: string }>();
+		const existing = await firstSql<{ status: string }>(database, sql(database).select({ table: 'passport_telegram_updates', columns: { status: 'status' }, where: [{ column: 'bot_id', value: botId }, { column: 'update_id', value: updateId }] }));
 		if (!existing || existing.status !== 'failed') return false;
-		await database.prepare(`UPDATE passport_telegram_updates SET status = 'processing', updated_at = ?3
-			WHERE bot_id = ?1 AND update_id = ?2 AND status = 'failed'`).bind(botId, updateId, now).run();
+		await runSql(database, sql(database).update('passport_telegram_updates', { status: 'processing', updated_at: now }, [{ column: 'bot_id', value: botId }, { column: 'update_id', value: updateId }, { column: 'status', value: 'failed' }]));
 		return true;
 	}
 };
@@ -70,12 +67,10 @@ const handler: ApiHandler = async (c) => {
 			id: String(bot.id),
 			botToken: bot.bot_token,
 		}, update);
-		await database.prepare(`UPDATE passport_telegram_updates SET status = 'completed', updated_at = ?3
-			WHERE bot_id = ?1 AND update_id = ?2`).bind(botId, update.update_id, Date.now()).run();
+		await runSql(database, sql(database).update('passport_telegram_updates', { status: 'completed', updated_at: Date.now() }, { bot_id: botId, update_id: update.update_id }));
 		return jsonStatus(c, 200, 'ok');
 	} catch (error) {
-		await database.prepare(`UPDATE passport_telegram_updates SET status = 'failed', updated_at = ?3
-			WHERE bot_id = ?1 AND update_id = ?2`).bind(botId, update.update_id, Date.now()).run().catch(() => undefined);
+		await runSql(database, sql(database).update('passport_telegram_updates', { status: 'failed', updated_at: Date.now() }, { bot_id: botId, update_id: update.update_id })).catch(() => undefined);
 		console.error('Passport Telegram webhook update failed', error instanceof Error ? error.message : 'unknown error');
 		return jsonStatus(c, 500, 'error');
 	}

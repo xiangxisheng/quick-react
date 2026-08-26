@@ -1,4 +1,5 @@
 import type { DatabaseAdapter } from '@server/database/index.mjs';
+import { firstSql, runSql, sql } from '@server/database/sql.mjs';
 
 export const PASSPORT_SNOWFLAKE_EPOCH = 1288834974657n;
 const MAX_TIMESTAMP_DELTA = (1n << 41n) - 1n;
@@ -21,11 +22,12 @@ class PassportSnowflakeGenerator {
 
 	private async reserveTimestamp() {
 		const now = Math.max(Date.now(), Number(PASSPORT_SNOWFLAKE_EPOCH));
-		await this.database.prepare(`INSERT INTO passport_snowflake_state (worker_id, last_timestamp, updated_at)
-			VALUES (?1, ?2, ?3) ON CONFLICT(worker_id) DO NOTHING`).bind(this.workerId, now - 1, now).run();
-		const row = await this.database.prepare(`UPDATE passport_snowflake_state
-			SET last_timestamp = CASE WHEN last_timestamp >= ?2 THEN last_timestamp + 1 ELSE ?2 END, updated_at = ?3
-			WHERE worker_id = ?1 RETURNING last_timestamp`).bind(this.workerId, now, now).first<{ last_timestamp: number }>();
+		const reserve = async (database: DatabaseAdapter) => {
+			await runSql(database, sql(database).ignoreInsert('passport_snowflake_state', ['worker_id'], { worker_id: this.workerId, last_timestamp: now - 1, updated_at: now }));
+			await runSql(database, sql(database).advanceNumber('passport_snowflake_state', 'last_timestamp', now, now, { worker_id: this.workerId }));
+			return firstSql<{ last_timestamp: number }>(database, sql(database).select({ table: 'passport_snowflake_state', columns: { last_timestamp: 'last_timestamp' }, where: [{ column: 'worker_id', value: this.workerId }] }));
+		};
+		const row = this.database.transaction ? await this.database.transaction(reserve) : await reserve(this.database);
 		if (!row || !Number.isSafeInteger(row.last_timestamp)) throw new Error('Unable to reserve Passport Snowflake timestamp');
 		const delta = BigInt(row.last_timestamp) - PASSPORT_SNOWFLAKE_EPOCH;
 		if (delta < 0n || delta > MAX_TIMESTAMP_DELTA) throw new Error('Passport Snowflake timestamp is outside the 41-bit range');
