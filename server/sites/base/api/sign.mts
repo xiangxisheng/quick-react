@@ -3,7 +3,6 @@ import { clearSessionCookie, createSessionCookie, createStoredPassword, readSess
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
-import businessPassportSign from '@server/passport/business-sign.mjs';
 
 const parseCredentials = async (c: Parameters<ApiHandler>[0]) => {
 	let body: Record<string, unknown> = {};
@@ -22,7 +21,6 @@ const registrationAvailable = async (database: DatabaseAdapter) => {
 };
 
 const handler: ApiHandler = async (c, next) => {
-	if (c.get('site').passportSsoEnabled) return businessPassportSign(c, next, {});
 	const database = c.get('database');
 	if (c.req.method === 'GET') {
 		const isSignUp = new URL(c.req.url).searchParams.get('mode') === 'sign-up';

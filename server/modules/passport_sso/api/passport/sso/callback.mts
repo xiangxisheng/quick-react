@@ -6,8 +6,7 @@ import { passportTicketHash } from '@server/passport/sso.mjs';
 const handler: ApiHandler = async (c) => {
 	if (c.req.method !== 'GET') return apiMessage(c, 405, '只允许 GET 请求');
 	const site = c.get('site');
-	if (site.siteKey === 'global' || site.siteKey === 'passport') return apiMessage(c, 404, '跨站回调只能用于业务站点');
-	if (!site.passportSsoEnabled) return apiMessage(c, 404, '该站点未启用 Passport SSO 登录');
+	if (site.siteKey === 'global' || site.siteKey === 'passport' || !site.passportSsoEnabled) return apiMessage(c, 404, '该站点未启用 Passport SSO 登录');
 	const token = c.req.query('ticket')?.trim() ?? '';
 	if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return apiMessage(c, 400, '登录票据不合法');
 	const database = c.get('passportDatabase');

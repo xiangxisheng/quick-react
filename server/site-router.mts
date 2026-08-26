@@ -94,6 +94,15 @@ const buildSiteChain = (site: SiteRecord, sites: Map<string, SiteRecord>) => {
 	throw new Error(`Site inheritance exceeds maximum depth: ${site.siteKey}`);
 };
 
+const buildEffectiveSiteChain = (site: SiteRecord, sites: Map<string, SiteRecord>) => {
+	const chain = buildSiteChain(site, sites);
+	if (site.siteKey !== 'passport' && site.passportSsoEnabled) {
+		const baseIndex = chain.lastIndexOf('base');
+		chain.splice(baseIndex < 0 ? chain.length : baseIndex, 0, 'passport_sso');
+	}
+	return chain;
+};
+
 export class SiteRouter {
 	private snapshot?: RouteSnapshot;
 	private loading?: Promise<RouteSnapshot>;
@@ -153,7 +162,7 @@ export class SiteRouter {
 		const databaseTarget: DatabaseTarget = site.databaseBinding
 			? { kind: 'binding', value: site.databaseBinding }
 			: site.dsn ? { kind: 'dsn', value: site.dsn } : { kind: 'default', value: '' };
-		return { ...site, hostname, codeSiteChain: buildSiteChain(site, snapshot.sites), databaseTarget };
+		return { ...site, hostname, codeSiteChain: buildEffectiveSiteChain(site, snapshot.sites), databaseTarget };
 	}
 
 	async resolveBySiteKey(siteKey: string, hostname = ''): Promise<SiteRequestContext | undefined> {
@@ -163,6 +172,6 @@ export class SiteRouter {
 		const databaseTarget: DatabaseTarget = site.databaseBinding
 			? { kind: 'binding', value: site.databaseBinding }
 			: site.dsn ? { kind: 'dsn', value: site.dsn } : { kind: 'default', value: '' };
-		return { ...site, hostname, codeSiteChain: buildSiteChain(site, snapshot.sites), databaseTarget };
+		return { ...site, hostname, codeSiteChain: buildEffectiveSiteChain(site, snapshot.sites), databaseTarget };
 	}
 }

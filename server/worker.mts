@@ -14,7 +14,7 @@ import { loadPassportSession } from './passport/session.mjs';
 import { loadSystemConfigFromStore } from './system-config.mjs';
 import { applyTechStackHeaders, loadTechStackConfigFromStore } from './tech-stack.mjs';
 import type { AppEnv, RuntimeBindings } from './types.mjs';
-import { workerApiModules, workerApiRoutes } from './.generated/worker-api-registry.mjs';
+import { workerApiModuleSites, workerApiModules, workerApiRoutes } from './.generated/worker-api-registry.mjs';
 
 export type WorkerBindings = RuntimeBindings & {
 	ASSETS?: { fetch: (request: Request) => Promise<Response> };
@@ -167,6 +167,7 @@ app.use('*', etag());
 
 const apiGateway = createApiGateway((c) => c.get('techStackConfig').apiSuffix, {
 	routes: workerApiRoutes,
+	moduleSites: workerApiModuleSites,
 	loadModule: async (file) => workerApiModules[file] ?? {},
 });
 app.all('/api', apiGateway);

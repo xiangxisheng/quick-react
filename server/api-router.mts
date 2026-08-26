@@ -72,15 +72,17 @@ const matchRoute = (path: string, siteChain: string[], matcher: RouteMatcher) =>
 	return undefined;
 };
 
-const modulePath = (site: string, routeSegments: string[], depth: number) => depth === 0
-	? `sites/${site}/api.mjs`
-	: `sites/${site}/api/${routeSegments.slice(0, depth).join('/')}.mjs`;
+const modulePath = (site: string, routeSegments: string[], depth: number, moduleSites: Set<string>) => {
+	const root = moduleSites.has(site) ? `modules/${site}` : `sites/${site}`;
+	return depth === 0 ? `${root}/api.mjs` : `${root}/api/${routeSegments.slice(0, depth).join('/')}.mjs`;
+};
 
 export const createApiGateway = (
 	getApiSuffix: (context: Context<AppEnv>) => string,
-	options: { routes: SiteApiRoute[]; loadModule: (file: string) => Promise<ApiModule> },
+	options: { routes: SiteApiRoute[]; moduleSites?: Set<string>; loadModule: (file: string) => Promise<ApiModule> },
 ) => {
 	const matcher = createRouteMatcher(options.routes);
+	const moduleSites = options.moduleSites ?? new Set<string>();
 	return async (c: Context<AppEnv>, _next: Next) => {
 		const normalizedPath = normalizeApiPath(c.req.path, getApiSuffix(c));
 		const siteChain = c.get('site').codeSiteChain;
@@ -91,7 +93,7 @@ export const createApiGateway = (
 		const files: string[] = [];
 		for (let depth = 0; depth <= routeSegments.length; depth += 1) {
 			for (const site of siteChain) {
-				const file = modulePath(site, routeSegments, depth);
+				const file = modulePath(site, routeSegments, depth, moduleSites);
 				const module = await options.loadModule(file);
 				if (typeof module.default === 'function') {
 					files.push(file);
