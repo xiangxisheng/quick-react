@@ -291,6 +291,8 @@ try {
 	})).status, 201);
 	assert.equal(directMailActions.length, directMailActionsBeforeTemplateCreate);
 	const emailTemplates = await (await request('localhost', emailTemplatesPath, { cookie })).json();
+	assert.equal(emailTemplates.table.columns.find((column) => column.dataIndex === 'body_text')?.tableDisplay, 'multiline');
+	assert.equal(emailTemplates.table.columns.find((column) => column.dataIndex === 'body_html')?.tableDisplay, 'multiline');
 	const syncTemplatesAction = emailTemplates.table.option.actions.toolbar.find((action) => action.key === 'sync');
 	assert.equal(syncTemplatesAction?.label, '同步模板');
 	assert.deepEqual(syncTemplatesAction.form.columns.map((column) => column.dataIndex), ['cloud_credential_id', 'region', 'template_type']);

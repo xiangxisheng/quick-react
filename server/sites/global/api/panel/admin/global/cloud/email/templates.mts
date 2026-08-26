@@ -15,8 +15,8 @@ const columns = [
 	{ dataIndex: 'template_type', title: '类型', component: 'select', options: cloudEmailPurposeOptions, rules: [{ required: true, message: '请选择模板类型' }] },
 	{ dataIndex: 'name', title: '名称', component: 'textbox', rules: [{ required: true, message: '请输入名称' }] },
 	{ dataIndex: 'subject', title: '主题', component: 'textbox', placeholder: '您的验证码是 {{code}}', rules: [{ required: true, message: '请输入主题' }] },
-	{ dataIndex: 'body_text', title: '纯文本正文', component: 'textarea', placeholder: '您的验证码是 {{code}}', rules: [{ required: true, message: '请输入纯文本正文' }] },
-	{ dataIndex: 'body_html', title: 'HTML 正文', component: 'textarea', placeholder: '<p>您的验证码是 {{code}}</p>', rules: [{ required: true, message: '请输入 HTML 正文' }] },
+	{ dataIndex: 'body_text', title: '纯文本正文', component: 'textarea', tableDisplay: 'multiline', placeholder: '您的验证码是 {{code}}', rules: [{ required: true, message: '请输入纯文本正文' }] },
+	{ dataIndex: 'body_html', title: 'HTML 正文', component: 'textarea', tableDisplay: 'multiline', placeholder: '<p>您的验证码是 {{code}}</p>', rules: [{ required: true, message: '请输入 HTML 正文' }] },
 	{ dataIndex: 'publication_status', title: '云端发布' },
 	{ dataIndex: 'status', title: '状态', component: 'switch', checkedValue: statusValues.enabled, uncheckedValue: statusValues.disabled, options: enabledDisabledOptions },
 ];

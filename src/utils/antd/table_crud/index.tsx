@@ -217,8 +217,9 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 					const tableColumns: TableColumnsType<DataType> = [];
 					for (const column of resJSON.table.columns) {
 						if (column.hideInTable) continue;
+						const { tableDisplay, ...tableColumn } = column;
 						tableColumns.push({
-							...column,
+							...tableColumn,
 							render: (value) => {
 								if (column.dayjsFormat) {
 									if (!value) {
@@ -236,6 +237,12 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 								}
 								if (column.component === 'switch') {
 									return <Tag color={value ? 'green' : 'default'}>{value ? '是' : '否'}</Tag>;
+								}
+								if (tableDisplay === 'multiline') {
+									return <Typography.Paragraph
+										style={{ width: 320, marginBottom: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+										ellipsis={{ rows: 3, expandable: 'collapsible', symbol: '展开' }}
+									>{String(value ?? '')}</Typography.Paragraph>;
 								}
 								return value;
 							},
