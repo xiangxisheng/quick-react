@@ -196,6 +196,14 @@ passport_telegram_menus
   updated_at BIGINT NOT NULL
   PRIMARY KEY (bot_id, telegram_user_id)
 
+passport_telegram_updates
+  bot_id BIGINT NOT NULL
+  update_id BIGINT NOT NULL
+  status TEXT NOT NULL                 -- processing / completed / failed
+  created_at BIGINT NOT NULL
+  updated_at BIGINT NOT NULL
+  PRIMARY KEY (bot_id, update_id)
+
 passport_user_roles
   user_id BIGINT NOT NULL
   role TEXT NOT NULL
@@ -281,8 +289,9 @@ global 控制面提供：
 3. 从 `globalDatabase` 读取该机器人的 Secret Token 和配置。
 4. 校验 `X-Telegram-Bot-Api-Secret-Token`。
 5. 解析 Telegram Update。
-6. 使用 `passportDatabase` 处理用户绑定、登录和 Passport 业务。
-7. 返回 Telegram 所需的成功或错误 HTTP 响应。
+6. 使用 `passportDatabase` 按 `bot_id + update_id` 认领 Update；已完成或正在处理的重复 Update 直接返回成功，失败记录允许 Telegram 重试。
+7. 使用 `passportDatabase` 处理用户绑定、登录和 Passport 业务。
+8. 返回 Telegram 所需的成功或错误 HTTP 响应。
 
 Webhook 处理必须避免把 Token、Secret、密码或验证码写入普通日志。
 

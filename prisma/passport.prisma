@@ -107,6 +107,17 @@ model passport_telegram_menus {
   @@id([bot_id, telegram_user_id])
 }
 
+model passport_telegram_updates {
+  bot_id     BigInt
+  update_id  BigInt
+  status     String
+  created_at BigInt
+  updated_at BigInt
+
+  @@id([bot_id, update_id])
+  @@index([status, updated_at])
+}
+
 model passport_user_roles {
   user_id    BigInt
   role       String

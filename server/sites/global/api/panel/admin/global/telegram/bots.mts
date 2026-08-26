@@ -64,7 +64,10 @@ const removeBot = async (c: Parameters<ApiHandler>[0], id: number) => {
 	if (bot.status !== statusValues.disabled) return apiMessage(c, 409, '机器人必须先停用才能删除');
 	const passportDatabase = c.get('passportDatabase');
 	if (!passportDatabase) return apiMessage(c, 503, 'Passport 数据库不可用，无法确认关联数据');
-	const associated = await passportDatabase.prepare('SELECT id FROM passport_telegram_accounts WHERE bot_id = ?1 LIMIT 1').bind(id).first();
+	const associated = await passportDatabase.prepare(`SELECT bot_id FROM passport_telegram_accounts WHERE bot_id = ?1
+		UNION ALL SELECT bot_id FROM passport_email_otp WHERE bot_id = ?1
+		UNION ALL SELECT bot_id FROM passport_telegram_menus WHERE bot_id = ?1
+		UNION ALL SELECT bot_id FROM passport_telegram_updates WHERE bot_id = ?1 LIMIT 1`).bind(id).first();
 	if (associated) return apiMessage(c, 409, '机器人存在 Passport 账号关联，只能保持停用，不能删除');
 	await database.prepare('DELETE FROM global_telegram_bots WHERE id = ?1').bind(id).run();
 	return undefined;

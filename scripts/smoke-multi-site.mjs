@@ -137,6 +137,33 @@ try {
 	})).status, 200);
 	assert.equal(telegramWebhookUrl, '');
 	assert.equal((await request('localhost', `${botsPath}/${bot.id}`, { method: 'DELETE', cookie })).status, 200);
+	assert.equal((await request('localhost', botsPath, {
+		method: 'POST', cookie, body: { name: 'smoke-webhook-bot', bot_token: '10002:smoke-token', secret_token: 'smoke-webhook-secret', webhook_hostname: 'passport-alt.test' },
+	})).status, 201);
+	const webhookBotsResult = await (await request('localhost', botsPath, { cookie })).json();
+	const webhookBot = webhookBotsResult.table.dataSource.find((item) => item.name === 'smoke-webhook-bot');
+	assert.ok(webhookBot?.id);
+	const webhookPath = `/api/tgwebhook?bot_id=${webhookBot.id}`;
+	assert.equal((await request('passport-alt.test', webhookPath)).status, 405);
+	assert.equal((await request('passport.test', webhookPath, {
+		method: 'POST', headers: { 'x-telegram-bot-api-secret-token': 'smoke-webhook-secret' }, body: { update_id: 7001 },
+	})).status, 404);
+	assert.equal((await request('passport-alt.test', webhookPath, {
+		method: 'POST', headers: { 'x-telegram-bot-api-secret-token': 'wrong-secret' }, body: { update_id: 7001 },
+	})).status, 403);
+	assert.equal((await request('passport-alt.test', webhookPath, {
+		method: 'POST', headers: { 'x-telegram-bot-api-secret-token': 'smoke-webhook-secret' }, body: { update_id: 7001 },
+	})).status, 200);
+	assert.equal((await request('passport-alt.test', webhookPath, {
+		method: 'POST', headers: { 'x-telegram-bot-api-secret-token': 'smoke-webhook-secret' }, body: { update_id: 7001 },
+	})).status, 200);
+	const webhookDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
+	assert.equal(webhookDatabase.prepare(`SELECT status FROM passport_telegram_updates WHERE bot_id = ? AND update_id = ?`).get(webhookBot.id, 7001)?.status, 'completed');
+	webhookDatabase.close();
+	assert.equal((await request('localhost', `${botsPath}/${webhookBot.id}`, {
+		method: 'PUT', cookie, body: { status: 'disabled', __changedFields: ['status'] },
+	})).status, 200);
+	assert.equal((await request('localhost', `${botsPath}/${webhookBot.id}`, { method: 'DELETE', cookie })).status, 409);
 	assert.equal((await request('site1.test', '/api/health.php')).status, 200);
 	assert.equal((await request('site1.test', '/api/panel/admin/global/site/sites.php', { cookie })).status, 404);
 	assert.equal((await request('a.wild.test', '/api/panel/admin/global/site/sites.php', { cookie })).status, 404);
