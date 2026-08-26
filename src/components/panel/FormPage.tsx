@@ -108,7 +108,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 				form.resetFields();
 				form.setFieldsValue(nextValues);
 			}
-			const target = await onSaved?.(values);
+			const target = result.redirectTo ?? await onSaved?.(values);
 			const savedValues = isRecord(result.currentValues) ? result.currentValues : values;
 			setInitialValues(savedValues);
 			changedFields.current.clear();

@@ -27,6 +27,10 @@ try {
 	const database = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
 	const now = Date.now();
 	database.prepare(`INSERT INTO global_site_hosts (hostname, site_key, status, created_at) VALUES (?, 'passport', 'enabled', ?)`).run('passport.test', now);
+	database.prepare(`INSERT INTO global_sites
+		(site_key, name, base_site_key, dsn, database_binding, status, migration_status, is_default, is_system)
+		VALUES ('site1', 'Site 1', 'base', '', '', 'enabled', 'ready', 0, 0)`).run();
+	database.prepare(`INSERT INTO global_site_hosts (hostname, site_key, status, created_at) VALUES ('site1.test', 'site1', 'enabled', ?)`).run(now);
 	database.prepare(`INSERT INTO global_telegram_bots
 		(id, name, bot_token, bot_username, secret_token, webhook_hostname, status, created_at, updated_at)
 		VALUES (1, 'login-bot', '1:test-token', 'passport_login_bot', 'login-secret', 'passport.test', 'enabled', ?, ?)`).run(now, now);
@@ -43,7 +47,7 @@ try {
 		const headers = new Headers(options.headers);
 		if (options.cookie) headers.set('cookie', options.cookie);
 		if (options.body !== undefined) headers.set('content-type', 'application/json');
-		return app.request(`http://passport.test${path}`, {
+		return app.request(`http://${options.host ?? 'passport.test'}${path}`, {
 			method: options.method,
 			headers,
 			body: options.body === undefined ? undefined : JSON.stringify(options.body),
@@ -86,10 +90,30 @@ try {
 	const signedIn = await (await request('/api/sign.php', { cookie: passportCookie })).json();
 	assert.equal(signedIn.user.id, userId);
 	assert.equal(signedIn.user.username, 'PassportUser');
+	const businessSign = await (await request('/api/sign.php', { host: 'site1.test' })).json();
+	assert.equal(businessSign.registrationAvailable, false);
+	assert.equal(businessSign.formPage.initialValues.passport_hostname, 'passport.test');
+	assert.equal((await request('/api/sign.php', { host: 'site1.test', method: 'PUT', body: { username: 'forbidden', password: 'forbidden' } })).status, 403);
+	const businessStart = await (await request('/api/sign.php', { host: 'site1.test', method: 'POST', body: { passport_hostname: 'passport.test' } })).json();
+	assert.equal(businessStart.redirectTo, 'https://passport.test/api/passport/sso/start?target_hostname=site1.test');
+	const ssoStart = await request('/api/passport/sso/start?target_hostname=site1.test', { cookie: passportCookie });
+	assert.equal(ssoStart.status, 302);
+	const callbackUrl = new URL(ssoStart.headers.get('location'));
+	assert.equal(callbackUrl.hostname, 'site1.test');
+	const callbackResponse = await request(`${callbackUrl.pathname}${callbackUrl.search}`, { host: 'site1.test' });
+	assert.equal(callbackResponse.status, 302);
+	const siteCookie = callbackResponse.headers.get('set-cookie')?.split(';')[0];
+	assert.match(siteCookie ?? '', /^passport_session=/);
+	const businessSignedIn = await (await request('/api/sign.php', { host: 'site1.test', cookie: siteCookie })).json();
+	assert.equal(businessSignedIn.user.id, userId);
+	assert.equal((await request(`${callbackUrl.pathname}${callbackUrl.search}`, { host: 'site1.test' })).status, 409);
+	assert.equal((await request('/api/sign.php', { host: 'site1.test', method: 'DELETE', cookie: siteCookie })).status, 200);
 	assert.equal((await request('/api/sign.php', { method: 'DELETE', cookie: passportCookie })).status, 200);
 	const completedDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
 	assert.equal(completedDatabase.prepare(`SELECT status FROM passport_login_challenges WHERE id = ?`).get(challengeId).status, 'consumed');
 	assert.equal(completedDatabase.prepare(`SELECT COUNT(*) AS count FROM passport_sessions`).get().count, 0);
+	assert.equal(completedDatabase.prepare(`SELECT COUNT(*) AS count FROM passport_site_sessions`).get().count, 0);
+	assert.equal(completedDatabase.prepare(`SELECT status FROM passport_login_tickets`).get().status, 'consumed');
 	completedDatabase.close();
 	console.log('passport login test passed');
 } finally {

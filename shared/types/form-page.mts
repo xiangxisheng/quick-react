@@ -26,5 +26,6 @@ export type FormPageResponse<T = Record<string, unknown>> = {
 	currentValues?: T;
 	formPage?: FormPageConfig;
 	feedback?: ApiFeedback;
+	redirectTo?: string;
 };
 import type { ApiFeedback } from './api-response.mjs';

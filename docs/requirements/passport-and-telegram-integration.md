@@ -55,6 +55,8 @@ siteDatabase
 
 Passport 网页首次登录采用邮箱与 Telegram 数字批准流程：用户输入已验证邮箱，选择该用户已绑定且机器人处于启用状态的 Telegram 外部身份；Passport 创建十分钟有效的登录挑战，并向对应 Telegram Chat 发送八个候选数字。只有点击网页显示的正确数字后，网页轮询才能原子消费挑战并建立 `passport_sessions`。错误数字不批准，拒绝按钮立即终止挑战；挑战和 Session 都不依赖 Redis、共享 Cookie Domain 或单一 Passport 域名。
 
+业务站点登录页不得提供本地注册或本地密码登录，只列出 global 中 Passport 站点的可用精确域名供用户选择。Passport 域名收到跳转后创建十分钟有效的 SSO 请求；已有 Passport Session 时直接签发票据，否则在数字批准登录完成后签发。一次性票据有效期一分钟，数据库只保存 SHA-256，不保存 URL 中的原始票据，并同时绑定目标 `site_key` 和当前 `hostname`。目标站点原子消费票据后在 Passport 数据库建立 `passport_site_sessions`，Cookie 保持 Host-only；票据不可重放，也不能换站点或换域名使用。
+
 ## 3. Passport 用户模型
 
 ### 3.1 用户身份
@@ -150,6 +152,33 @@ passport_login_challenges
   expires_at BIGINT NOT NULL
   created_at BIGINT NOT NULL
   updated_at BIGINT NOT NULL
+
+passport_sso_requests
+  id TEXT PRIMARY KEY
+  target_site_key TEXT NOT NULL
+  target_hostname TEXT NOT NULL
+  status TEXT NOT NULL                 -- pending / consumed / expired
+  expires_at BIGINT NOT NULL
+  created_at BIGINT NOT NULL
+  updated_at BIGINT NOT NULL
+
+passport_login_tickets
+  token_hash TEXT PRIMARY KEY          -- 只保存一次性票据 SHA-256
+  user_id BIGINT NOT NULL
+  target_site_key TEXT NOT NULL
+  target_hostname TEXT NOT NULL
+  status TEXT NOT NULL                 -- pending / consumed / expired
+  expires_at BIGINT NOT NULL
+  created_at BIGINT NOT NULL
+  updated_at BIGINT NOT NULL
+
+passport_site_sessions
+  id TEXT PRIMARY KEY
+  user_id BIGINT NOT NULL
+  site_key TEXT NOT NULL
+  hostname TEXT NOT NULL
+  expires_at BIGINT NOT NULL
+  created_at BIGINT NOT NULL
 
 passport_telegram_accounts
   id BIGINT PRIMARY KEY

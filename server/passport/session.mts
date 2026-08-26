@@ -15,12 +15,16 @@ export const createPassportSessionCookie = (sessionId: string, secure: boolean, 
 export const clearPassportSessionCookie = (secure: boolean) =>
 	`${passportSessionCookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`;
 
-export const loadPassportSession = async (database: DatabaseAdapter, request: Request) => {
+export const loadPassportSession = async (database: DatabaseAdapter, request: Request, siteKey = 'passport', hostname = '') => {
 	const sessionId = readPassportSessionId(request);
 	if (!sessionId) return undefined;
-	const user = await database.prepare(`SELECT CAST(u.user_id AS TEXT) AS user_id, u.nickname FROM passport_sessions s
-		JOIN passport_users u ON u.user_id = s.user_id WHERE s.id = ?1 AND s.expires_at > ?2 AND u.status = 'enabled'`)
-		.bind(sessionId, Date.now()).first<{ user_id: string; nickname: string }>();
+	const user = siteKey === 'passport'
+		? await database.prepare(`SELECT CAST(u.user_id AS TEXT) AS user_id, u.nickname FROM passport_sessions s
+			JOIN passport_users u ON u.user_id = s.user_id WHERE s.id = ?1 AND s.expires_at > ?2 AND u.status = 'enabled'`)
+			.bind(sessionId, Date.now()).first<{ user_id: string; nickname: string }>()
+		: await database.prepare(`SELECT CAST(u.user_id AS TEXT) AS user_id, u.nickname FROM passport_site_sessions s
+			JOIN passport_users u ON u.user_id = s.user_id WHERE s.id = ?1 AND s.site_key = ?2 AND s.hostname = ?3
+				AND s.expires_at > ?4 AND u.status = 'enabled'`).bind(sessionId, siteKey, hostname, Date.now()).first<{ user_id: string; nickname: string }>();
 	if (!user) return undefined;
 	const roles = await database.prepare(`SELECT role FROM passport_user_roles WHERE user_id = ?1 ORDER BY role`).bind(user.user_id).all<{ role: string }>();
 	return { id: user.user_id, username: user.nickname, roles: roles.results.map((item) => item.role) };

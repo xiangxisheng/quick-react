@@ -96,7 +96,7 @@ const configureForRequest = async (c: Context<WorkerEnv>) => {
 	c.set('techStackConfig', configuration.techStackConfig);
 	const currentUser = site.siteKey === 'global'
 		? await loadCurrentUser(database, c.req.raw)
-		: passportDatabase ? await loadPassportSession(passportDatabase, c.req.raw) : undefined;
+		: passportDatabase ? await loadPassportSession(passportDatabase, c.req.raw, site.siteKey, site.hostname) : undefined;
 	if (currentUser) c.set('currentUser', currentUser);
 	c.set('effectiveRoles', currentUser ? ['public', 'user', ...currentUser.roles] : ['public']);
 	return true;
@@ -116,18 +116,18 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 			],
 			pages: [
 				{ path: `/sign${siteConfig.pageSuffix}`, title: '登录', description: '登录 Quick React', mode: 'sign' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'POST' as const, redirectPath: `/panel/admin${siteConfig.pageSuffix}` },
-				{ path: `/sign-up${siteConfig.pageSuffix}`, title: '注册', description: '创建初始管理员', mode: 'sign-up' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'PUT' as const, redirectPath: `/sign${siteConfig.pageSuffix}` },
+				...(site.siteKey === 'global' ? [{ path: `/sign-up${siteConfig.pageSuffix}`, title: '注册', description: '创建初始管理员', mode: 'sign-up' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'PUT' as const, redirectPath: `/sign${siteConfig.pageSuffix}` }] : []),
 			],
 		}
 		: {
 			component: 'buttons' as const,
 			actions: [
 				{ key: '/sign', label: '登录', action: 'navigate' as const, icon: 'login' as const },
-				{ key: '/sign-up', label: '注册', action: 'navigate' as const, icon: 'register' as const },
+				...(site.siteKey === 'global' ? [{ key: '/sign-up', label: '注册', action: 'navigate' as const, icon: 'register' as const }] : []),
 			],
 			pages: [
 				{ path: `/sign${siteConfig.pageSuffix}`, title: '登录', description: '登录 Quick React', mode: 'sign' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'POST' as const, redirectPath: `/panel/admin${siteConfig.pageSuffix}` },
-				{ path: `/sign-up${siteConfig.pageSuffix}`, title: '注册', description: '创建初始管理员', mode: 'sign-up' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'PUT' as const, redirectPath: `/sign${siteConfig.pageSuffix}` },
+				...(site.siteKey === 'global' ? [{ path: `/sign-up${siteConfig.pageSuffix}`, title: '注册', description: '创建初始管理员', mode: 'sign-up' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'PUT' as const, redirectPath: `/sign${siteConfig.pageSuffix}` }] : []),
 			],
 		};
 	const metadata = getPageMetadata(c.req.path, menuItems, siteConfig.pageSuffix);

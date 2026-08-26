@@ -149,6 +149,43 @@ model passport_login_challenges {
   @@index([status, expires_at])
 }
 
+model passport_sso_requests {
+  id                String @id
+  target_site_key   String
+  target_hostname   String
+  status            String
+  expires_at        BigInt
+  created_at        BigInt
+  updated_at        BigInt
+
+  @@index([status, expires_at])
+}
+
+model passport_login_tickets {
+  token_hash        String @id
+  user_id           BigInt
+  target_site_key   String
+  target_hostname   String
+  status            String
+  expires_at        BigInt
+  created_at        BigInt
+  updated_at        BigInt
+
+  @@index([status, expires_at])
+}
+
+model passport_site_sessions {
+  id         String @id
+  user_id    BigInt
+  site_key   String
+  hostname   String
+  expires_at BigInt
+  created_at BigInt
+
+  @@index([user_id])
+  @@index([site_key, hostname, expires_at])
+}
+
 model passport_user_roles {
   user_id    BigInt
   role       String

@@ -195,8 +195,9 @@ try {
 	const isolatedRegistration = await request('site2.test', '/api/sign.php');
 	const isolatedRegistrationResult = await isolatedRegistration.json();
 	assert.equal(isolatedRegistrationResult.user, null);
-	assert.equal(isolatedRegistrationResult.registrationAvailable, true);
+	assert.equal(isolatedRegistrationResult.registrationAvailable, false);
 	assert.ok(isolatedRegistrationResult.formPage);
+	assert.equal(isolatedRegistrationResult.formPage.fields[0].name, 'passport_hostname');
 
 	const credentialsPath = '/api/panel/admin/global/cloud/credentials.php';
 	assert.equal((await request('localhost', credentialsPath, {
