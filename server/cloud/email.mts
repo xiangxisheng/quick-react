@@ -3,32 +3,28 @@ import { getCloudEmailAdapter } from './catalog.mjs';
 import type { CloudEmailAdapter, CloudEmailMessage, CloudEmailScope, CloudEmailTarget, CloudEmailTemplate, CloudEmailTemplatePublication } from './index.mjs';
 import { createAliyunDirectMailAdapter, createAliyunDirectMailTemplate, describeAliyunDirectMailTemplate, updateAliyunDirectMailTemplate } from './providers/aliyun-direct-mail.mjs';
 import { createTencentSesAdapter, createTencentSesTemplate, describeTencentSesTemplate, updateTencentSesTemplate } from './providers/tencent-ses.mjs';
+import { firstSql, sql } from '@server/database/sql.mjs';
 
 type DefaultEmailConfiguration = CloudEmailTarget & CloudEmailTemplate & {
+	template_id: number;
 	provider_template_id: string;
 	publication_status: string;
 };
 
-const targetSelect = `SELECT ch.id, c.provider, ch.cloud_credential_id, ch.region, ch.account_name,
-	ch.from_alias, ch.reply_to_address, c.access_key_id, c.access_key_secret
-	FROM global_cloud_email_bindings b
-	JOIN global_cloud_email_channels ch ON ch.id = b.channel_id
-	JOIN global_cloud_credentials c ON c.id = ch.cloud_credential_id`;
+const targetColumns = { id: 'ch.id', provider: 'c.provider', cloud_credential_id: 'ch.cloud_credential_id', region: 'ch.region', account_name: 'ch.account_name', from_alias: 'ch.from_alias', reply_to_address: 'ch.reply_to_address', access_key_id: 'c.access_key_id', access_key_secret: 'c.access_key_secret' };
+const targetJoins = [
+	{ table: 'global_cloud_email_channels', alias: 'ch', left: 'ch.id', right: 'b.channel_id' },
+	{ table: 'global_cloud_credentials', alias: 'c', left: 'c.id', right: 'ch.cloud_credential_id' },
+] as const;
 
-export const loadDefaultCloudEmailTarget = async (database: DatabaseAdapter, siteKey: string, purpose: string) => database.prepare(`${targetSelect}
-	WHERE b.site_key = ?1 AND b.purpose = ?2 AND b.is_default = 1
-		AND b.status = 'enabled' AND ch.status = 'enabled' AND c.status = 'enabled'`)
-	.bind(siteKey, purpose).first<CloudEmailTarget>();
+export const loadDefaultCloudEmailTarget = async (database: DatabaseAdapter, siteKey: string, purpose: string) => firstSql<CloudEmailTarget>(database, sql(database).select({ table: 'global_cloud_email_bindings', alias: 'b', columns: targetColumns, joins: [...targetJoins], where: [{ column: 'b.site_key', value: siteKey }, { column: 'b.purpose', value: purpose }, { column: 'b.is_default', value: 1 }, { column: 'b.status', value: 'enabled' }, { column: 'ch.status', value: 'enabled' }, { column: 'c.status', value: 'enabled' }], limit: 1 }));
 
-export const loadCloudEmailTarget = async (database: DatabaseAdapter, channelId: number) => database.prepare(`SELECT ch.id,
-	c.provider, ch.cloud_credential_id, ch.region, ch.account_name, ch.from_alias, ch.reply_to_address,
-	c.access_key_id, c.access_key_secret FROM global_cloud_email_channels ch
-	JOIN global_cloud_credentials c ON c.id = ch.cloud_credential_id
-	WHERE ch.id = ?1 AND ch.status = 'enabled' AND c.status = 'enabled'`).bind(channelId).first<CloudEmailTarget>();
+export const loadCloudEmailTarget = async (database: DatabaseAdapter, channelId: number) => firstSql<CloudEmailTarget>(database, sql(database).select({ table: 'global_cloud_email_channels', alias: 'ch', columns: targetColumns, joins: [{ table: 'global_cloud_credentials', alias: 'c', left: 'c.id', right: 'ch.cloud_credential_id' }], where: [{ column: 'ch.id', value: channelId }, { column: 'ch.status', value: 'enabled' }, { column: 'c.status', value: 'enabled' }] }));
 
-export const loadCloudEmailScope = async (database: DatabaseAdapter, credentialId: number, region: string) => database.prepare(`SELECT c.provider,
-	c.id AS cloud_credential_id, ?2 AS region, c.access_key_id, c.access_key_secret FROM global_cloud_credentials c
-	WHERE c.id = ?1 AND c.status = 'enabled'`).bind(credentialId, region).first<CloudEmailScope>();
+export const loadCloudEmailScope = async (database: DatabaseAdapter, credentialId: number, region: string) => {
+	const credential = await firstSql<Omit<CloudEmailScope, 'region'>>(database, sql(database).select({ table: 'global_cloud_credentials', columns: { provider: 'provider', cloud_credential_id: 'id', access_key_id: 'access_key_id', access_key_secret: 'access_key_secret' }, where: [{ column: 'id', value: credentialId }, { column: 'status', value: 'enabled' }] }));
+	return credential ? { ...credential, region } : null;
+};
 
 export const createCloudEmailAdapter = (target: CloudEmailTarget): CloudEmailAdapter => {
 	const adapter = getCloudEmailAdapter(target.provider);
@@ -69,23 +65,14 @@ export const renderCloudEmailTemplate = (template: Pick<CloudEmailTemplate, 'sub
 });
 
 export const sendDefaultCloudEmail = async (database: DatabaseAdapter, siteKey: string, purpose: string, to: string, variables: Record<string, string>) => {
-	const configuration = await database.prepare(`SELECT ch.id, c.provider, ch.cloud_credential_id, ch.region, ch.account_name,
-		ch.from_alias, ch.reply_to_address, c.access_key_id, c.access_key_secret,
-		t.id AS template_id, t.template_key, t.template_type, t.name, t.subject, t.body_text, t.body_html, t.status,
-		p.provider_template_id, p.status AS publication_status
-		FROM global_cloud_email_bindings b
-		JOIN global_cloud_email_channels ch ON ch.id = b.channel_id
-		JOIN global_cloud_credentials c ON c.id = ch.cloud_credential_id
-		JOIN global_cloud_email_templates t ON t.id = b.template_id
-		JOIN global_cloud_email_template_publications p ON p.template_id = t.id
-			AND p.cloud_credential_id = ch.cloud_credential_id AND p.region = ch.region
-		WHERE b.site_key = ?1 AND b.purpose = ?2 AND b.is_default = 1 AND b.status = 'enabled'
-			AND ch.status = 'enabled' AND c.status = 'enabled' AND t.status = 'enabled' AND p.status = 'ready'`)
-		.bind(siteKey, purpose).first<DefaultEmailConfiguration>();
+	const configuration = await firstSql<Omit<DefaultEmailConfiguration, 'provider_template_id' | 'publication_status'>>(database, sql(database).select({ table: 'global_cloud_email_bindings', alias: 'b', columns: { ...targetColumns, template_id: 't.id', template_key: 't.template_key', template_type: 't.template_type', name: 't.name', subject: 't.subject', body_text: 't.body_text', body_html: 't.body_html', status: 't.status' }, joins: [...targetJoins, { table: 'global_cloud_email_templates', alias: 't', left: 't.id', right: 'b.template_id' }], where: [{ column: 'b.site_key', value: siteKey }, { column: 'b.purpose', value: purpose }, { column: 'b.is_default', value: 1 }, { column: 'b.status', value: 'enabled' }, { column: 'ch.status', value: 'enabled' }, { column: 'c.status', value: 'enabled' }, { column: 't.status', value: 'enabled' }], limit: 1 }));
 	if (!configuration) throw new Error(`站点 ${siteKey} 没有可用的 ${purpose} 默认邮件模板`);
-	const rendered = renderCloudEmailTemplate(configuration, variables);
-	return createCloudEmailAdapter(configuration).send({ to, ...rendered, template: {
-		providerTemplateId: configuration.provider_template_id,
+	const publication = await firstSql<{ provider_template_id: string; publication_status: string }>(database, sql(database).select({ table: 'global_cloud_email_template_publications', columns: { provider_template_id: 'provider_template_id', publication_status: 'status' }, where: [{ column: 'template_id', value: configuration.template_id }, { column: 'cloud_credential_id', value: configuration.cloud_credential_id }, { column: 'region', value: configuration.region }, { column: 'status', value: 'ready' }] }));
+	if (!publication) throw new Error(`站点 ${siteKey} 没有可用的 ${purpose} 默认邮件模板`);
+	const readyConfiguration: DefaultEmailConfiguration = { ...configuration, ...publication };
+	const rendered = renderCloudEmailTemplate(readyConfiguration, variables);
+	return createCloudEmailAdapter(readyConfiguration).send({ to, ...rendered, template: {
+		providerTemplateId: readyConfiguration.provider_template_id,
 		variables,
 	} });
 };

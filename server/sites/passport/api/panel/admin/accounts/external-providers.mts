@@ -59,8 +59,8 @@ const handler: ApiHandler = async (c, next, params) => {
 		if (!current) return apiMessage(c, 404, '外部身份源不存在');
 		if (current.status !== 'disabled') return apiMessage(c, 409, '外部身份源必须先停用才能删除');
 		const [identity, authorization] = await Promise.all([
-			database.prepare('SELECT 1 AS found FROM passport_external_identities WHERE provider = ?1 LIMIT 1').bind(id).first(),
-			database.prepare('SELECT 1 AS found FROM passport_external_login_states WHERE provider = ?1 LIMIT 1').bind(id).first(),
+			firstSql(database, sql(database).select({ table: 'passport_external_identities', columns: { provider: 'provider' }, where: [{ column: 'provider', value: id }], limit: 1 })),
+			firstSql(database, sql(database).select({ table: 'passport_external_login_states', columns: { provider: 'provider' }, where: [{ column: 'provider', value: id }], limit: 1 })),
 		]);
 		if (identity || authorization) return apiMessage(c, 409, '该身份源已有用户身份或授权历史，只能保持停用，不能删除');
 		await runSql(database, sql(database).delete('passport_external_providers', { id }));
