@@ -133,6 +133,22 @@ model passport_telegram_identity_choices {
   @@index([bot_id, telegram_user_id, status, created_at])
 }
 
+model passport_login_challenges {
+  id               String @id
+  user_id          BigInt
+  bot_id           BigInt
+  telegram_user_id BigInt
+  chat_id          BigInt
+  expected_number  Int
+  status           String
+  expires_at       BigInt
+  created_at       BigInt
+  updated_at       BigInt
+
+  @@index([bot_id, telegram_user_id, status, created_at])
+  @@index([status, expires_at])
+}
+
 model passport_user_roles {
   user_id    BigInt
   role       String

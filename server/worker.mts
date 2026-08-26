@@ -10,6 +10,7 @@ import { apiMessage } from './api-response.mjs';
 import type { DatabaseAdapter } from './database/index.mjs';
 import { SiteRouter } from './site-router.mjs';
 import { loadCurrentUser } from './auth.mjs';
+import { loadPassportSession } from './passport/session.mjs';
 import { loadSystemConfigFromStore } from './system-config.mjs';
 import { applyTechStackHeaders, loadTechStackConfigFromStore } from './tech-stack.mjs';
 import type { AppEnv, RuntimeBindings } from './types.mjs';
@@ -93,7 +94,9 @@ const configureForRequest = async (c: Context<WorkerEnv>) => {
 	c.set('configStore', configStore);
 	c.set('systemConfig', configuration.systemConfig);
 	c.set('techStackConfig', configuration.techStackConfig);
-	const currentUser = await loadCurrentUser(database, c.req.raw);
+	const currentUser = site.siteKey === 'global'
+		? await loadCurrentUser(database, c.req.raw)
+		: passportDatabase ? await loadPassportSession(passportDatabase, c.req.raw) : undefined;
 	if (currentUser) c.set('currentUser', currentUser);
 	c.set('effectiveRoles', currentUser ? ['public', 'user', ...currentUser.roles] : ['public']);
 	return true;

@@ -184,11 +184,36 @@ const handleMessage = async (database: DatabaseAdapter, globalDatabase: Database
 
 const handleCallback = async (database: DatabaseAdapter, globalDatabase: DatabaseAdapter, configuredWorkerId: unknown, bot: PassportTelegramBot, callback: TelegramCallback) => {
 	const callbackId = typeof callback.id === 'string' ? callback.id : '';
-	if (callbackId) await answerTelegramCallback(bot.botToken, callbackId).catch(() => undefined);
 	if (callback.message?.chat?.type !== 'private') return;
 	const identity = identityFrom(bot, callback.from, callback.message.chat), messageId = decimal(callback.message.message_id);
 	if (!identity || !messageId) return;
 	const data = typeof callback.data === 'string' ? callback.data : '';
+	const loginMatch = /^login:(approve|deny):([0-9a-f-]{36})(?::(\d{1,2}))?$/i.exec(data);
+	if (loginMatch) {
+		const challenge = await database.prepare(`SELECT expected_number, status, expires_at FROM passport_login_challenges
+			WHERE id = ?1 AND bot_id = ?2 AND telegram_user_id = ?3`).bind(loginMatch[2], identity.botId, identity.telegramUserId)
+			.first<{ expected_number: number; status: string; expires_at: number }>();
+		if (!challenge || challenge.status !== 'pending' || challenge.expires_at <= Date.now()) {
+			if (challenge?.status === 'pending') await database.prepare(`UPDATE passport_login_challenges SET status = 'expired', updated_at = ?2 WHERE id = ?1 AND status = 'pending'`).bind(loginMatch[2], Date.now()).run();
+			if (callbackId) await answerTelegramCallback(bot.botToken, callbackId, '登录确认已失效').catch(() => undefined);
+			return;
+		}
+		if (loginMatch[1] === 'deny') {
+			await database.prepare(`UPDATE passport_login_challenges SET status = 'denied', updated_at = ?2 WHERE id = ?1 AND status = 'pending'`).bind(loginMatch[2], Date.now()).run();
+			if (callbackId) await answerTelegramCallback(bot.botToken, callbackId, '已拒绝登录').catch(() => undefined);
+			await editTelegramMessage(bot.botToken, String(identity.chatId), messageId, '本次网页登录已拒绝');
+			return;
+		}
+		if (Number(loginMatch[3]) !== challenge.expected_number) {
+			if (callbackId) await answerTelegramCallback(bot.botToken, callbackId, '数字不匹配，请选择网页显示的数字').catch(() => undefined);
+			return;
+		}
+		await database.prepare(`UPDATE passport_login_challenges SET status = 'approved', updated_at = ?2 WHERE id = ?1 AND status = 'pending'`).bind(loginMatch[2], Date.now()).run();
+		if (callbackId) await answerTelegramCallback(bot.botToken, callbackId, '登录已批准').catch(() => undefined);
+		await editTelegramMessage(bot.botToken, String(identity.chatId), messageId, '网页登录已批准，请返回网页完成登录');
+		return;
+	}
+	if (callbackId) await answerTelegramCallback(bot.botToken, callbackId).catch(() => undefined);
 	if (data === 'menu:accounts') return editAccounts(database, bot, identity, messageId);
 	if (data === 'menu:back') return editMenu(database, bot, identity, messageId, 'menu', '请选择服务', rootKeyboard);
 	if (data === 'menu:bind_email') return editMenu(database, bot, identity, messageId, 'email', '请输入要绑定的邮箱地址', backAccountsKeyboard);

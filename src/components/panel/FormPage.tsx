@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Form, Input, message, Modal, Space, Switch, Typography } from 'antd';
+import { Alert, Button, Card, Form, Input, message, Modal, Select, Space, Switch, Typography } from 'antd';
 import { ClearOutlined, RollbackOutlined } from '@ant-design/icons';
 import type { CommonApi } from '@/utils/common/api.js';
 import type { FormPageResponse } from '@shared/types/form-page.mjs';
@@ -101,6 +101,13 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 			const result = await response.json() as FormResponse;
 			Modal.destroyAll();
 			setResponseFeedback(result.feedback);
+			if (result.formPage) {
+				const nextValues = isRecord(result.currentValues) ? result.currentValues : result.formPage.initialValues;
+				setFormConfig(result.formPage);
+				setInitialValues(nextValues);
+				form.resetFields();
+				form.setFieldsValue(nextValues);
+			}
 			const target = await onSaved?.(values);
 			const savedValues = isRecord(result.currentValues) ? result.currentValues : values;
 			setInitialValues(savedValues);
@@ -159,7 +166,9 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 				setDirty(changedFields.current.size > 0);
 			}}
 		>
-			{formConfig?.fields.map((field) => (
+			{formConfig?.fields.map((field) => field.type === 'hidden' ? (
+				<Form.Item key={field.name} name={field.name} hidden><Input /></Form.Item>
+			) : (
 				<Form.Item
 					key={field.name}
 					label={(
@@ -196,6 +205,8 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 				>
 					{field.type === 'switch'
 						? <Switch checkedChildren={field.checkedChildren} unCheckedChildren={field.unCheckedChildren} />
+						: field.type === 'select'
+							? <Select options={field.options?.map((option) => ({ value: option.value, label: option.text }))} placeholder={field.placeholder} />
 						: <Input type={field.type === 'password' ? 'password' : 'text'} placeholder={field.placeholder} maxLength={field.maxLength} />}
 				</Form.Item>
 			))}

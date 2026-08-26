@@ -1,4 +1,4 @@
-export type FormPageFieldType = 'text' | 'password' | 'switch';
+export type FormPageFieldType = 'text' | 'password' | 'switch' | 'select' | 'hidden';
 
 export type FormPageField = {
 	name: string;
@@ -9,6 +9,7 @@ export type FormPageField = {
 	maxLength?: number;
 	checkedChildren?: string;
 	unCheckedChildren?: string;
+	options?: Array<{ value: string; text: string }>;
 	rules?: { required?: boolean; message?: string }[];
 };
 

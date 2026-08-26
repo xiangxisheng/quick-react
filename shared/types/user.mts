@@ -1,5 +1,5 @@
 export type UserIdentity = {
-	id: number;
+	id: number | string;
 	username: string;
 	roles: string[];
 };

@@ -53,6 +53,8 @@ siteDatabase
 
 跨站点登录统一使用 Passport Session。Session 存储在 Passport 数据库，业务站点通过统一身份上下文解析当前 `passport_user_id`，再查询本站点的成员和角色关系；业务站点不得建立自己的身份 Session。跨站登录使用 Passport 的登录跳转和一次性登录票据，由目标站点建立自己的安全 Cookie，避免依赖单个全局 Cookie 域。更换域名后旧域名 Cookie 可以失效，用户在新域名重新登录即可恢复，不能因为某个域名失效导致整个身份系统不可用。
 
+Passport 网页首次登录采用邮箱与 Telegram 数字批准流程：用户输入已验证邮箱，选择该用户已绑定且机器人处于启用状态的 Telegram 外部身份；Passport 创建十分钟有效的登录挑战，并向对应 Telegram Chat 发送八个候选数字。只有点击网页显示的正确数字后，网页轮询才能原子消费挑战并建立 `passport_sessions`。错误数字不批准，拒绝按钮立即终止挑战；挑战和 Session 都不依赖 Redis、共享 Cookie Domain 或单一 Passport 域名。
+
 ## 3. Passport 用户模型
 
 ### 3.1 用户身份
@@ -136,6 +138,18 @@ passport_sessions
   user_id BIGINT NOT NULL
   expires_at BIGINT NOT NULL
   created_at BIGINT NOT NULL
+
+passport_login_challenges
+  id TEXT PRIMARY KEY
+  user_id BIGINT NOT NULL
+  bot_id BIGINT NOT NULL
+  telegram_user_id BIGINT NOT NULL
+  chat_id BIGINT NOT NULL
+  expected_number INTEGER NOT NULL
+  status TEXT NOT NULL                 -- pending / approved / denied / expired / consumed
+  expires_at BIGINT NOT NULL
+  created_at BIGINT NOT NULL
+  updated_at BIGINT NOT NULL
 
 passport_telegram_accounts
   id BIGINT PRIMARY KEY
