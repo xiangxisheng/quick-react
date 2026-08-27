@@ -56,6 +56,7 @@ try {
 	const jwks = await (await request('/api/oidc/jwks')).json(); assert.equal(jwks.keys[0].alg, 'RS256'); assert.ok(jwks.keys[0].n);
 	const businessSign = await (await app.request('https://site1.test/api/sign.php')).json();
 	assert.equal(businessSign.formPage.fields[0].name, 'action');
+	assert.equal(businessSign.formPage.passportLogin.autoStart, true);
 	const businessStart = await app.request('https://site1.test/api/sign.php', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
 	const loginCookie = businessStart.headers.get('set-cookie')?.split(';')[0];
 	const businessAuthorizeUrl = (await businessStart.json()).redirectTo;
@@ -67,6 +68,7 @@ try {
 	assert.ok(businessSessionCookie);
 	const signedInBusiness = await (await app.request('https://site1.test/api/sign.php', { headers: { cookie: businessSessionCookie } })).json();
 	assert.match(signedInBusiness.user.username, /^accounts_[0-9a-f]{16}$/);
+	assert.equal(signedInBusiness.formPage.passportLogin.autoStart, false);
 	const completed = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
 	assert.equal(completed.prepare('SELECT COUNT(*) AS count FROM base_oidc_accounts').get().count, 1); completed.close();
 	assert.equal((await app.request('https://accounts.test/api/oidc/logout', { headers: { cookie: `passport_session=${sessionId}` } })).status, 200);

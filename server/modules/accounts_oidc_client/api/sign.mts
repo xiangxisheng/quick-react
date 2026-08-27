@@ -11,8 +11,9 @@ const handler: ApiHandler = async (c, next) => {
 	const config = await loadAccountsOidcConfig(c);
 	if (!config.enabled) return baseSign(c, next, {});
 	if (c.req.method === 'GET') {
-		const formPage: FormPageConfig = { description: '使用 Accounts 账号中心完成统一登录。', submitLabel: '前往 Accounts 登录', passportLogin: { enabled: true, mode: 'popup' }, initialValues: { action: 'login' }, fields: [{ name: 'action', label: '', type: 'hidden' }] };
-		return apiResponse(c, 200, { user: c.get('currentUser') ?? null, registrationAvailable: false, formPage });
+		const currentUser = c.get('currentUser') ?? null;
+		const formPage: FormPageConfig = { description: '使用 Accounts 账号中心完成统一登录。', submitLabel: '前往 Accounts 登录', passportLogin: { enabled: true, mode: 'popup', autoStart: !currentUser }, initialValues: { action: 'login' }, fields: [{ name: 'action', label: '', type: 'hidden' }] };
+		return apiResponse(c, 200, { user: currentUser, registrationAvailable: false, formPage });
 	}
 	if (c.req.method === 'POST') {
 		try {

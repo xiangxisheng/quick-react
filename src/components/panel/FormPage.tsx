@@ -53,6 +53,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 	const [saved, setSaved] = useState(false);
 	const [responseFeedback, setResponseFeedback] = useState<FormResponse['feedback']>();
 	const [passportError, setPassportError] = useState('');
+	const passportAutoStarted = useRef(false);
 	const changedFields = useRef(new Set<string>());
 
 	useEffect(() => {
@@ -62,8 +63,22 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 		setRefreshDeadline(undefined);
 		setRefreshCancelled(false);
 		setResponseFeedback(undefined);
+		setPassportError('');
+		passportAutoStarted.current = false;
 		messageApi.destroy('form-feedback');
 	}, [apiPath, messageApi]);
+
+	useEffect(() => {
+		if (!formConfig?.passportLogin?.enabled || !formConfig.passportLogin.autoStart || passportAutoStarted.current) return;
+		passportAutoStarted.current = true;
+		const start = async () => {
+			try {
+				if (!(window as any).Passport) await new Promise<void>((resolve, reject) => { const script = document.createElement('script'); script.src = '/passport.js'; script.onload = () => resolve(); script.onerror = () => reject(new Error('Passport SDK 加载失败')); document.head.appendChild(script); });
+				await (window as any).Passport.login({ mode: 'redirect' });
+			} catch (error) { setPassportError(error instanceof Error ? error.message : 'Passport 自动登录失败'); }
+		};
+		void start();
+	}, [formConfig]);
 
 	useEffect(() => {
 		const feedback = responseFeedback;
