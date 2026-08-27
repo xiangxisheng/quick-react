@@ -3,6 +3,7 @@ import { Alert, Button, Card, Form, Input, message, Modal, Select, Space, Switch
 import { ClearOutlined, RollbackOutlined } from '@ant-design/icons';
 import type { CommonApi } from '@/utils/common/api.js';
 import type { FormPageField, FormPageResponse } from '@shared/types/form-page.mjs';
+import { isFieldReadOnly, type FieldLinkOption } from '@shared/field-linkage.mjs';
 import { changedFieldsKey, type ChangedFieldsPayload } from '@shared/types/changed-fields.mjs';
 import { CountdownDisplay, formatCountdown } from '@/components/common/Countdown.js';
 import { runAfterFeedback } from '@/utils/common/feedback.js';
@@ -29,11 +30,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> => (
 	Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 );
 
-const FieldControl = ({ field, form }: { field: FormPageField; form: ReturnType<typeof Form.useForm<Record<string, unknown>>>[0] }) => {
-	const dependencyValue = Form.useWatch(field.readOnlyWhen?.field ?? '__unlinked__', form);
-	const readOnly = field.readOnlyWhen ? (field.readOnlyWhen.values
-		? field.readOnlyWhen.values.includes(String(dependencyValue ?? ''))
-		: !field.readOnlyWhen.notValues?.includes(String(dependencyValue ?? ''))) : false;
+const FieldControl = ({ field, dependencyValue, sourceOptions }: { field: FormPageField; dependencyValue: unknown; sourceOptions?: FieldLinkOption[] }) => {
+	const readOnly = isFieldReadOnly(field.readOnlyWhen, dependencyValue, sourceOptions);
 	if (field.type === 'switch') return <Switch checkedChildren={field.checkedChildren} unCheckedChildren={field.unCheckedChildren} />;
 	if (field.type === 'select') return <Select options={field.options?.map((option) => ({ value: option.value, label: option.text }))} placeholder={field.placeholder} />;
 	return <Input type={field.type === 'password' ? 'password' : 'text'} placeholder={field.placeholder} maxLength={field.maxLength} readOnly={readOnly} disabled={readOnly} />;
@@ -46,6 +44,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 	const [saving, setSaving] = useState(false);
 	const [formConfig, setFormConfig] = useState<FormResponse['formPage']>();
 	const [initialValues, setInitialValues] = useState<Record<string, unknown>>({});
+	const [liveValues, setLiveValues] = useState<Record<string, unknown>>({});
 	const [dirty, setDirty] = useState(false);
 	const [refreshTarget, setRefreshTarget] = useState<string>();
 	const refreshSchedule = useRef<{ cancel: () => void } | undefined>(undefined);
@@ -86,6 +85,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 				const values = isRecord(result.currentValues) ? result.currentValues : result.formPage.initialValues;
 				setFormConfig(result.formPage);
 				setInitialValues(values);
+				setLiveValues(values);
 				setDirty(false);
 				changedFields.current.clear();
 				form.setFieldsValue(values);
@@ -115,6 +115,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 				const nextValues = isRecord(result.currentValues) ? result.currentValues : result.formPage.initialValues;
 				setFormConfig(result.formPage);
 				setInitialValues(nextValues);
+				setLiveValues(nextValues);
 				form.resetFields();
 				form.setFieldsValue(nextValues);
 			}
@@ -171,12 +172,14 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 			layout="vertical"
 			onFinish={onFinish}
 			initialValues={formConfig?.initialValues}
-			onValuesChange={(changedValues) => {
+			onValuesChange={(changedValues, allValues) => {
+				setLiveValues(allValues);
 				for (const field of Object.keys(changedValues)) changedFields.current.add(field);
 				for (const [name, value] of Object.entries(changedValues)) {
 					const option = formConfig?.fields.find((field) => field.name === name)?.options?.find((item) => item.value === String(value));
 					if (option?.fieldValues) {
 						form.setFieldsValue(option.fieldValues);
+						setLiveValues((previous) => ({ ...previous, ...option.fieldValues }));
 						for (const field of Object.keys(option.fieldValues)) changedFields.current.add(field);
 					}
 				}
@@ -198,6 +201,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 								icon={<ClearOutlined />}
 								onClick={() => {
 									form.setFields([{ name: field.name, value: field.type === 'switch' ? false : null, touched: true }]);
+									setLiveValues((previous) => ({ ...previous, [field.name]: field.type === 'switch' ? false : null }));
 									changedFields.current.add(field.name);
 									setDirty(true);
 								}}
@@ -209,6 +213,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 								icon={<RollbackOutlined />}
 								onClick={() => {
 									form.setFields([{ name: field.name, value: initialValues[field.name], touched: false, errors: [] }]);
+									setLiveValues((previous) => ({ ...previous, [field.name]: initialValues[field.name] }));
 									changedFields.current.delete(field.name);
 									setDirty(changedFields.current.size > 0);
 								}}
@@ -220,7 +225,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 					valuePropName={field.type === 'switch' ? 'checked' : 'value'}
 					rules={field.rules}
 				>
-					<FieldControl field={field} form={form} />
+					<FieldControl field={field} dependencyValue={field.readOnlyWhen ? liveValues[field.readOnlyWhen.field] : undefined} sourceOptions={field.readOnlyWhen ? formConfig.fields.find((candidate) => candidate.name === field.readOnlyWhen?.field)?.options : undefined} />
 				</Form.Item>
 			))}
 			<Space>

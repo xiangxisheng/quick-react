@@ -11,7 +11,7 @@ const createFormPage = (issuerOptions: Array<{ value: string; text: string; fiel
 	fields: [
 		{ name: 'enabled', label: '启用 Accounts 登录', type: 'switch' },
 		{ name: 'issuerSource', label: 'Passport 域名', type: 'select', options: issuerOptions, placeholder: '选择 Passport 域名，或选择自定义', rules: [{ required: true, message: '请选择 Passport 域名来源' }] },
-		{ name: 'issuer', label: 'Accounts Issuer', type: 'text', placeholder: 'https://accounts.example.com', readOnlyWhen: { field: 'issuerSource', notValues: ['__custom__'] }, rules: [{ required: true, message: '请输入 Accounts Issuer' }] },
+		{ name: 'issuer', label: 'Accounts Issuer', type: 'text', placeholder: 'https://accounts.example.com', readOnlyWhen: { field: 'issuerSource', optionValues: true }, rules: [{ required: true, message: '请输入 Accounts Issuer' }] },
 		{ name: 'clientId', label: '客户端 ID', type: 'text', rules: [{ required: true, message: '请输入客户端 ID' }] },
 		{ name: 'clientSecret', label: '客户端密钥', type: 'password', extra: '留空表示保留现有密钥；创建或重置 OIDC 客户端后只显示一次。' },
 	],

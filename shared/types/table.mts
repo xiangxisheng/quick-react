@@ -13,7 +13,7 @@ export type TableColumnFormProperties = {
 	parentValues?: Array<string | number | boolean>;
 	multiple?: boolean;
 	allowCustomValue?: boolean;
-	readOnlyWhen?: { field: string; values?: string[]; notValues?: string[] };
+	readOnlyWhen?: FieldReadOnlyWhen;
 	remoteOptions?: TableColumnRemoteOptions;
 	checkedValue?: string | boolean;
 	uncheckedValue?: string | boolean;
@@ -70,3 +70,4 @@ export type TableResponse = {
 	hasMore?: boolean;
 };
 export type TableRow = TableData & { key: string };
+import type { FieldReadOnlyWhen } from '../field-linkage.mjs';

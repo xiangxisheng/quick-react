@@ -10,7 +10,7 @@ export type FormPageField = {
 	checkedChildren?: string;
 	unCheckedChildren?: string;
 	options?: Array<{ value: string; text: string; fieldValues?: Record<string, unknown> }>;
-	readOnlyWhen?: { field: string; values?: string[]; notValues?: string[] };
+	readOnlyWhen?: FieldReadOnlyWhen;
 	rules?: { required?: boolean; message?: string }[];
 };
 
@@ -30,3 +30,4 @@ export type FormPageResponse<T = Record<string, unknown>> = {
 	redirectTo?: string;
 };
 import type { ApiFeedback } from './api-response.mjs';
+import type { FieldReadOnlyWhen } from '../field-linkage.mjs';

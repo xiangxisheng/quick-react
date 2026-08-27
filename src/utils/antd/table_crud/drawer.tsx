@@ -2,6 +2,7 @@ import type { DataType, ResJsonTableColumn } from '@/utils/common/api.js';
 import type { CommonApi } from '@/utils/common/api.js';
 import type { UploadProps } from 'antd';
 import type { TableSelectOption } from '@shared/types/table.mjs';
+import { isFieldReadOnly } from '@shared/field-linkage.mjs';
 import { changedFieldsKey, type ChangedFieldsPayload } from '@shared/types/changed-fields.mjs';
 
 import { ClearOutlined, InboxOutlined, RollbackOutlined } from '@ant-design/icons';
@@ -31,8 +32,7 @@ function getFullFileExtension(filename: string): string {
 	return index !== -1 ? filename.slice(index) : '';
 }
 
-function getFormItemComponent(item: ResJsonTableColumn, row: DataType, parentValue?: unknown, remoteOptions?: TableSelectOption[], optionsLoading?: boolean, onOptionChange?: (value: unknown) => void) {
-	const readOnly = item.readOnlyWhen ? (item.readOnlyWhen.values ? item.readOnlyWhen.values.includes(String(row[item.readOnlyWhen.field] ?? '')) : !item.readOnlyWhen.notValues?.includes(String(row[item.readOnlyWhen.field] ?? ''))) : false;
+function getFormItemComponent(item: ResJsonTableColumn, row: DataType, parentValue?: unknown, remoteOptions?: TableSelectOption[], optionsLoading?: boolean, onOptionChange?: (value: unknown) => void, readOnly = false) {
 	switch (item.component) {
 		case ('textbox'):
 			return (
@@ -170,7 +170,7 @@ export default ({
 
 	const [form] = Form.useForm();
 	const formValues = Form.useWatch([], form);
-	const redirectUriSource = Form.useWatch('redirect_uri_source', form);
+	const [liveValues, setLiveValues] = useState<DataType>(row);
 	const changedFields = useRef(new Set<string>());
 	const [remoteOptions, setRemoteOptions] = useState<Record<string, TableSelectOption[]>>({});
 	const [loadingOptions, setLoadingOptions] = useState<Record<string, boolean>>({});
@@ -186,6 +186,7 @@ export default ({
 		const option = options?.find((item) => item.value === selectedValue);
 		if (!option?.fieldValues) return;
 		form.setFieldsValue(option.fieldValues);
+		setLiveValues((previous) => ({ ...previous, ...option.fieldValues }));
 		for (const field of Object.keys(option.fieldValues)) changedFields.current.add(field);
 	};
 
@@ -202,6 +203,7 @@ export default ({
 		changedFields.current.clear();
 		form.resetFields();
 		form.setFieldsValue(row);
+		setLiveValues(row);
 	}, [row]);
 
 	useEffect(() => {
@@ -228,6 +230,7 @@ export default ({
 					if (options.length === 1 && !form.getFieldValue(column.dataIndex)) {
 						const value = column.allowCustomValue ? [options[0].value] : options[0].value;
 						form.setFieldValue(column.dataIndex, value);
+						setLiveValues((previous) => ({ ...previous, [column.dataIndex]: value }));
 						changedFields.current.add(column.dataIndex);
 						applyOptionFieldValues(column, value, options);
 					}
@@ -286,7 +289,8 @@ export default ({
 			<Form
 				layout="vertical"
 				form={form}
-				onValuesChange={(values) => {
+				onValuesChange={(values, allValues) => {
+					setLiveValues(allValues);
 					for (const field of Object.keys(values)) changedFields.current.add(field);
 					for (const changedField of Object.keys(values)) {
 						for (const column of columns.filter((item) => item.remoteOptions?.dependencies.includes(changedField))) {
@@ -330,8 +334,10 @@ export default ({
 						}
 						if (item.dependsOn && item.parentValues && !item.parentValues.includes(formValues?.[item.dependsOn] as string | number | boolean)) return;
 						const options = remoteOptions[item.dataIndex] ?? item.options;
-						const component = getFormItemComponent(item, { ...row, ...formValues, redirect_uri_source: redirectUriSource }, item.dependsOn ? formValues?.[item.dependsOn] : undefined, remoteOptions[item.dataIndex], loadingOptions[item.dataIndex],
-							(value) => applyOptionFieldValues(item, value, options));
+						const sourceOptions = item.readOnlyWhen ? columns.find((column) => column.dataIndex === item.readOnlyWhen?.field)?.options : undefined;
+						const readOnly = isFieldReadOnly(item.readOnlyWhen, item.readOnlyWhen ? liveValues[item.readOnlyWhen.field] : undefined, sourceOptions);
+						const component = getFormItemComponent(item, row, item.dependsOn ? formValues?.[item.dependsOn] : undefined, remoteOptions[item.dataIndex], loadingOptions[item.dataIndex],
+							(value) => applyOptionFieldValues(item, value, options), readOnly);
 						if (!component) {
 							return;
 						}
@@ -350,8 +356,9 @@ export default ({
 												size="small"
 												title="清空"
 												icon={<ClearOutlined />}
-												onClick={() => {
-													form.setFields([{ name: item.dataIndex, value: null, touched: true }]);
+									onClick={() => {
+										form.setFields([{ name: item.dataIndex, value: null, touched: true }]);
+										setLiveValues((previous) => ({ ...previous, [item.dataIndex]: null }));
 													changedFields.current.add(item.dataIndex);
 												}}
 											/>
@@ -360,8 +367,9 @@ export default ({
 												size="small"
 												title="还原"
 												icon={<RollbackOutlined />}
-												onClick={() => {
-													form.setFields([{ name: item.dataIndex, value: row[item.dataIndex], touched: false, errors: [] }]);
+									onClick={() => {
+										form.setFields([{ name: item.dataIndex, value: row[item.dataIndex], touched: false, errors: [] }]);
+										setLiveValues((previous) => ({ ...previous, [item.dataIndex]: row[item.dataIndex] }));
 													changedFields.current.delete(item.dataIndex);
 												}}
 											/>

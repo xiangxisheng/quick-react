@@ -70,7 +70,7 @@ return next();
 
 `shared/types/` 集中保存跨运行时协议，包括 API 反馈、FormPage、表格、Dashboard、导航、初始化数据和用户身份。Node、Worker 和浏览器端共同使用这些类型，减少接口漂移和重复 DTO。
 
-TableCRUD 的下拉字段支持通过 `dependsOn`、`parentValues` 和选项的 `parentValue` 描述本地联动，也支持通过 `remoteOptions` 声明依赖字段并从当前资源 API 延迟加载选项。远程请求在依赖变化后防抖执行，并通过 `clearFields` 清空下游旧值；选项的 `fieldValues` 可以回填同一表单中的派生值，`multiple` 和 `allowCustomValue` 分别支持多选与手工输入，`hideInTable` 允许字段只出现在抽屉。这些能力属于通用表单协议，不与云服务 API 耦合。
+TableCRUD 的下拉字段支持通过 `dependsOn`、`parentValues` 和选项的 `parentValue` 描述本地联动，也支持通过 `remoteOptions` 声明依赖字段并从当前资源 API 延迟加载选项。远程请求在依赖变化后防抖执行，并通过 `clearFields` 清空下游旧值；选项的 `fieldValues` 可以回填同一表单中的派生值，`readOnlyWhen.optionValues` 根据来源字段已有选项统一控制派生字段锁定，空值、未知值和 `__custom__` 保持可编辑。`multiple` 和 `allowCustomValue` 分别支持多选与手工输入，`hideInTable` 允许字段只出现在抽屉。这些能力属于通用表单协议，不与云服务 API 耦合。
 
 TableCRUD 同时支持可选的游标分页响应 `nextCursor` 和 `hasMore`。前端请求统一提交 `cursor`，后端能力模块负责把它映射到实际协议的 continuation token；没有游标字段的普通表格继续使用 `totalRecords`，两种模式不会互相污染。
 

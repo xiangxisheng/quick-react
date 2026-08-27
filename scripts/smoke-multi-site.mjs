@@ -194,14 +194,14 @@ try {
 	const issuerSourceField = accountsSettings.formPage.fields.find((field) => field.name === 'issuerSource');
 	const issuerField = accountsSettings.formPage.fields.find((field) => field.name === 'issuer');
 	assert.ok(issuerSourceField.options.some((option) => option.value === 'https://passport.test' && option.fieldValues.issuer === 'https://passport.test'));
-	assert.deepEqual(issuerField.readOnlyWhen, { field: 'issuerSource', notValues: ['__custom__'] });
+	assert.deepEqual(issuerField.readOnlyWhen, { field: 'issuerSource', optionValues: true });
 	const oidcClients = await (await request('passport.test', '/api/panel/admin/accounts/oidc/clients.php', { cookie })).json();
 	const redirectSourceColumn = oidcClients.table.columns.find((column) => column.dataIndex === 'redirect_uri_source');
 	const redirectColumn = oidcClients.table.columns.find((column) => column.dataIndex === 'redirect_uris');
 	const logoutPathColumn = oidcClients.table.columns.find((column) => column.dataIndex === 'backchannel_logout_path');
 	assert.ok(redirectSourceColumn.options.some((option) => option.value === 'https://site1.test/api/accounts/oidc/callback' && option.fieldValues.backchannel_logout_path === '/api/accounts/oidc/backchannel-logout'));
-	assert.deepEqual(redirectColumn.readOnlyWhen, { field: 'redirect_uri_source', notValues: ['__custom__'] });
-	assert.deepEqual(logoutPathColumn.readOnlyWhen, { field: 'redirect_uri_source', notValues: ['__custom__'] });
+	assert.deepEqual(redirectColumn.readOnlyWhen, { field: 'redirect_uri_source', optionValues: true });
+	assert.deepEqual(logoutPathColumn.readOnlyWhen, { field: 'redirect_uri_source', optionValues: true });
 	const botsPath = '/api/panel/admin/global/telegram/bots.php';
 	assert.equal((await request('localhost', botsPath, {
 		method: 'POST', cookie, body: { name: 'smoke-passport-bot', bot_token: '10001:smoke-token', webhook_hostname: 'passport.test' },

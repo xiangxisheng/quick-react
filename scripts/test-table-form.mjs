@@ -11,6 +11,16 @@ try {
 	const file = join(directory, 'table-form.mjs');
 	await writeFile(file, result.outputFiles[0].contents);
 	const { resolveTableFormColumns } = await import(pathToFileURL(file));
+	const linkageResult = await build({ entryPoints: [resolve(import.meta.dirname, '../shared/field-linkage.mts')], bundle: true, format: 'esm', platform: 'node', write: false });
+	const linkageFile = join(directory, 'field-linkage.mjs');
+	await writeFile(linkageFile, linkageResult.outputFiles[0].contents);
+	const { isFieldReadOnly } = await import(pathToFileURL(linkageFile));
+	const linkedOptions = [{ value: 'https://passport.test' }, { value: '__custom__' }];
+	assert.equal(isFieldReadOnly({ field: 'source', optionValues: true }, undefined, linkedOptions), false);
+	assert.equal(isFieldReadOnly({ field: 'source', optionValues: true }, '', linkedOptions), false);
+	assert.equal(isFieldReadOnly({ field: 'source', optionValues: true }, 'https://passport.test', linkedOptions), true);
+	assert.equal(isFieldReadOnly({ field: 'source', optionValues: true }, '__custom__', linkedOptions), false);
+	assert.equal(isFieldReadOnly({ field: 'source', optionValues: true }, 'https://unknown.test', linkedOptions), false);
 	const columns = [
 		{ dataIndex: 'id', title: 'ID', component: 'textbox', form: { edit: false } },
 		{ dataIndex: 'secret', title: '密钥', component: 'textbox', placeholder: '留空不修改', form: { create: { title: '初始密钥', placeholder: '新增必填', rules: [{ required: true, message: '请输入密钥' }] } } },
