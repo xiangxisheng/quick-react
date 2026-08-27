@@ -87,6 +87,16 @@ const normalizedNickname = (value: string, provider: ExternalProviderId) => {
 	return (characters.length ? characters : Array.from(provider === 'google' ? 'Google用户' : '微信用户')).slice(0, 12).join('');
 };
 
+/** 该外部身份是否已经绑定到启用中的 Accounts 用户；已绑定的直接登录，不再走注册验证码流程。 */
+export const externalIdentityUser = async (database: DatabaseAdapter, provider: ExternalProviderId, subject: string) => (
+	await firstSql<{ user_id: string; status: string }>(database, sql(database).select({
+		table: 'passport_external_identities', alias: 'i',
+		columns: { user_id: { column: 'i.user_id', cast: 'text' }, status: 'u.status' },
+		joins: [{ table: 'passport_users', alias: 'u', left: 'u.user_id', right: 'i.user_id' }],
+		where: [{ column: 'i.provider', value: provider }, { column: 'i.subject', value: subject }],
+	}))
+);
+
 export const resolveExternalUser = async (database: DatabaseAdapter, workerId: unknown, provider: ExternalProvider, profile: ExternalProfile, targetUserId?: string | null) => {
 	const existing = await firstSql<{ user_id: string; status: string }>(database, sql(database).select({ table: 'passport_external_identities', alias: 'i', columns: { user_id: { column: 'i.user_id', cast: 'text' }, status: 'u.status' }, joins: [{ table: 'passport_users', alias: 'u', left: 'u.user_id', right: 'i.user_id' }], where: [{ column: 'i.provider', value: provider.id }, { column: 'i.subject', value: profile.subject }] }));
 	if (existing?.status !== undefined && existing.status !== 'enabled') throw new Error('该外部身份对应的 Accounts 用户已停用');

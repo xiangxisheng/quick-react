@@ -183,6 +183,20 @@ try {
 	assert.ok(cookie(passwordLogin, 'passport_session'));
 	assert.equal((await passwordLogin.json()).redirectTo, '/');
 
+	// 已绑定过的微信身份再次登录：直接建立会话，不再发验证码、也不再进注册流程。
+	deliveredCode = '';
+	const returningStart = await app.request('http://accounts.test/api/accounts/external/wechat');
+	const returningState = new URL(returningStart.headers.get('location')).searchParams.get('state');
+	const returningCallback = await app.request(`http://accounts.test/api/accounts/external/wechat?code=wechat-code&state=${encodeURIComponent(returningState)}`, { headers: { cookie: cookie(returningStart, 'accounts_external_state') } });
+	assert.equal(returningCallback.status, 302);
+	assert.ok(cookie(returningCallback, 'passport_session'), '老用户应该直接拿到会话');
+	assert.equal(cookie(returningCallback, 'accounts_external_pending'), undefined, '不应该再进入待注册状态');
+	assert.equal(deliveredCode, '', '老用户登录不应该发送验证码');
+	const returningDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
+	assert.equal(returningDatabase.prepare('SELECT COUNT(*) AS count FROM passport_users').get().count, 2, '不应该重复创建用户');
+	assert.equal(returningDatabase.prepare("SELECT COUNT(*) AS count FROM passport_external_identities WHERE provider = 'wechat'").get().count, 1);
+	returningDatabase.close();
+
 	const modeDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
 	modeDatabase.prepare("UPDATE passport_external_providers SET wechat_mode = 'official_account' WHERE id = 'wechat'").run();
 	modeDatabase.close();

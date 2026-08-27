@@ -1,6 +1,6 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiResponse } from '@server/api-response.mjs';
-import { clearExternalStateCookie, consumeExternalState, createExternalState, createPendingExternalIdentity, discardExternalEmailOtp, externalAuthorizationUrl, externalPendingCookie, externalProvider, externalQrState, externalStateCookie, externalStateCookieName, externalVerifiedCookie, fetchExternalProfile, issueExternalEmailOtp, pendingExternalIdentityByQrState, resolveExternalUser, verifyExternalEmailOtp, type ExternalProviderId } from '@server/accounts/external.mjs';
+import { clearExternalStateCookie, consumeExternalState, createExternalState, createPendingExternalIdentity, discardExternalEmailOtp, externalAuthorizationUrl, externalPendingCookie, externalProvider, externalQrState, externalStateCookie, externalIdentityUser, externalStateCookieName, externalVerifiedCookie, fetchExternalProfile, issueExternalEmailOtp, pendingExternalIdentityByQrState, resolveExternalUser, verifyExternalEmailOtp, type ExternalProviderId } from '@server/accounts/external.mjs';
 import { clearOidcRequestCookie, oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
 import { accountOnboarding, refreshOidcRequest } from '@server/accounts/onboarding.mjs';
 import { createPassportSessionCookie, loadPassportSession } from '@server/passport/session.mjs';
@@ -90,7 +90,9 @@ const handler: ApiHandler = async (c, _next, params) => {
 	try {
 		const profile = await fetchExternalProfile(provider, code, state, c.env.OIDC_FETCH ?? fetch);
 		const current = await loadPassportSession(database, c.req.raw);
-		if (!current && !profile.email) {
+		// 已经绑定过的外部身份直接登录，即使身份源不提供邮箱也不再要求验证码。
+		const bound = await externalIdentityUser(database, provider.id, profile.subject);
+		if (!current && !bound && !profile.email) {
 			if (provider.wechat_mode === 'official_account' && !cookieState && consume) {
 				await createPendingExternalIdentity(database, profile, provider.id, await sha256(returnedState));
 				await runSql(database, sql(database).update('passport_external_login_states', { qr_status: 'authorized' }, [{ column: 'id_hash', value: await sha256(returnedState) }]));
