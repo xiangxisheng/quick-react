@@ -143,7 +143,7 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 			pageSuffix: siteConfig.pageSuffix,
 			siteName: site.name,
 			siteNavigation: menuItems,
-			auth: { ...auth, currentUser: c.get('currentUser') ?? c.get('passportUser') },
+			auth,
 			footer: `Ant Design ©${new Date().getFullYear()} Created by Ant UED`,
 			pageStatus,
 		},

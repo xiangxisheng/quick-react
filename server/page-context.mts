@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 import type { AppEnv } from './types.mjs';
-import type { AuthPage, AuthState, PageStatus } from '@shared/types/initial-data.mjs';
+import type { AuthPage, AuthState, HeaderAction, PageStatus } from '@shared/types/initial-data.mjs';
 import { findNavigationItem, stripPageSuffix } from '@shared/navigation-tree.mjs';
 import { getFullSiteNavigation, getPageDefinitions, getSiteNavigation } from './navigation.mjs';
 import { loadAccountsOidcConfig } from './accounts/client.mjs';
@@ -25,26 +25,29 @@ export const buildAuthState = async (c: Context<AppEnv>): Promise<AuthState> => 
 			? [{ path: `/accounts/sign${siteConfig.pageSuffix}`, title: 'Accounts 身份登录', description: '使用 Accounts 身份完成统一登录', mode: 'sign' as const, apiPath: `/api/accounts/sign${siteConfig.apiSuffix}`, submitMethod: 'POST' as const, redirectPath: `/` }]
 			: []),
 	];
-	if (c.get('currentUser')) {
+	const currentUser = c.get('currentUser'), passportUser = c.get('passportUser');
+	const localActions: HeaderAction[] = [
+		{ key: '/panel/me', label: '个人中心', action: 'navigate', icon: 'user' },
+		{ key: '/sign', label: '退出登录', action: 'logout', icon: 'logout' },
+	];
+	const accountsActions: HeaderAction[] = [
+		{ key: '/panel/accounts', label: '账户中心', action: 'navigate', icon: 'user' },
+		{ key: '/accounts/sign', label: '退出 Accounts', action: 'logout', icon: 'logout' },
+	];
+	// Accounts 站点上以 Accounts 身份（昵称）为准；同时存在站点本地会话时，两套入口都给出。
+	if (site.codeSiteChain.includes('accounts_identity') && passportUser) {
 		return {
 			component: 'dropdown',
-			actions: [
-				{ key: '/panel/me', label: '个人中心', action: 'navigate', icon: 'user' },
-				{ key: '/sign', label: '退出登录', action: 'logout', icon: 'logout' },
-			],
+			currentUser: passportUser,
+			actions: [...accountsActions, ...(currentUser ? localActions : [])],
 			pages: signPages,
 		};
 	}
-	// 只有 Accounts 会话时，头部展示 Accounts 身份并指向账户中心。
-	if (c.get('passportUser')) {
-		return {
-			component: 'dropdown',
-			actions: [
-				{ key: '/panel/accounts', label: '账户中心', action: 'navigate', icon: 'user' },
-				{ key: '/accounts/sign', label: '退出 Accounts', action: 'logout', icon: 'logout' },
-			],
-			pages: signPages,
-		};
+	if (currentUser) {
+		return { component: 'dropdown', currentUser, actions: localActions, pages: signPages };
+	}
+	if (passportUser) {
+		return { component: 'dropdown', currentUser: passportUser, actions: accountsActions, pages: signPages };
 	}
 	// Accounts 站点的登录入口指向账号登录页（第三方与邮箱登录都在那里），本地账号密码页只给站点管理员使用。
 	const signInKey = site.codeSiteChain.includes('accounts_identity') ? '/accounts/sign' : '/sign';
