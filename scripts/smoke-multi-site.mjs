@@ -202,6 +202,15 @@ try {
 	assert.ok(redirectSourceColumn.options.some((option) => option.value === 'https://site1.test/api/accounts/oidc/callback' && option.fieldValues.backchannel_logout_path === '/api/accounts/oidc/backchannel-logout'));
 	assert.deepEqual(redirectColumn.readOnlyWhen, { field: 'redirect_uri_source', optionValues: true });
 	assert.deepEqual(logoutPathColumn.readOnlyWhen, { field: 'redirect_uri_source', optionValues: true });
+	assert.equal((await request('passport.test', '/api/panel/admin/accounts/oidc/clients.php', {
+		method: 'POST', cookie, body: { name: 'Smoke OIDC Client', redirect_uris: 'https://site1.test/api/accounts/oidc/callback', backchannel_logout_path: '/api/accounts/oidc/backchannel-logout', allowed_scopes: 'openid profile email', require_pkce: true },
+	})).status, 201);
+	const createdOidcClients = await (await request('passport.test', '/api/panel/admin/accounts/oidc/clients.php', { cookie })).json();
+	const createdOidcClient = createdOidcClients.table.dataSource.find((row) => row.name === 'Smoke OIDC Client');
+	assert.equal(createdOidcClient.redirect_uri_source, 'https://site1.test/api/accounts/oidc/callback');
+	const oidcClientEdit = await (await request('passport.test', `/api/panel/admin/accounts/oidc/clients/${encodeURIComponent(createdOidcClient.id)}.php`, { cookie })).json();
+	assert.equal(oidcClientEdit.redirect_uri_source, 'https://site1.test/api/accounts/oidc/callback');
+	assert.equal(oidcClientEdit.backchannel_logout_path, '/api/accounts/oidc/backchannel-logout');
 	const botsPath = '/api/panel/admin/global/telegram/bots.php';
 	assert.equal((await request('localhost', botsPath, {
 		method: 'POST', cookie, body: { name: 'smoke-passport-bot', bot_token: '10001:smoke-token', webhook_hostname: 'passport.test' },

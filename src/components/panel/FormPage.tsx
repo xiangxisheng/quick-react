@@ -30,8 +30,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> => (
 	Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 );
 
-const FieldControl = ({ field, dependencyValue, sourceOptions }: { field: FormPageField; dependencyValue: unknown; sourceOptions?: FieldLinkOption[] }) => {
-	const readOnly = isFieldReadOnly(field.readOnlyWhen, dependencyValue, sourceOptions);
+const fieldControl = (field: FormPageField, readOnly: boolean) => {
 	if (field.type === 'switch') return <Switch checkedChildren={field.checkedChildren} unCheckedChildren={field.unCheckedChildren} />;
 	if (field.type === 'select') return <Select options={field.options?.map((option) => ({ value: option.value, label: option.text }))} placeholder={field.placeholder} />;
 	return <Input type={field.type === 'password' ? 'password' : 'text'} placeholder={field.placeholder} maxLength={field.maxLength} readOnly={readOnly} disabled={readOnly} />;
@@ -188,7 +187,10 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 		>
 			{formConfig?.fields.map((field) => field.type === 'hidden' ? (
 				<Form.Item key={field.name} name={field.name} hidden><Input /></Form.Item>
-			) : (
+			) : (() => {
+				const sourceOptions = field.readOnlyWhen ? formConfig.fields.find((candidate) => candidate.name === field.readOnlyWhen?.field)?.options as FieldLinkOption[] | undefined : undefined;
+				const readOnly = isFieldReadOnly(field.readOnlyWhen, field.readOnlyWhen ? liveValues[field.readOnlyWhen.field] : undefined, sourceOptions);
+				return (
 				<Form.Item
 					key={field.name}
 					label={(
@@ -225,9 +227,10 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 					valuePropName={field.type === 'switch' ? 'checked' : 'value'}
 					rules={field.rules}
 				>
-					<FieldControl field={field} dependencyValue={field.readOnlyWhen ? liveValues[field.readOnlyWhen.field] : undefined} sourceOptions={field.readOnlyWhen ? formConfig.fields.find((candidate) => candidate.name === field.readOnlyWhen?.field)?.options : undefined} />
+					{fieldControl(field, readOnly)}
 				</Form.Item>
-			))}
+				);
+			})())}
 			<Space>
 				<Button type="primary" htmlType="submit" loading={saving}>{formConfig?.submitLabel}</Button>
 				{formConfig?.submitHint ? <Typography.Text type="secondary">{formConfig.submitHint}</Typography.Text> : null}

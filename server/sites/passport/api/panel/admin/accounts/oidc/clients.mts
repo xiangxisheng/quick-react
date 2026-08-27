@@ -3,7 +3,7 @@ import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mj
 import { parseRedirectUris, randomToken, sha256 } from '@server/accounts/oidc.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 import { allSql, runSql, sql } from '@server/database/sql.mjs';
-import { oidcClients } from '@server/accounts/repository.mjs';
+import { oidcClient, oidcClients } from '@server/accounts/repository.mjs';
 
 const defaultBackchannelLogoutPath = '/api/accounts/oidc/backchannel-logout';
 
@@ -51,22 +51,32 @@ const pathFromUri = (value: unknown) => {
 	catch { return defaultBackchannelLogoutPath; }
 };
 
+const clientFormRow = (row: Record<string, unknown>, options: Array<{ value: string }>) => {
+	const redirectUris = JSON.parse(String(row.redirect_uris || '[]')) as string[];
+	return {
+		...row,
+		redirect_uris: redirectUris.join(', '),
+		backchannel_logout_path: pathFromUri(row.backchannel_logout_uri),
+		redirect_uri_source: options.some((option) => option.value === redirectUris[0]) ? redirectUris[0] : '__custom__',
+		backchannel_logout_uri: undefined,
+	};
+};
+
 const handler: ApiHandler = async (c, next, params) => {
 	const database = c.get('passportDatabase');
 	if (!database || c.get('site').siteKey !== 'passport') return apiMessage(c, 404);
 	if (!params.id && c.req.method === 'GET') {
 		const rows: Array<Record<string, unknown>> = await oidcClients(database);
 		const redirectUriOptions = await loadRedirectUriOptions(c);
-		for (const row of rows) {
-			const redirectUris = JSON.parse(String(row.redirect_uris || '[]')) as string[];
-			row.redirect_uris = redirectUris.join(', ');
-			row.backchannel_logout_path = pathFromUri(row.backchannel_logout_uri);
-			row.redirect_uri_source = redirectUriOptions.some((option) => option.value === redirectUris[0]) ? redirectUris[0] : '__custom__';
-			delete row.backchannel_logout_uri;
-		}
+		const dataSource = rows.map((row) => clientFormRow(row, redirectUriOptions));
 		redirectUriOptions.push({ value: '__custom__', text: '自定义回调地址', fieldValues: {} });
 		const tableColumns = columns.map((column) => column.dataIndex === 'redirect_uri_source' ? { ...column, options: redirectUriOptions } : column);
-		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { toolbar: [{ key: 'create', label: '新增客户端' }], row: [{ key: 'edit', label: '编辑' }, { key: 'reset-secret', label: '重置密钥', confirm: '重置后旧密钥立即失效，确定继续吗？' }, { key: 'delete', label: '删除' }] } }, columns: tableColumns, dataSource: rows, totalRecords: rows.length } });
+		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { toolbar: [{ key: 'create', label: '新增客户端' }], row: [{ key: 'edit', label: '编辑' }, { key: 'reset-secret', label: '重置密钥', confirm: '重置后旧密钥立即失效，确定继续吗？' }, { key: 'delete', label: '删除' }] } }, columns: tableColumns, dataSource, totalRecords: rows.length } });
+	}
+	if (params.id && c.req.method === 'GET') {
+		const row = await oidcClient(database, params.id);
+		if (!row) return apiMessage(c, 404, 'OIDC 客户端不存在');
+		return apiResponse(c, 200, clientFormRow(row, await loadRedirectUriOptions(c)));
 	}
 	if (!params.id && c.req.method === 'POST') {
 		const body: Record<string, unknown> = await c.req.json<Record<string, unknown>>().catch(() => ({}));
