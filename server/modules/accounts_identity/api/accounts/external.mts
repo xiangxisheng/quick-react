@@ -34,7 +34,10 @@ const handler: ApiHandler = async (c, _next, params) => {
 		}
 		const verified = await verifyExternalEmailOtp(database, c.env.SNOWFLAKE_WORKER_ID, pending, String(body.code ?? ''));
 		if (verified.status !== 'created') return apiMessage(c, 409, verified.status === 'conflict' ? verified.message : verified.status === 'expired' ? '验证码已过期' : '验证码不正确');
-		await runSql(database, sql(database).update('passport_external_login_states', { qr_status: 'authorized', qr_user_id: verified.userId }, { id_hash: await sha256(bindState) }));
+		const sessionId = crypto.randomUUID(), now = Date.now(), maxAge = 24 * 60 * 60;
+		await runSql(database, sql(database).insert('passport_sessions', { id: sessionId, user_id: verified.userId, expires_at: now + maxAge * 1000, created_at: now }));
+		await runSql(database, sql(database).update('passport_external_login_states', { qr_status: 'consumed', qr_user_id: verified.userId }, { id_hash: await sha256(bindState) }));
+		c.header('Set-Cookie', createPassportSessionCookie(sessionId, secure, maxAge));
 		return apiResponse(c, 200, { status: 'completed' });
 	}
 	if (c.req.method !== 'GET') return apiMessage(c, 400, '缺少邮箱绑定状态');
