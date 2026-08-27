@@ -24,6 +24,12 @@ npm start
 npm run dev
 ```
 
+如果希望后端源码变动后自动重启 Node 服务，使用：
+
+```bash
+npm run dev:restart
+```
+
 执行类型检查：
 
 ```bash

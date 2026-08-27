@@ -19,6 +19,12 @@ node esbuild.cjs
 npm run dev
 ```
 
+开发监听并自动重启后端：
+
+```bash
+npm run dev:restart
+```
+
 类型检查：
 
 ```bash

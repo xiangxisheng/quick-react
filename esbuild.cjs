@@ -1,5 +1,6 @@
 const path = require('node:path');
 const fs = require('node:fs');
+const { spawn } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
 const esbuild = require('esbuild');
 const { generate: generateWorkerRegistryFile } = require('./scripts/generate-worker-registry.cjs');
@@ -16,7 +17,7 @@ const createRuntimeConfig = () => {
 	);
 };
 
-const createBuildContext = async (entryPoint, outputDir, outfile, options = {}) => {
+const createBuildContext = async (entryPoint, outputDir, outfile, options = {}, onBuild) => {
 	let initialBuildResolve;
 	let initialBuildReject;
 	let initialBuildCompleted = false;
@@ -34,6 +35,7 @@ const createBuildContext = async (entryPoint, outputDir, outfile, options = {}) 
 			setup(build) {
 				build.onEnd((result) => {
 					console.log(`${outfile}: build ended with ${result.errors.length} errors`);
+					if (result.errors.length === 0) onBuild?.();
 					if (!initialBuildCompleted) {
 						initialBuildCompleted = true;
 						if (result.errors.length > 0) {
@@ -53,6 +55,27 @@ const createBuildContext = async (entryPoint, outputDir, outfile, options = {}) 
 const main = async () => {
 	const watch = process.argv.includes('--watch');
 	const startServer = process.argv.includes('--start') || process.env.START_SERVER === '1';
+	const restartServer = process.argv.includes('--restart') || process.env.AUTO_RESTART_SERVER === '1';
+	let serverProcess;
+	let watchReady = false;
+	let restartPromise = Promise.resolve();
+	const launchServer = () => {
+		serverProcess = spawn(process.execPath, [path.join(distDir, 'server.mjs')], {
+			cwd: projectDir,
+			env: process.env,
+			stdio: 'inherit',
+		});
+	};
+	const restartRunningServer = () => {
+		restartPromise = restartPromise.then(async () => {
+			if (serverProcess && !serverProcess.killed && serverProcess.exitCode === null) {
+				const oldProcess = serverProcess;
+				oldProcess.kill('SIGTERM');
+				await new Promise((resolve) => oldProcess.once('exit', resolve));
+			}
+			launchServer();
+		});
+	};
 	generateWorkerRegistryFile();
 	const frontend = await createBuildContext('src/index.tsx', publicDir, 'bundle.js', {
 		minify: true,
@@ -67,7 +90,9 @@ const main = async () => {
 		format: 'esm',
 		target: 'node18',
 		packages: 'external',
-	});
+	}, watch && startServer && restartServer ? () => {
+		if (watchReady) restartRunningServer();
+	} : undefined);
 	const worker = await createBuildContext('server/worker.mts', distDir, 'worker.mjs', {
 		platform: 'neutral',
 		format: 'esm',
@@ -79,6 +104,7 @@ const main = async () => {
 		await Promise.all(contexts.map((context) => context.watch()));
 		await Promise.all(builds.map(({ initialBuild }) => initialBuild));
 		createRuntimeConfig();
+		watchReady = true;
 		console.log('Watching frontend and backend sources');
 	} else {
 		try {
@@ -89,7 +115,27 @@ const main = async () => {
 		createRuntimeConfig();
 	}
 
-	if (startServer) await import(`${pathToFileURL(path.join(distDir, 'server.mjs')).href}?startup=${Date.now()}`);
+	if (startServer) {
+		if (watch && restartServer) {
+			const stopServer = () => {
+				if (serverProcess && !serverProcess.killed) serverProcess.kill('SIGTERM');
+			};
+			process.once('exit', stopServer);
+			process.once('SIGINT', stopServer);
+			process.once('SIGTERM', stopServer);
+			launchServer();
+			await new Promise((resolve, reject) => {
+				serverProcess.once('error', reject);
+				serverProcess.once('exit', (code, signal) => {
+					if (code && code !== 0) reject(new Error(`Server exited with code ${code}`));
+					else if (signal !== 'SIGTERM') reject(new Error(`Server exited with signal ${signal}`));
+					else resolve();
+				});
+			});
+		} else {
+			await import(`${pathToFileURL(path.join(distDir, 'server.mjs')).href}?startup=${Date.now()}`);
+		}
+	}
 };
 
 main().catch((error) => {

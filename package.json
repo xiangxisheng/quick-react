@@ -11,6 +11,7 @@
 		"build": "node esbuild.cjs",
 		"build:worker": "SKIP_SERVER_LISTEN=1 node esbuild.cjs",
 		"dev": "node esbuild.cjs --watch --start",
+		"dev:restart": "node esbuild.cjs --watch --start --restart",
 		"start": "node dist/server.mjs",
 		"typecheck": "node scripts/generate-worker-registry.cjs && tsc --noEmit",
 		"smoke:multi-site": "node scripts/smoke-multi-site.mjs",
