@@ -17,6 +17,7 @@ export type FormPageField = {
 export type FormPageConfig = {
 	description?: string;
 	submitLabel?: string;
+	actions?: Array<{ key: string; label: string }>;
 	confirmOnUnchangedSubmit?: string;
 	submitHint?: string;
 	initialValues: Record<string, unknown>;

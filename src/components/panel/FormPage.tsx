@@ -41,6 +41,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 	const [messageApi, messageContextHolder] = message.useMessage();
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
+	const [runningAction, setRunningAction] = useState<string>();
 	const [formConfig, setFormConfig] = useState<FormResponse['formPage']>();
 	const [initialValues, setInitialValues] = useState<Record<string, unknown>>({});
 	const [liveValues, setLiveValues] = useState<Record<string, unknown>>({});
@@ -135,6 +136,20 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 			console.error(`保存配置失败: ${apiPath}`, error);
 		} finally {
 			setSaving(false);
+		}
+	};
+	const runAction = async (key: string) => {
+		setRunningAction(key);
+		try {
+			await commonApi.apiFetch(`${apiPath}?action=${encodeURIComponent(key)}`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(form.getFieldsValue(true)),
+			});
+		} catch (error) {
+			console.error(`执行配置操作失败: ${apiPath}?action=${key}`, error);
+		} finally {
+			setRunningAction(undefined);
 		}
 	};
 
@@ -232,6 +247,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 				);
 			})())}
 			<Space>
+				{formConfig?.actions?.map((action) => <Button key={action.key} loading={runningAction === action.key} disabled={saving || Boolean(runningAction)} onClick={() => runAction(action.key)}>{action.label}</Button>)}
 				<Button type="primary" htmlType="submit" loading={saving}>{formConfig?.submitLabel}</Button>
 				{formConfig?.submitHint ? <Typography.Text type="secondary">{formConfig.submitHint}</Typography.Text> : null}
 			</Space>

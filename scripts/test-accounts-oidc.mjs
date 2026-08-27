@@ -36,6 +36,8 @@ try {
 	const discovery = await (await request('/.well-known/openid-configuration')).json();
 	assert.equal(discovery.issuer, 'https://accounts.test');
 	assert.equal(discovery.authorization_endpoint, 'https://accounts.test/api/oidc/authorize');
+	const forwardedDiscovery = await (await app.request('http://accounts.test/.well-known/openid-configuration', { headers: { 'x-forwarded-proto': 'https', 'x-forwarded-host': 'accounts.test' } })).json();
+	assert.equal(forwardedDiscovery.issuer, 'https://accounts.test');
 	const authorize = new URL('/api/oidc/authorize', 'https://accounts.test');
 	authorize.search = new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: 'https://client.test/callback', scope: 'openid profile', state: 'state-1', nonce: 'nonce-1', code_challenge: challenge, code_challenge_method: 'S256' }).toString();
 	const authorized = await request(`${authorize.pathname}${authorize.search}`, { headers: { cookie: `passport_session=${sessionId}` } });

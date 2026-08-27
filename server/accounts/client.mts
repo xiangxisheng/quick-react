@@ -25,7 +25,22 @@ export const loadDiscovery = async (c: Context<AppEnv>, issuer: string) => {
 	const response = await oidcFetch(c, `${issuer}/.well-known/openid-configuration`);
 	if (!response.ok) throw new Error(`Accounts 发现文档请求失败（HTTP ${response.status}）`);
 	const discovery = await response.json() as OidcDiscovery;
-	if (discovery.issuer !== issuer || !discovery.authorization_endpoint || !discovery.token_endpoint || !discovery.jwks_uri) throw new Error('Accounts 发现文档不合法或 issuer 不匹配');
+	if (discovery.issuer !== issuer) {
+		try {
+			const configured = new URL(issuer), discovered = new URL(discovery.issuer);
+			if (configured.hostname !== discovered.hostname || configured.port !== discovered.port || configured.protocol !== 'https:' || discovered.protocol !== 'http:') throw new Error('issuer mismatch');
+			for (const key of ['authorization_endpoint', 'token_endpoint', 'userinfo_endpoint', 'jwks_uri'] as const) {
+				const endpoint = discovery[key];
+				if (endpoint) {
+					const url = new URL(endpoint);
+					if (url.hostname !== discovered.hostname || url.port !== discovered.port) throw new Error('endpoint host mismatch');
+					(discovery[key] as string) = `${configured.origin}${url.pathname}${url.search}`;
+				}
+			}
+			discovery.issuer = issuer;
+		} catch { throw new Error('Accounts 发现文档不合法或 issuer 不匹配'); }
+	}
+	if (!discovery.authorization_endpoint || !discovery.token_endpoint || !discovery.jwks_uri) throw new Error('Accounts 发现文档缺少必要端点');
 	return discovery;
 };
 

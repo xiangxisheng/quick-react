@@ -29,7 +29,7 @@ const DrawerForm = (await import('../src/utils/antd/table_crud/drawer.js')).defa
 const response = {
 	currentValues: { enabled: false, issuerSource: '__custom__', issuer: '', clientId: '', clientSecret: '' },
 	formPage: {
-		initialValues: {}, submitLabel: '保存', fields: [
+		initialValues: {}, submitLabel: '保存', actions: [{ key: 'test', label: '测试配置' }], fields: [
 			{ name: 'issuerSource', label: 'Passport 域名', type: 'select', options: [
 				{ value: 'https://passport.test', text: 'Passport (passport.test)', fieldValues: { issuer: 'https://passport.test' } },
 				{ value: '__custom__', text: '自定义 Issuer' },
@@ -38,8 +38,12 @@ const response = {
 		],
 	},
 };
+const requests: Array<{ url: string; init?: RequestInit }> = [];
 const commonApi = {
-	apiFetch: async () => new Response(JSON.stringify(response), { headers: { 'content-type': 'application/json' } }),
+	apiFetch: async (url: string, init?: RequestInit) => {
+		requests.push({ url, init });
+		return new Response(JSON.stringify(response), { headers: { 'content-type': 'application/json' } });
+	},
 	modalConfirm: async () => true,
 };
 const user = userEvent.setup({ document: dom.window.document });
@@ -56,6 +60,10 @@ sourceSelect = screen.getByRole('combobox');
 await user.click(sourceSelect);
 await user.click(await screen.findByText('自定义 Issuer'));
 await waitFor(() => assert.equal(issuerInput.disabled, false, '选择自定义 Issuer 后输入框应解锁'));
+await user.clear(issuerInput);
+await user.type(issuerInput, 'https://custom.test');
+await user.click(screen.getByRole('button', { name: '测试配置' }));
+await waitFor(() => assert.ok(requests.some((request) => request.url === '/api/settings?action=test' && JSON.parse(String(request.init?.body)).issuer === 'https://custom.test')));
 cleanup();
 
 const columns = [

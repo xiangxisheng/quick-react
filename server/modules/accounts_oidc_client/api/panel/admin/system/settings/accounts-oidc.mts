@@ -1,13 +1,13 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
-import { accountsOidcConfigKey, defaultAccountsOidcConfig, normalizeAccountsOidcConfig } from '@server/accounts/client.mjs';
+import { accountsOidcConfigKey, defaultAccountsOidcConfig, loadDiscovery, normalizeAccountsOidcConfig, oidcFetch } from '@server/accounts/client.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 import { allSql, sql } from '@server/database/sql.mjs';
 
 const defaultIssuer = 'https://accounts.example.com';
 const createFormPage = (issuerOptions: Array<{ value: string; text: string; fieldValues?: Record<string, unknown> }>): FormPageConfig => ({
 	description: '业务站点通过 OIDC Authorization Code + PKCE 登录 Accounts。客户端密钥保存在本站数据库，不会写入全局站点库。',
-	submitLabel: '保存配置', initialValues: defaultAccountsOidcConfig,
+	submitLabel: '保存配置', actions: [{ key: 'test', label: '测试配置' }], initialValues: defaultAccountsOidcConfig,
 	fields: [
 		{ name: 'enabled', label: '启用 Accounts 登录', type: 'switch' },
 		{ name: 'issuerSource', label: 'Passport 域名', type: 'select', options: issuerOptions, placeholder: '选择 Passport 域名，或选择自定义', rules: [{ required: true, message: '请选择 Passport 域名来源' }] },
@@ -38,6 +38,21 @@ const handler: ApiHandler = async (c, next) => {
 		const issuerOptions = await loadIssuerOptions(c, current.issuer);
 		const issuerSource = issuerOptions.some((option) => option.value === current.issuer) ? current.issuer : '__custom__';
 		return apiResponse(c, 200, { currentValues: { ...current, issuerSource, clientSecret: '' }, formPage: { ...createFormPage(issuerOptions), initialValues: { ...current, issuerSource, clientSecret: '' } } });
+	}
+	if (c.req.method === 'POST' && c.req.query('action') === 'test') {
+		const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
+		const config = normalizeAccountsOidcConfig(body, current);
+		if (!config.issuer || !config.clientId || !config.clientSecret) return apiMessage(c, 400, '测试前必须填写 Issuer、客户端 ID 和客户端密钥');
+		try {
+			const discovery = await loadDiscovery(c, config.issuer);
+			const jwksResponse = await oidcFetch(c, discovery.jwks_uri, { headers: { accept: 'application/json' } });
+			if (!jwksResponse.ok) return apiMessage(c, 502, `Accounts JWKS 请求失败（HTTP ${jwksResponse.status}）`);
+			const jwks = await jwksResponse.json() as { keys?: unknown[] };
+			if (!Array.isArray(jwks.keys) || !jwks.keys.length) return apiMessage(c, 502, 'Accounts JWKS 中没有可用公钥');
+			return apiMessage(c, 200, 'Accounts OIDC 连接测试通过：Issuer 发现文档和 JWKS 可用；客户端 ID、密钥及回调地址将在实际登录时验证');
+		} catch (error) {
+			return apiMessage(c, 502, error instanceof Error ? error.message : 'Accounts OIDC 配置测试失败');
+		}
 	}
 	if (c.req.method === 'PUT') {
 		const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));

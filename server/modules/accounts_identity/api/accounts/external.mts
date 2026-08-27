@@ -1,9 +1,11 @@
 import type { ApiHandler } from '@server/api-router.mjs';
-import { apiMessage } from '@server/api-response.mjs';
-import { clearExternalStateCookie, consumeExternalState, createExternalState, createPendingExternalIdentity, externalAuthorizationUrl, externalPendingCookie, externalProvider, externalStateCookie, externalStateCookieName, fetchExternalProfile, resolveExternalUser, type ExternalProviderId } from '@server/accounts/external.mjs';
+import { apiMessage, apiResponse } from '@server/api-response.mjs';
+import { clearExternalStateCookie, consumeExternalState, createExternalState, createPendingExternalIdentity, externalAuthorizationUrl, externalPendingCookie, externalProvider, externalQrState, externalStateCookie, externalStateCookieName, fetchExternalProfile, resolveExternalUser, type ExternalProviderId } from '@server/accounts/external.mjs';
 import { clearOidcRequestCookie, oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
 import { createPassportSessionCookie, loadPassportSession } from '@server/passport/session.mjs';
 import { runSql, sql } from '@server/database/sql.mjs';
+import { isSecureRequest, requestOrigin } from '@server/request-origin.mjs';
+import { sha256 } from '@server/accounts/oidc.mjs';
 
 const providerId = (value: string): ExternalProviderId | undefined => value === 'google' || value === 'wechat' ? value : undefined;
 
@@ -14,14 +16,40 @@ const handler: ApiHandler = async (c, _next, params) => {
 	if (!id) return apiMessage(c, 404, '外部身份源不存在');
 	const provider = await externalProvider(database, id);
 	if (!provider) return apiMessage(c, 404, `${id === 'google' ? 'Google' : '微信'}登录尚未启用`);
-	const requestUrl = new URL(c.req.url), secure = requestUrl.protocol === 'https:';
+	const secure = isSecureRequest(c);
 	const publicOrigin = c.get('systemConfig').publicOrigin?.trim();
-	const redirectUri = new URL(`/api/accounts/external/${id}`, publicOrigin || requestUrl.origin).toString();
+	const configuredOrigin = id === 'wechat' && provider.wechat_redirect_domain ? `${isSecureRequest(c) ? 'https' : 'http'}://${provider.wechat_redirect_domain}` : (publicOrigin || requestOrigin(c));
+	const redirectUri = new URL(`/api/accounts/external/${id}`, configuredOrigin).toString();
 	const code = c.req.query('code')?.trim(), returnedState = c.req.query('state')?.trim();
+	const pollState = c.req.query('poll')?.trim();
+	if (pollState) {
+		const polled = await externalQrState(database, await sha256(pollState));
+		if (!polled || polled.provider !== id || polled.expires_at <= Date.now()) return apiResponse(c, 410, { status: 'expired' });
+		if (polled.qr_status !== 'authorized' || !polled.qr_user_id) return apiResponse(c, 200, { status: polled.qr_status });
+		const sessionId = crypto.randomUUID(), now = Date.now();
+		await runSql(database, sql(database).insert('passport_sessions', { id: sessionId, user_id: polled.qr_user_id, expires_at: now + 24 * 60 * 60 * 1000, created_at: now }));
+		await runSql(database, sql(database).update('passport_external_login_states', { qr_status: 'consumed' }, [{ column: 'id_hash', value: await sha256(pollState) }, { column: 'qr_status', value: 'authorized' }]));
+		c.header('Set-Cookie', createPassportSessionCookie(sessionId, secure, 24 * 60 * 60));
+		return apiResponse(c, 200, { status: 'authenticated' });
+	}
 	if (!code && !returnedState) {
 		const created = await createExternalState(database, id, redirectUri);
 		c.header('Set-Cookie', externalStateCookie(created.state, secure));
-		return c.redirect(await externalAuthorizationUrl(provider, redirectUri, created.state, created.nonce, created.codeVerifier), 302);
+		const authorizationUrl = await externalAuthorizationUrl(provider, redirectUri, created.state, created.nonce, created.codeVerifier);
+		const isWechatClient = /MicroMessenger/i.test(c.req.header('user-agent') ?? '');
+		if (id === 'wechat' && provider.wechat_mode === 'official_account' && !isWechatClient) {
+			if (c.req.query('format') === 'json') return apiResponse(c, 200, { mode: 'qrcode', authorizationUrl, pollUrl: `/api/accounts/external/${id}?poll=${created.state}` });
+			const pageSuffix = c.get('techStackConfig').pageSuffix || '';
+			return c.redirect(`/accounts/external/${id}${pageSuffix}`, 302);
+		}
+		return c.redirect(authorizationUrl, 302);
+	}
+	const consume = c.req.query('consume') === '1';
+	if (id === 'wechat' && provider.wechat_mode === 'official_account' && (code || c.req.query('error')) && !consume) {
+		const pageSuffix = c.get('techStackConfig').pageSuffix || '';
+		const target = new URL(`/accounts/external/callback${pageSuffix}`, requestOrigin(c));
+		for (const key of ['provider', 'code', 'state', 'error', 'error_description']) { const value = c.req.query(key); if (value) target.searchParams.set(key, value); }
+		return c.redirect(target.toString(), 302);
 	}
 	const providerError = c.req.query('error');
 	if (providerError) {
@@ -30,19 +58,27 @@ const handler: ApiHandler = async (c, _next, params) => {
 	}
 	if (!code || !returnedState) return apiMessage(c, 400, '外部授权回调缺少 code 或 state');
 	const cookieState = readCookie(c.req.raw, externalStateCookieName);
-	if (!cookieState || cookieState !== returnedState) return apiMessage(c, 400, '外部授权 state 与当前浏览器不匹配，请重新登录');
+	if ((!cookieState || cookieState !== returnedState) && !(id === 'wechat' && provider.wechat_mode === 'official_account')) return apiMessage(c, 400, '外部授权 state 与当前浏览器不匹配，请重新登录');
 	const state = await consumeExternalState(database, returnedState);
 	if (!state || state.provider !== id || state.redirect_uri !== redirectUri) return apiMessage(c, 400, '外部授权请求不存在、已过期或已经使用');
 	try {
 		const profile = await fetchExternalProfile(provider, code, state, c.env.OIDC_FETCH ?? fetch);
 		const current = await loadPassportSession(database, c.req.raw);
 		if (!current && !profile.email) {
+			if (provider.wechat_mode === 'official_account' && !cookieState && consume) {
+				await runSql(database, sql(database).update('passport_external_login_states', { qr_status: 'expired' }, [{ column: 'id_hash', value: await sha256(returnedState) }]));
+				return apiMessage(c, 422, '服务号未返回邮箱，暂不能完成跨设备登录，请先在 Accounts 绑定邮箱');
+			}
 			const pendingToken = await createPendingExternalIdentity(database, profile, provider.id);
 			c.header('Set-Cookie', clearExternalStateCookie(secure));
 			c.header('Set-Cookie', externalPendingCookie(pendingToken, secure), { append: true });
 			return c.redirect(`/accounts/sign${c.get('techStackConfig').pageSuffix}`, 302);
 		}
 		const userId = await resolveExternalUser(database, c.env.SNOWFLAKE_WORKER_ID, provider, profile, current?.id ? String(current.id) : undefined);
+		if (provider.wechat_mode === 'official_account' && !cookieState) {
+			await runSql(database, sql(database).update('passport_external_login_states', { qr_status: 'authorized', qr_user_id: userId }, [{ column: 'id_hash', value: await sha256(returnedState) }]));
+			return c.html('<p>授权成功，请返回电脑页面。</p>');
+		}
 		const sessionId = crypto.randomUUID(), now = Date.now(), maxAge = 24 * 60 * 60;
 		await runSql(database, sql(database).insert('passport_sessions', { id: sessionId, user_id: userId, expires_at: now + maxAge * 1000, created_at: now }));
 		c.header('Set-Cookie', clearExternalStateCookie(secure));
@@ -52,7 +88,8 @@ const handler: ApiHandler = async (c, _next, params) => {
 		return c.redirect(oidcRequestId ? `/api/oidc/authorize?request_id=${encodeURIComponent(oidcRequestId)}` : '/', 302);
 	} catch (error) {
 		c.header('Set-Cookie', clearExternalStateCookie(secure));
-		return apiMessage(c, 400, error instanceof Error ? error.message : '外部身份登录失败');
+		const message = error instanceof Error ? error.message : '外部身份登录失败';
+		return apiMessage(c, 400, message);
 	}
 };
 

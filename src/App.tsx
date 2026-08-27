@@ -16,6 +16,8 @@ import TableCRUD from '@/utils/antd/table_crud/index.js';
 import FormPage from './components/panel/FormPage.js';
 import AuthActions from './components/AuthActions.js';
 import PersonalCenter from './components/panel/PersonalCenter.js';
+import ExternalCallback from './components/accounts/ExternalCallback.js';
+import WechatQrLogin from './components/accounts/WechatQrLogin.js';
 const { Content } = Layout;
 
 // 定义路由对应的页面组件
@@ -95,6 +97,8 @@ const App = ({ commonApi }: AppType) => {
 		const routePath = page.component === 'sign' ? page.path : pageUrl(page.path);
 		return [{ path: routePath, element: render(page) }];
 	});
+	routes.push({ path: pageUrl('/accounts/external/callback'), element: <ExternalCallback commonApi={commonApi} /> });
+	routes.push({ path: pageUrl('/accounts/external/wechat'), element: <WechatQrLogin commonApi={commonApi} /> });
 
 	const location = useLocation(); // 获取当前 URL 路径
 	const [current, setCurrent] = useState(location.pathname); // 同步选中状态

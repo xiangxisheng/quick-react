@@ -13,8 +13,10 @@ const directMailActions = [];
 const tencentSesActions = [];
 const telegramActions = [];
 let telegramMessageId = 8000;
+let internalApp;
 globalThis.fetch = async (input, init) => {
 	const url = String(input);
+	if (internalApp && new URL(url).hostname === 'passport.test') return internalApp.request(url, init);
 	if (url === 'https://dm.aliyuncs.com/' || url === 'https://dm.ap-southeast-1.aliyuncs.com/') {
 		const parameters = new URLSearchParams(String(init?.body ?? ''));
 		const action = parameters.get('Action');
@@ -89,6 +91,7 @@ globalThis.fetch = async (input, init) => {
 
 try {
 	const { app } = await import(`../dist/server.mjs?smoke=${Date.now()}`);
+	internalApp = app;
 	const migratedDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
 	assert.equal(migratedDatabase.prepare("SELECT migration_status FROM global_sites WHERE site_key = 'passport'").get()?.migration_status, 'ready');
 	assert.equal(migratedDatabase.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'passport_users'").get()?.name, 'passport_users');
@@ -191,6 +194,7 @@ try {
 	assert.match(await (await request('site1.test', '/')).text(), /<title>首页 \| site1<\/title>/);
 	const accountsSettings = await (await request('site1.test', '/api/panel/admin/system/settings/accounts-oidc.php', { cookie })).json();
 	assert.equal(accountsSettings.formPage.fields[0].name, 'enabled');
+	assert.deepEqual(accountsSettings.formPage.actions, [{ key: 'test', label: '测试配置' }]);
 	const issuerSourceField = accountsSettings.formPage.fields.find((field) => field.name === 'issuerSource');
 	const issuerField = accountsSettings.formPage.fields.find((field) => field.name === 'issuer');
 	assert.ok(issuerSourceField.options.some((option) => option.value === 'https://passport.test' && option.fieldValues.issuer === 'https://passport.test'));
@@ -202,15 +206,22 @@ try {
 	assert.ok(redirectSourceColumn.options.some((option) => option.value === 'https://site1.test/api/accounts/oidc/callback' && option.fieldValues.backchannel_logout_path === '/api/accounts/oidc/backchannel-logout'));
 	assert.deepEqual(redirectColumn.readOnlyWhen, { field: 'redirect_uri_source', optionValues: true });
 	assert.deepEqual(logoutPathColumn.readOnlyWhen, { field: 'redirect_uri_source', optionValues: true });
-	assert.equal((await request('passport.test', '/api/panel/admin/accounts/oidc/clients.php', {
+	const createOidcClientResponse = await request('passport.test', '/api/panel/admin/accounts/oidc/clients.php', {
 		method: 'POST', cookie, body: { name: 'Smoke OIDC Client', redirect_uris: 'https://site1.test/api/accounts/oidc/callback', backchannel_logout_path: '/api/accounts/oidc/backchannel-logout', allowed_scopes: 'openid profile email', require_pkce: true },
-	})).status, 201);
+	});
+	assert.equal(createOidcClientResponse.status, 201);
+	const createdOidcCredentials = await createOidcClientResponse.json();
 	const createdOidcClients = await (await request('passport.test', '/api/panel/admin/accounts/oidc/clients.php', { cookie })).json();
 	const createdOidcClient = createdOidcClients.table.dataSource.find((row) => row.name === 'Smoke OIDC Client');
 	assert.equal(createdOidcClient.redirect_uri_source, 'https://site1.test/api/accounts/oidc/callback');
 	const oidcClientEdit = await (await request('passport.test', `/api/panel/admin/accounts/oidc/clients/${encodeURIComponent(createdOidcClient.id)}.php`, { cookie })).json();
 	assert.equal(oidcClientEdit.redirect_uri_source, 'https://site1.test/api/accounts/oidc/callback');
 	assert.equal(oidcClientEdit.backchannel_logout_path, '/api/accounts/oidc/backchannel-logout');
+	const oidcSettingsTest = await app.request('https://site1.test/api/panel/admin/system/settings/accounts-oidc.php?action=test', {
+		method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify({ issuer: 'https://passport.test', clientId: createdOidcClient.id, clientSecret: createdOidcCredentials.client_secret }),
+	});
+	assert.equal(oidcSettingsTest.status, 200);
+	assert.match((await oidcSettingsTest.json()).feedback.message, /连接测试通过/);
 	const botsPath = '/api/panel/admin/global/telegram/bots.php';
 	assert.equal((await request('localhost', botsPath, {
 		method: 'POST', cookie, body: { name: 'smoke-passport-bot', bot_token: '10001:smoke-token', webhook_hostname: 'passport.test' },

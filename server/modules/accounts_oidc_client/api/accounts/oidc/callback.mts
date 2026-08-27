@@ -4,6 +4,7 @@ import { clearAccountsLoginCookie, accountsLoginCookieName, loadAccountsOidcConf
 import { readCookie, sha256 } from '@server/accounts/oidc.mjs';
 import { createSessionCookie } from '@server/auth.mjs';
 import { firstSql, runSql, sql } from '@server/database/sql.mjs';
+import { isSecureRequest, requestOrigin } from '@server/request-origin.mjs';
 
 type LoginRequest = { id: string; issuer: string; state: string; nonce: string; code_verifier: string; return_path: string; expires_at: number };
 
@@ -15,7 +16,7 @@ const handler: ApiHandler = async (c) => {
 	const request = requestId ? await firstSql<LoginRequest>(database, sql(database).select({ table: 'base_oidc_login_requests', columns: { id: 'id', issuer: 'issuer', state: 'state', nonce: 'nonce', code_verifier: 'code_verifier', return_path: 'return_path', expires_at: 'expires_at' }, where: [{ column: 'id', value: requestId }] })) : undefined;
 	if (!request || request.expires_at <= Date.now() || request.issuer !== config.issuer || !state || state !== request.state || !code) return apiMessage(c, 400, 'Accounts 登录回调状态无效或已过期');
 	try {
-		const discovery = await loadDiscovery(c, config.issuer), callback = `${new URL(c.req.url).origin}/api/accounts/oidc/callback`;
+		const discovery = await loadDiscovery(c, config.issuer), callback = `${requestOrigin(c)}/api/accounts/oidc/callback`;
 		const tokenResponse = await oidcFetch(c, discovery.token_endpoint, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: callback, client_id: config.clientId, client_secret: config.clientSecret, code_verifier: request.code_verifier }) });
 		if (!tokenResponse.ok) throw new Error(`Accounts Token 请求失败（HTTP ${tokenResponse.status}）`);
 		const tokens = await tokenResponse.json() as { id_token?: string };
@@ -42,7 +43,7 @@ const handler: ApiHandler = async (c) => {
 		await runSql(database, sql(database).insert('base_system_sessions', { id: sessionId, user_id: account.user_id, expires_at: now + maxAge * 1000, created_at: now }));
 		await runSql(database, sql(database).upsert('base_oidc_sessions', ['issuer', 'sid'], { issuer: config.issuer, sid: oidcSessionId, session_id: sessionId, created_at: now }, ['session_id', 'created_at']));
 		await runSql(database, sql(database).delete('base_oidc_login_requests', { id: request.id }));
-		const secure = new URL(c.req.url).protocol === 'https:';
+		const secure = isSecureRequest(c);
 		c.header('Set-Cookie', clearAccountsLoginCookie(secure)); c.header('Set-Cookie', createSessionCookie(sessionId, secure, maxAge), { append: true });
 		return c.redirect(request.return_path || '/', 302);
 	} catch (error) { return apiMessage(c, 502, error instanceof Error ? error.message : 'Accounts 登录回调失败'); }

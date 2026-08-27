@@ -87,12 +87,15 @@ try {
 	assert.equal(afterConflict.prepare("SELECT COUNT(*) AS count FROM passport_external_identities WHERE provider = 'google'").get().count, 1);
 	afterConflict.close();
 
-	const wechatStart = await app.request('http://accounts.test/api/accounts/external/wechat');
+	const forwardedHeaders = { 'x-forwarded-proto': 'https', 'x-forwarded-host': 'passport.example.test' };
+	const wechatStart = await app.request('http://accounts.test/api/accounts/external/wechat', { headers: forwardedHeaders });
 	const wechatStateCookie = cookie(wechatStart, 'accounts_external_state');
 	const wechatAuthorization = new URL(wechatStart.headers.get('location'));
 	assert.equal(wechatAuthorization.hostname, 'open.weixin.qq.com');
+	assert.equal(wechatAuthorization.searchParams.get('scope'), 'snsapi_login');
+	assert.equal(wechatAuthorization.searchParams.get('redirect_uri'), 'https://passport.example.test/api/accounts/external/wechat');
 	const wechatState = wechatAuthorization.searchParams.get('state');
-	const wechatCallback = await app.request(`http://accounts.test/api/accounts/external/wechat?code=wechat-code&state=${encodeURIComponent(wechatState)}`, { headers: { cookie: wechatStateCookie } });
+	const wechatCallback = await app.request(`http://accounts.test/api/accounts/external/wechat?code=wechat-code&state=${encodeURIComponent(wechatState)}`, { headers: { ...forwardedHeaders, cookie: wechatStateCookie } });
 	assert.equal(wechatCallback.status, 302);
 	const pendingCookie = cookie(wechatCallback, 'accounts_external_pending');
 	assert.ok(pendingCookie);
@@ -114,6 +117,12 @@ try {
 	assert.equal(completed.prepare("SELECT COUNT(*) AS count FROM passport_emails WHERE email = 'wechat@example.com' AND verified = 1").get().count, 1);
 	assert.equal(completed.prepare("SELECT COUNT(*) AS count FROM passport_external_pending_identities WHERE status = 'completed'").get().count, 1);
 	completed.close();
+	const modeDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
+	modeDatabase.prepare("UPDATE passport_external_providers SET wechat_mode = 'official_account' WHERE id = 'wechat'").run();
+	modeDatabase.close();
+	const officialWechatStart = await app.request('http://accounts.test/api/accounts/external/wechat');
+	assert.equal(officialWechatStart.status, 302);
+	assert.match(officialWechatStart.headers.get('location'), /\/accounts\/external\/wechat/);
 	console.log('accounts external identity test passed');
 } finally {
 	globalThis.fetch = originalFetch;

@@ -5,8 +5,9 @@ import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { signIdToken } from '@server/accounts/oidc.mjs';
 import { backchannelClients, passportSessionUser } from '@server/accounts/repository.mjs';
 import { runSql, sql } from '@server/database/sql.mjs';
+import { requestOrigin } from '@server/request-origin.mjs';
 
-export const oidcIssuer = (c: Context<AppEnv>) => new URL(c.req.url).origin;
+export const oidcIssuer = (c: Context<AppEnv>) => requestOrigin(c);
 
 export const oidcDiscovery = (c: Context<AppEnv>) => {
 	if (c.get('site').siteKey !== 'passport') return apiMessage(c, 404);

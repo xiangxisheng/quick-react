@@ -6,12 +6,13 @@ import { hashPassword, verifyPassword } from '@server/auth.mjs';
 import { normalizePassportEmail } from '@server/passport/identity.mjs';
 
 export type ExternalProviderId = 'google' | 'wechat';
-export type ExternalProvider = { id: ExternalProviderId; display_name: string; client_id: string; client_secret: string; status: string };
+export type WechatMode = 'open_platform' | 'official_account';
+export type ExternalProvider = { id: ExternalProviderId; display_name: string; client_id: string; client_secret: string; wechat_mode: WechatMode; wechat_redirect_domain: string; status: string };
 export type ExternalProfile = { subject: string; nickname: string; email?: string; raw: Record<string, unknown> };
 export type ExternalLoginState = { provider: ExternalProviderId; code_verifier: string; nonce: string; redirect_uri: string; expires_at: number; consumed_at: number | null };
 export type PendingExternalIdentity = { id_hash: string; provider: ExternalProviderId; subject: string; nickname: string; profile: string; status: string; expires_at: number };
 
-const providerColumns = { id: 'id', display_name: 'display_name', client_id: 'client_id', client_secret: 'client_secret', status: 'status' } as const;
+const providerColumns = { id: 'id', display_name: 'display_name', client_id: 'client_id', client_secret: 'client_secret', wechat_mode: 'wechat_mode', wechat_redirect_domain: 'wechat_redirect_domain', status: 'status' } as const;
 export const externalProviders = (database: DatabaseAdapter, enabledOnly = false) => allSql<ExternalProvider>(database, sql(database).select({
 	table: 'passport_external_providers', columns: providerColumns,
 	where: enabledOnly ? [{ column: 'status', value: 'enabled' }] : [], orderBy: [{ column: 'created_at' }],
@@ -31,8 +32,9 @@ export const externalAuthorizationUrl = async (provider: ExternalProvider, redir
 		url.search = new URLSearchParams({ client_id: provider.client_id, redirect_uri: redirectUri, response_type: 'code', scope: 'openid profile email', state, nonce, code_challenge: await sha256Base64Url(codeVerifier), code_challenge_method: 'S256', prompt: 'select_account' }).toString();
 		return url.toString();
 	}
-	const url = new URL('https://open.weixin.qq.com/connect/qrconnect');
-	url.search = new URLSearchParams({ appid: provider.client_id, redirect_uri: redirectUri, response_type: 'code', scope: 'snsapi_login', state }).toString();
+	const officialAccount = provider.wechat_mode === 'official_account';
+	const url = new URL(officialAccount ? 'https://open.weixin.qq.com/connect/oauth2/authorize' : 'https://open.weixin.qq.com/connect/qrconnect');
+	url.search = new URLSearchParams({ appid: provider.client_id, redirect_uri: redirectUri, response_type: 'code', scope: officialAccount ? 'snsapi_userinfo' : 'snsapi_login', state }).toString();
 	return `${url.toString()}#wechat_redirect`;
 };
 
@@ -116,6 +118,8 @@ export const consumeExternalState = async (database: DatabaseAdapter, state: str
 	if (!Number(updated.meta?.changes ?? 0)) return null;
 	return firstSql<ExternalLoginState>(database, sql(database).select({ table: 'passport_external_login_states', columns: { provider: 'provider', code_verifier: 'code_verifier', nonce: 'nonce', redirect_uri: 'redirect_uri', expires_at: 'expires_at', consumed_at: 'consumed_at' }, where: [{ column: 'id_hash', value: hash }] }));
 };
+
+export const externalQrState = async (database: DatabaseAdapter, stateHash: string) => firstSql<{ provider: ExternalProviderId; qr_status: string; qr_user_id: string | null; expires_at: number }>(database, sql(database).select({ table: 'passport_external_login_states', columns: { provider: 'provider', qr_status: 'qr_status', qr_user_id: 'qr_user_id', expires_at: 'expires_at' }, where: [{ column: 'id_hash', value: stateHash }] }));
 
 const generateEmailCode = () => {
 	const limit = Math.floor(0x1_0000_0000 / 1_000_000) * 1_000_000, values = new Uint32Array(1);

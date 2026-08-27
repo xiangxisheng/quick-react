@@ -4,6 +4,7 @@ import { loadPassportSession, readPassportSessionId } from '@server/passport/ses
 import { oidcRequestCookie, randomToken, sha256 } from '@server/accounts/oidc.mjs';
 import { runSql, sql } from '@server/database/sql.mjs';
 import { authorizationRequest, oidcClient } from '@server/accounts/repository.mjs';
+import { isSecureRequest } from '@server/request-origin.mjs';
 
 type Client = { id: string; redirect_uris: string; allowed_scopes: string; require_pkce: number; status: string };
 type RequestRow = { client_id: string; redirect_uri: string; scope: string; state: string; nonce: string; code_challenge: string; code_challenge_method: string; expires_at: number };
@@ -37,7 +38,7 @@ const handler: ApiHandler = async (c) => {
 	if (!current) {
 		const id = requestId || crypto.randomUUID(), now = Date.now();
 		if (!requestId) await runSql(database, sql(database).insert('passport_oidc_authorization_requests', { id, client_id: values.client_id, redirect_uri: values.redirect_uri, scope: scopes.join(' '), state: values.state, nonce: values.nonce, code_challenge: values.code_challenge, code_challenge_method: values.code_challenge_method, expires_at: now + 600_000, created_at: now }));
-		c.header('Set-Cookie', oidcRequestCookie(id, new URL(c.req.url).protocol === 'https:'));
+		c.header('Set-Cookie', oidcRequestCookie(id, isSecureRequest(c)));
 		return c.redirect(`/accounts/sign${c.get('techStackConfig').pageSuffix}`, 302);
 	}
 	const code = randomToken(32), now = Date.now(), sessionId = readPassportSessionId(c.req.raw) ?? '';
