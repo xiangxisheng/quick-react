@@ -22,7 +22,11 @@ try {
 
 	// Accounts 站点覆盖成账号服务的用途说明，覆盖登录方式、账号管理、统一登录和数据使用。
 	const accounts = await (await app.request('http://accounts.test/api/home.php')).json();
-	assert.match(accounts.home.title, /Accounts 账号中心/);
+	// 首页显示的应用名称必须唯一且等于站点名称，Google 同意屏幕要配置同一个名字。
+	const accountsDocument = await (await app.request('http://accounts.test/', { headers: { accept: 'text/html' } })).text();
+	const accountsSiteName = JSON.parse(accountsDocument.match(/__INITIAL_DATA__=(\{.*?\});<\/script>/s)[1]).siteName;
+	assert.equal(accounts.home.title, accountsSiteName);
+	assert.match(accountsDocument, new RegExp(`<noscript>\\s*<h1>${accountsSiteName}</h1>`));
 	assert.match(accounts.home.summary, /统一账号服务/);
 	assert.deepEqual(accounts.home.sections.map((section) => section.key), ['sign-in', 'account', 'sso', 'privacy', 'contact']);
 	assert.match(accounts.home.sections.find((section) => section.key === 'privacy').body, /Google API 服务用户数据政策/);

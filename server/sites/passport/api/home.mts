@@ -10,7 +10,7 @@ const handler: ApiHandler = (c, next) => {
 	if (c.req.method !== 'GET') return next();
 	const site = c.get('site');
 	const home: HomePageData = {
-		title: `${site.name}（Accounts 账号中心）`,
+		title: site.name,
 		summary: '本站是统一账号服务：你可以使用微信、Google 或 Telegram 完成身份认证，绑定并验证邮箱，设置用户名和密码，然后用同一个账号登录接入本服务的业务站点，无需在每个站点重复注册。',
 		sections: [
 			{ key: 'sign-in', title: '登录方式', body: '支持微信扫码登录、Google 账号登录、Telegram 消息批准登录；设置密码后也可以直接使用邮箱和密码登录。首次创建账号需要先完成一次第三方身份认证，并验证一个邮箱。' },

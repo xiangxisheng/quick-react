@@ -25,7 +25,7 @@ export const renderIndexHtml = (data: IndexData) => {
 <body>
   <div id="root"></div>
   <noscript>
-    <h1>${data.title}</h1>
+    <h1>${data.initialData.siteName}</h1>
     <p>${data.description}</p>
     <p><a href="/page/privacy.html">隐私权政策</a> · <a href="/page/terms.html">服务条款</a></p>
   </noscript>
