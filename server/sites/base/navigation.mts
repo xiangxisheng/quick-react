@@ -3,7 +3,7 @@ import { resolveNavigationPaths } from '@shared/navigation-tree.mjs';
 export type MenuNode = NavigationItem;
 
 const rawSiteNavigation = (): MenuNode[] => [
-	{ label: '首页', key: '/', icon: 'mail', component: 'home', title: '首页', description: 'Quick React 项目首页' },
+	{ label: '首页', key: '/', icon: 'mail', component: 'home', title: '首页', description: '本站点提供网站页面与接口服务；登录后可以在个人中心查看当前账号信息。' },
 	{
 		label: '管理后台',
 		key: 'panel/admin',
