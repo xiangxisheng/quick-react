@@ -187,9 +187,10 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 			const response: Response = await commonApi.apiFetch(`${apiPath}?${queryString}`);
 			const resJSON: ResJSON = await response.json();
 			if (resJSON.table) {
+				// 表格配置整体替换：合并会让上一张表的操作按钮、查询字段残留到新表上。
+				const tableOption: ResJsonTableOption = resJSON.table.option ?? resJsonTableOption;
 				if (resJSON.table.option) {
-					Object.assign(resJsonTableOption, resJSON.table.option);
-					setResJsonTableOption((prev) => ({ ...prev, ...resJSON.table?.option }));
+					setResJsonTableOption(tableOption);
 					const fields = resJSON.table.option.queryFields;
 					setQueryActions(resJSON.table.option.actions?.query ?? []);
 					if (fields) {
@@ -261,7 +262,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 						fixed: 'right',
 						width: 160,
 						render: (value: any, record: DataType, index: number) => <Space wrap size={[8, 4]}>
-							{(resJsonTableOption.actions?.row ?? []).map((action) => rowActionHandlers[action.key]?.(action, value, record, index)
+							{(tableOption.actions?.row ?? []).map((action) => rowActionHandlers[action.key]?.(action, value, record, index)
 								?? <a key={action.key} aria-disabled={action.disabled} onClick={() => action.form ? onRowFormAction(action, record) : onSimpleRowAction(action, record)}>{action.label}</a>)}
 						</Space>,
 					});
@@ -512,7 +513,8 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 		}}>{action.label}</Button>,
 	};
 	const queryActionHandlers: Record<string, (action: TableAction) => React.ReactNode> = {
-		search: (action) => <Button key={action.key} onClick={() => { cursorsByPage.current = { 1: undefined }; setAppliedQueryValues(queryValues); setSearchRequestKey((previous) => previous + 1); setPagination((prev) => ({ ...prev, current: 1 })); }} icon={<SearchOutlined />} disabled={loading || action.disabled}>{action.label}</Button>,
+		// 查询条件变化（例如数据管理切换数据表）时，必须清掉上一次的选中行和列筛选，否则会按旧表的状态操作新数据。
+		search: (action) => <Button key={action.key} onClick={() => { cursorsByPage.current = { 1: undefined }; setSelectedRowKeys([]); setFilters({}); setAppliedQueryValues(queryValues); setSearchRequestKey((previous) => previous + 1); setPagination((prev) => ({ ...prev, current: 1 })); }} icon={<SearchOutlined />} disabled={loading || action.disabled}>{action.label}</Button>,
 	};
 
 	return (<Flex vertical gap="small">
