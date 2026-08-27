@@ -9,16 +9,11 @@ import { isSecureRequest, requestOrigin } from '@server/request-origin.mjs';
 
 const handler: ApiHandler = async (c, next) => {
 	const config = await loadAccountsOidcConfig(c);
-	// 控制面站点的管理员账号与 Accounts 用户完全分离，始终使用本站账号密码登录；
-	// Accounts 配置与业务站点共库时，也不能把控制面的登录方式顶掉。
-	const controlPanel = c.get('site').siteKey === 'global';
-	if (!config.enabled || controlPanel) {
-		// SDK 的登录请求不能被当成本地账号密码登录，否则会报"用户名或密码错误"。
+	if (!config.enabled) {
+		// 未启用 Accounts 登录时，SDK 的登录请求不能被当成本地账号密码登录，否则会报"用户名或密码错误"。
 		if (c.req.method === 'POST') {
 			const body = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>));
-			if (body.action === 'login') {
-				return apiMessage(c, 409, controlPanel ? '控制面站点使用本站账号密码登录，不支持 Accounts 登录' : '本站未启用 Accounts 登录，请使用本站账号密码登录');
-			}
+			if (body.action === 'login') return apiMessage(c, 409, '本站未启用 Accounts 登录，请使用本站账号密码登录');
 		}
 		return baseSign(c, next, {});
 	}

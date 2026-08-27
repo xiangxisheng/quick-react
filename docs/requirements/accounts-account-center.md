@@ -221,11 +221,3 @@ global、passport 和业务站点会分别部署，数据库也各自独立，�
 ## 文案约定（2026-08-27 补充）
 
 用户可见文案一律使用正式书面语：用"更换/点击/请/尚未/可使用"，不用"换个/点/还没有/可以直接用"这类口语，也不出现"不登录了"这种表述。
-
-## 控制面站点不受 Accounts 登录影响（2026-08-27 补充）
-
-`accounts-oidc-client` 配置保存在**站点所在数据库**里，共库部署时（例如 global、业务站点、passport 共用默认库）为业务站点启用 Accounts 登录会连带影响其它站点。按上游需求"global 管理员与 Passport 用户完全分离、继续使用 `base_system_users` 账号体系"，控制面站点（`global`）**始终使用本站账号密码登录**：
-
-- 登录页永远是账号密码表单，不下发 `passportLogin`；头部登录按钮和 401 提示页都指向本站登录页。
-- 误触发的 SDK 登录请求返回明确提示"控制面站点使用本站账号密码登录，不支持 Accounts 登录"，不会掉进本地密码校验报"用户名或密码错误"。
-- 覆盖测试：`npm run test:accounts-oidc`（共库启用 Accounts 时控制面仍是本地登录）、`npm run test:accounts-login-disabled`。
