@@ -97,6 +97,17 @@ GET /api/panel/admin/dashboard
 /api/sign
 ```
 
+Accounts 账号中心（仅 `passport` 站点，需要 Accounts 会话）：
+
+```text
+/api/accounts/center/overview
+/api/accounts/center/profile
+/api/accounts/center/emails
+/api/accounts/center/security
+```
+
+`/api/accounts/sign` 是分步表单：第一步提交邮箱，已注册邮箱返回可用登录方式（密码、Telegram 消息批准、已启用的第三方），未注册邮箱返回确认步骤并在确认后进入第三方认证。登录成功后如果还没有用户名或密码，会继续返回补全步骤的 `formPage`，全部完成才返回 `redirectTo`。密码步骤支持 `POST /api/accounts/sign?action=skip_password` 跳过，跳过只对本次登录生效。
+
 `GET /api/page-status?path=<页面路径>` 返回该路径的访问状态，供前端路由兜底页面展示提示；路径不存在返回 `404`、未登录返回 `401`、角色不足返回 `403`，路径可访问但前端没有对应渲染组件时返回 `500`。接口本身始终以 `200` 返回 `pageStatus`，不触发全局错误弹窗。
 
 `global` 控制面额外提供：

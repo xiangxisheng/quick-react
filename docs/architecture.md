@@ -18,6 +18,10 @@ server/templates/   -> 动态首页响应
 
 静态文件只从 `public/` 提供，`dist/server.mjs` 不在静态目录中。
 
+## Accounts 会话与账户中心
+
+`passport` 站点的请求会在站点本地会话之外额外加载 Accounts 会话：存在时把 `accounts` 角色加入 `effectiveRoles`，并把身份写入 `passportUser`。账户中心导航用 `roles: ['accounts']` 控制可见性，接口在 `server/modules/accounts_identity/api/accounts/center.mts` 统一做会话守卫。业务站点不复制账号资料，个人中心只展示只读信息并链接到 Accounts 账户中心。
+
 ## 页面访问状态
 
 `server/page-context.mts` 在渲染文档前判断请求路径能否打开，并把结果写入 `initialData.pageStatus`：路径不存在返回 `404`，需要登录返回 `401`，角色不足返回 `403`；文档响应使用同一状态码，提示标题、说明和按钮全部由后端下发。合法路径缺少页面后缀时先 `302` 跳转到带后缀的规范地址。

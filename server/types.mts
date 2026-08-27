@@ -26,6 +26,7 @@ export type AppEnv = {
 		systemConfig: SystemConfig;
 		techStackConfig: TechStackConfig;
 		currentUser?: UserIdentity;
+		passportUser?: UserIdentity;
 		effectiveRoles: string[];
 	};
 };

@@ -13,6 +13,7 @@ import { oidcDiscovery } from './accounts/provider.mjs';
 import type { DatabaseAdapter } from './database/index.mjs';
 import { SiteRouter } from './site-router.mjs';
 import { loadCurrentUser } from './auth.mjs';
+import { loadPassportSession } from './passport/session.mjs';
 import { loadSystemConfigFromStore } from './system-config.mjs';
 import { applyTechStackHeaders, loadTechStackConfigFromStore } from './tech-stack.mjs';
 import type { AppEnv, RuntimeBindings } from './types.mjs';
@@ -98,7 +99,16 @@ const configureForRequest = async (c: Context<WorkerEnv>) => {
 	c.set('techStackConfig', configuration.techStackConfig);
 	const currentUser = await loadCurrentUser(database, c.req.raw);
 	if (currentUser) c.set('currentUser', currentUser);
-	c.set('effectiveRoles', currentUser ? ['public', 'user', ...currentUser.roles] : ['public']);
+	// Accounts 会话与站点本地会话相互独立，存在时额外授予 accounts 角色。
+	const passportUser = passportDatabase && site.codeSiteChain.includes('accounts_identity')
+		? await loadPassportSession(passportDatabase, c.req.raw)
+		: undefined;
+	if (passportUser) c.set('passportUser', passportUser);
+	c.set('effectiveRoles', [
+		'public',
+		...(currentUser ? ['user', ...currentUser.roles] : []),
+		...(passportUser ? ['accounts', ...passportUser.roles] : []),
+	]);
 	return true;
 };
 
@@ -133,7 +143,7 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 			pageSuffix: siteConfig.pageSuffix,
 			siteName: site.name,
 			siteNavigation: menuItems,
-			auth: { ...auth, currentUser: c.get('currentUser') },
+			auth: { ...auth, currentUser: c.get('currentUser') ?? c.get('passportUser') },
 			footer: `Ant Design ©${new Date().getFullYear()} Created by Ant UED`,
 			pageStatus,
 		},

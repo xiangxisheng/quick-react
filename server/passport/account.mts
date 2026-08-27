@@ -48,6 +48,9 @@ export const updateAccountNickname = async (database: DatabaseAdapter, userId: s
 	return nickname;
 };
 
+/** 统一的时间展示格式，避免依赖运行时的本地化能力。 */
+export const utcMinutes = (timestamp: number) => `${new Date(timestamp).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+
 export type AccountEmail = { email_id: string; email: string; verified: number; is_primary: number; created_at: number };
 
 export const listAccountEmails = (database: DatabaseAdapter, userId: string) => allSql<AccountEmail>(database, sql(database).select({
@@ -90,9 +93,9 @@ export const issueAccountEmailOtp = async (database: DatabaseAdapter, userId: st
 	return { code, email, expiresAt: now + 600_000 };
 };
 
-export const pendingAccountEmailOtp = (database: DatabaseAdapter, userId: string) => firstSql<{ id: string; email: string; expires_at: number }>(database, sql(database).select({
+export const pendingAccountEmailOtp = (database: DatabaseAdapter, userId: string) => firstSql<{ id: string; email: string; expires_at: number; created_at: number }>(database, sql(database).select({
 	table: 'passport_user_email_otps',
-	columns: { id: 'id', email: 'email', expires_at: 'expires_at' },
+	columns: { id: 'id', email: 'email', expires_at: 'expires_at', created_at: 'created_at' },
 	where: [{ column: 'user_id', value: userId }, { column: 'status', value: 'pending' }, { column: 'expires_at', operator: '>', value: Date.now() }],
 	orderBy: [{ column: 'created_at', direction: 'DESC' }],
 	limit: 1,

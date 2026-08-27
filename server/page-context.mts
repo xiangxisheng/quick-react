@@ -17,23 +17,35 @@ export const buildAuthState = (c: Context<AppEnv>): AuthState => {
 			? [{ path: `/accounts/sign${siteConfig.pageSuffix}`, title: 'Accounts 身份登录', description: '使用 Accounts 身份完成统一登录', mode: 'sign' as const, apiPath: `/api/accounts/sign${siteConfig.apiSuffix}`, submitMethod: 'POST' as const, redirectPath: `/` }]
 			: []),
 	];
-	return c.get('currentUser')
-		? {
+	if (c.get('currentUser')) {
+		return {
 			component: 'dropdown',
 			actions: [
 				{ key: '/panel/me', label: '个人中心', action: 'navigate', icon: 'user' },
 				{ key: '/sign', label: '退出登录', action: 'logout', icon: 'logout' },
 			],
 			pages: signPages,
-		}
-		: {
-			component: 'buttons',
+		};
+	}
+	// 只有 Accounts 会话时，头部展示 Accounts 身份并指向账户中心。
+	if (c.get('passportUser')) {
+		return {
+			component: 'dropdown',
 			actions: [
-				{ key: '/sign', label: '登录', action: 'navigate', icon: 'login' },
-				...(site.siteKey === 'global' ? [{ key: '/sign-up', label: '注册', action: 'navigate' as const, icon: 'register' as const }] : []),
+				{ key: '/accounts/center', label: '账户中心', action: 'navigate', icon: 'user' },
+				{ key: '/accounts/sign', label: '退出 Accounts', action: 'logout', icon: 'logout' },
 			],
 			pages: signPages,
 		};
+	}
+	return {
+		component: 'buttons',
+		actions: [
+			{ key: '/sign', label: '登录', action: 'navigate', icon: 'login' },
+			...(site.siteKey === 'global' ? [{ key: '/sign-up', label: '注册', action: 'navigate' as const, icon: 'register' as const }] : []),
+		],
+		pages: signPages,
+	};
 };
 
 const authPagePaths = (auth: AuthState, pageSuffix: string) => auth.pages.map((page) => stripPageSuffix(page.path, pageSuffix));

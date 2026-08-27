@@ -2,7 +2,7 @@ import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
 import type { DatabaseAdapter, DatabaseBatchStatement } from '@server/database/index.mjs';
 import { normalizePassportEmail, setPassportPassword, verifyPassportPasswordHistory } from '@server/passport/identity.mjs';
-import { hasAccountPassword, setAccountUsername } from '@server/passport/account.mjs';
+import { hasAccountPassword, setAccountUsername, utcMinutes } from '@server/passport/account.mjs';
 import { accountOnboardingStep, loginRedirectTarget, onboardingForm, refreshOidcRequest } from '@server/accounts/onboarding.mjs';
 import { clearPassportSessionCookie, createPassportSessionCookie, loadPassportSession, readPassportSessionId } from '@server/passport/session.mjs';
 import { oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
@@ -107,7 +107,6 @@ const externalCodeForm = (email: string): FormPageConfig => ({
 
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : '';
 const parseBody = async (c: Parameters<ApiHandler>[0]): Promise<Record<string, unknown>> => c.req.json<Record<string, unknown>>().catch(() => ({}));
-const utcMinutes = (timestamp: number) => `${new Date(timestamp).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 
 const loadTelegramOptions = async (database: DatabaseAdapter, globalDatabase: DatabaseAdapter, email: string) => {
 	const accounts = await allSql<TelegramOption>(database, sql(database).select({ table: 'passport_emails', alias: 'e', columns: { account_id: { column: 'a.id', cast: 'text' }, bot_id: { column: 'a.bot_id', cast: 'text' }, telegram_user_id: { column: 'a.telegram_user_id', cast: 'text' }, chat_id: { column: 'a.chat_id', cast: 'text' }, nickname: 'a.nickname' }, joins: [{ table: 'passport_user_emails', alias: 'ue', left: 'ue.email_id', right: 'e.id' }, { table: 'passport_users', alias: 'u', left: 'u.user_id', right: 'ue.user_id' }, { table: 'passport_telegram_accounts', alias: 'a', left: 'a.user_id', right: 'u.user_id' }], where: [{ column: 'e.email', value: email }, { column: 'e.verified', value: 1 }, { column: 'u.status', value: 'enabled' }], orderBy: [{ column: 'a.created_at' }] }));
