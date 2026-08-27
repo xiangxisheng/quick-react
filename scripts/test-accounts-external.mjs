@@ -85,7 +85,8 @@ try {
 	const googleState = googleAuthorization.searchParams.get('state');
 	const googleCallback = await app.request(`http://accounts.test/api/accounts/external/google?code=google-code&state=${encodeURIComponent(googleState)}`, { headers: { cookie: googleStateCookie } });
 	assert.equal(googleCallback.status, 302);
-	assert.ok(cookie(googleCallback, 'passport_session'));
+	const googleSession = cookie(googleCallback, 'passport_session');
+	assert.ok(googleSession);
 	// 新用户还没有用户名，回到登录页继续补全。
 	assert.match(googleCallback.headers.get('location'), /\/accounts\/sign/);
 	const afterGoogle = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
@@ -182,6 +183,20 @@ try {
 	assert.equal(passwordLogin.status, 200);
 	assert.ok(cookie(passwordLogin, 'passport_session'));
 	assert.equal((await passwordLogin.json()).redirectTo, '/');
+
+	// 已登录后再绑定一个新的第三方身份：user_id 是雪花 ID，查询必须按文本读取，否则会报数值溢出。
+	const bindStart = await app.request('http://accounts.test/api/accounts/external/google');
+	const bindState = new URL(bindStart.headers.get('location')).searchParams.get('state');
+	const bindCallback = await app.request(`http://accounts.test/api/accounts/external/google?code=google-conflict&state=${encodeURIComponent(bindState)}`, { headers: { cookie: `${cookie(bindStart, 'accounts_external_state')}; ${wechatSession}` } });
+	assert.equal(bindCallback.status, 302, '绑定新身份应该成功');
+	const boundIdentities = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
+	assert.equal(boundIdentities.prepare("SELECT COUNT(*) AS count FROM passport_external_identities WHERE provider = 'google'").get().count, 2);
+	boundIdentities.close();
+
+	// 用户名被占用时也要给出明确提示，而不是数值溢出错误。
+	const takenUsername = await jsonRequest(app, '/api/accounts/sign.php', { step: 'set_username', username: 'wechat2026' }, googleSession);
+	assert.equal(takenUsername.status, 400);
+	assert.match((await takenUsername.json()).feedback.message, /已被占用/);
 
 	// 已绑定过的微信身份再次登录：直接建立会话，不再发验证码、也不再进注册流程。
 	deliveredCode = '';

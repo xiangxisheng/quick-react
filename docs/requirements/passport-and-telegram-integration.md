@@ -308,6 +308,8 @@ passport_group_prompts
   updated_at BIGINT NOT NULL
 ```
 
+任何取出 64 位 ID（`user_id`、`email_id` 等雪花值）的查询都必须按文本读取（SQL 构造器的 `cast: 'text'`），包括只做存在性判断的查询：SQLite 驱动读取超过 `Number.MAX_SAFE_INTEGER` 的整数时会直接抛错，用户会看到“Value is too large to be represented as a JavaScript number”。
+
 `passport_users.user_id` 必须由兼容老项目的雪花 ID 生成器产生，不能使用自增 ID。其它表的 `id` 可以使用数据库自增实现，但跨数据库 migration 必须保持 64 位整数语义。头像对象路径后续由 `user_id` 推导为 `avatars/<user_id>.<ext>`，不在数据库中保存 `avatar_object_key` 或头像路径字段。
 
 `passport_user_credentials` 同时保存当前密码和密码历史，不再建立独立的密码历史表。首次设置密码和每次修改密码都新增一条记录，不更新旧记录。每条记录的 `created_at` 表示该密码设置或修改的时间；最新记录按 `created_at DESC, id DESC` 判断。`password` 使用与 `base_system_users.password` 相同的 JSON 结构：包含 PBKDF2-SHA256 编码后的 `hash` 和用于安全分析的 `pattern`，不保存明文密码。管理界面可以显示密码修改时间和特征，但不得显示哈希、JSON 凭据或原密码。

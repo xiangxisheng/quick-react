@@ -40,7 +40,8 @@ export const setAccountUsername = async (database: DatabaseAdapter, userId: stri
 	const username = normalizeAccountUsername(rawUsername);
 	const current = await accountUsernameState(database, userId);
 	if (current.state === 'ready') throw new Error('用户名已经设置，不能修改');
-	const taken = await firstSql(database, sql(database).select({ table: 'passport_usernames', columns: { user_id: 'user_id' }, where: [{ column: 'username', value: username }] }));
+	// 同上：user_id 是雪花 ID，必须按文本读取，否则用户名被占用时会抛数值溢出错误。
+	const taken = await firstSql(database, sql(database).select({ table: 'passport_usernames', columns: { user_id: { column: 'user_id', cast: 'text' } }, where: [{ column: 'username', value: username }] }));
 	if (taken) throw new Error('该用户名已被占用，请更换后重试');
 	try {
 		// 占位或历史用户名允许改写，正式用户名只能新增一次。

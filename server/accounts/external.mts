@@ -107,7 +107,8 @@ export const resolveExternalUser = async (database: DatabaseAdapter, workerId: u
 		return existing.user_id;
 	}
 	if (targetUserId) {
-		const target = await firstSql(database, sql(database).select({ table: 'passport_users', columns: { user_id: 'user_id' }, where: [{ column: 'user_id', value: targetUserId }, { column: 'status', value: 'enabled' }] }));
+		// 雪花 ID 超出 JavaScript number 范围，任何取出 user_id 的查询都必须按文本读取。
+		const target = await firstSql(database, sql(database).select({ table: 'passport_users', columns: { user_id: { column: 'user_id', cast: 'text' } }, where: [{ column: 'user_id', value: targetUserId }, { column: 'status', value: 'enabled' }] }));
 		if (!target) throw new Error('准备绑定的 Accounts 用户不存在或已停用');
 		await runSql(database, sql(database).insert('passport_external_identities', { user_id: targetUserId, provider: provider.id, subject: profile.subject, profile: serializedProfile, created_at: now, updated_at: now }));
 		return targetUserId;
