@@ -12,7 +12,13 @@ const handler: ApiHandler = async (c, next) => {
 	if (!config.enabled) return baseSign(c, next, {});
 	if (c.req.method === 'GET') {
 		const currentUser = c.get('currentUser') ?? null;
-		const formPage: FormPageConfig = { description: '使用 Accounts 账号中心完成统一登录。', submitLabel: '前往 Accounts 登录', passportLogin: { enabled: true, mode: 'popup', autoStart: !currentUser }, initialValues: { action: 'login' }, fields: [{ name: 'action', label: '', type: 'hidden' }] };
+		const formPage: FormPageConfig = {
+			description: '本站使用 Accounts 账号中心统一登录。点击下面的按钮会打开 Accounts 登录窗口，完成后自动回到本站；本页不会自动跳转。',
+			submitLabel: currentUser ? '重新登录 Accounts' : '前往 Accounts 登录',
+			passportLogin: { enabled: true, mode: 'popup' },
+			initialValues: { action: 'login' },
+			fields: [{ name: 'action', label: '', type: 'hidden' }],
+		};
 		return apiResponse(c, 200, { user: currentUser, registrationAvailable: false, formPage });
 	}
 	if (c.req.method === 'POST') {

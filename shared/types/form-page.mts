@@ -18,7 +18,8 @@ export type FormPageField = {
 export type FormPageExternalLogin = { key: string; label: string };
 
 export type FormPageConfig = {
-	passportLogin?: { enabled: boolean; mode?: 'popup' | 'redirect'; autoStart?: boolean };
+	/** 需要跳转到 Accounts 完成登录的页面。跳转必须由用户点击触发，不提供自动跳转。 */
+	passportLogin?: { enabled: boolean; mode?: 'popup' | 'redirect' };
 	description?: string;
 	submitLabel?: string;
 	actions?: Array<{ key: string; label: string }>;

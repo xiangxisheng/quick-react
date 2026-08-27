@@ -92,4 +92,30 @@ assert.equal(requests[1].url, '/api/accounts/sign.php?mode=sign&action=forgot_pa
 // 动作返回的新表单会替换当前表单。
 await waitFor(() => assert.ok(screen.getByText('输入邮箱后点下一步')));
 
+cleanup();
+
+// 业务站点登录页：加载时绝不自动跳转到 Accounts，必须用户点击确认。
+requests.length = 0;
+const passportForm = {
+	description: '本站使用 Accounts 账号中心统一登录。点击下面的按钮会打开 Accounts 登录窗口，完成后自动回到本站；本页不会自动跳转。',
+	submitLabel: '前往 Accounts 登录',
+	passportLogin: { enabled: true, mode: 'popup' },
+	initialValues: { action: 'login' },
+	fields: [{ name: 'action', label: '', type: 'hidden' }],
+};
+nextResponse = { formPage: passportForm, currentValues: passportForm.initialValues };
+let openedWindows = 0, loginCalls = 0;
+(dom.window as unknown as { open: () => null }).open = () => { openedWindows += 1; return null; };
+(dom.window as unknown as { Passport: { login: () => Promise<void> } }).Passport = { login: async () => { loginCalls += 1; } };
+render(React.createElement(FormPage, { commonApi, apiPath: '/api/sign.php?mode=sign', title: '登录' }));
+await waitFor(() => assert.ok(screen.getByRole('button', { name: '前往 Accounts 登录' })));
+await new Promise((resolve) => setTimeout(resolve, 60));
+assert.deepEqual(requests.map((item) => item.method), [undefined], '加载时只应该有一次 GET，不应该发起登录请求');
+assert.equal(loginCalls, 0, '加载时不允许自动跳转到 Accounts');
+assert.equal(openedWindows, 0, '加载时不允许自动打开 Accounts 窗口');
+assert.ok(screen.getByText(/本页不会自动跳转/));
+await user.click(screen.getByRole('button', { name: '前往 Accounts 登录' }));
+await waitFor(() => assert.equal(loginCalls, 1));
+cleanup();
+
 console.log('sign form browser test passed');

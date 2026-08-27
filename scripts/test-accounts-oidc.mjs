@@ -74,7 +74,11 @@ try {
 	const jwks = await (await request('/api/oidc/jwks')).json(); assert.equal(jwks.keys[0].alg, 'RS256'); assert.ok(jwks.keys[0].n);
 	const businessSign = await (await app.request('https://site1.test/api/sign.php')).json();
 	assert.equal(businessSign.formPage.fields[0].name, 'action');
-	assert.equal(businessSign.formPage.passportLogin.autoStart, true);
+	// 业务站点不允许自动跳转到 Accounts，必须由用户点击按钮确认。
+	assert.equal(businessSign.formPage.passportLogin.enabled, true);
+	assert.equal(businessSign.formPage.passportLogin.autoStart, undefined);
+	assert.equal(businessSign.formPage.passportLogin.mode, 'popup');
+	assert.match(businessSign.formPage.description, /本页不会自动跳转/);
 	const businessStart = await app.request('https://site1.test/api/sign.php', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
 	const loginCookie = businessStart.headers.get('set-cookie')?.split(';')[0];
 	const businessAuthorizeUrl = (await businessStart.json()).redirectTo;
@@ -88,7 +92,7 @@ try {
 	// Accounts 用户名通过 preferred_username 下发，业务站点用它替换 passport_<user_id> 占位名。
 	assert.equal(claims.preferred_username, 'oidcuser1');
 	assert.equal(signedInBusiness.user.username, 'oidcuser1');
-	assert.equal(signedInBusiness.formPage.passportLogin.autoStart, false);
+	assert.equal(signedInBusiness.formPage.passportLogin.autoStart, undefined);
 	const businessUsers = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
 	assert.equal(businessUsers.prepare("SELECT COUNT(*) AS count FROM base_system_users WHERE username LIKE 'passport\\_%' ESCAPE '\\'").get().count, 0);
 	businessUsers.close();

@@ -69,7 +69,6 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 	const [saved, setSaved] = useState(false);
 	const [responseFeedback, setResponseFeedback] = useState<FormResponse['feedback']>();
 	const [passportError, setPassportError] = useState('');
-	const passportAutoStarted = useRef(false);
 	const changedFields = useRef(new Set<string>());
 
 	useEffect(() => {
@@ -80,23 +79,8 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 		setRefreshCancelled(false);
 		setResponseFeedback(undefined);
 		setPassportError('');
-		passportAutoStarted.current = false;
 		messageApi.destroy('form-feedback');
 	}, [apiPath, messageApi]);
-
-	useEffect(() => {
-		if (!formConfig?.passportLogin?.enabled || !formConfig.passportLogin.autoStart || passportAutoStarted.current) return;
-		passportAutoStarted.current = true;
-		const start = async () => {
-			try {
-				if (!(window as any).Passport) await new Promise<void>((resolve, reject) => { const script = document.createElement('script'); script.src = '/passport.js'; script.onload = () => resolve(); script.onerror = () => reject(new Error('Passport SDK 加载失败')); document.head.appendChild(script); });
-				// 按后端配置的方式自动登录：popup 模式下本站页面保留，不把整个浏览器带去 Accounts。
-				await (window as any).Passport.login({ mode: formConfig.passportLogin?.mode ?? 'popup' });
-				window.location.reload();
-			} catch (error) { setPassportError(error instanceof Error ? error.message : 'Passport 自动登录失败'); }
-		};
-		void start();
-	}, [formConfig]);
 
 	useEffect(() => {
 		const feedback = responseFeedback;
@@ -228,7 +212,11 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 		{messageContextHolder}
 		{modalFeedback}
 		{inlineFeedback}
-		{formConfig?.passportLogin?.enabled ? <div style={{ marginBottom: 16 }}><Button onClick={loginWithPassport}>使用 Passport 登录</Button>{passportError ? <Alert type="error" showIcon message={passportError} style={{ marginTop: 12 }} /> : null}</div> : null}
+		{/* 跳转到 Accounts 必须由用户点击确认，页面不会自动跳走。 */}
+		{formConfig?.passportLogin?.enabled ? <div style={{ marginBottom: 16 }}>
+			<Button type="primary" onClick={loginWithPassport}>{formConfig.submitLabel ?? '前往 Accounts 登录'}</Button>
+			{passportError ? <Alert type="error" showIcon message={passportError} style={{ marginTop: 12 }} /> : null}
+		</div> : null}
 		{formConfig?.description ? <Alert type="info" showIcon message={formConfig.description} style={{ marginBottom: 24 }} /> : null}
 		<Form
 			form={form}
