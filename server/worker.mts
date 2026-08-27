@@ -164,6 +164,19 @@ app.use('*', async (c, next) => {
 app.use('*', compress());
 app.use('*', etag());
 
+/**
+ * 源码映射只允许配置的 IP 访问。Node 侧在 app.mts 里按连接地址拦截，
+ * Worker 侧没有连接信息，用 Cloudflare 提供的客户端 IP 做同样的限制。
+ */
+app.use('/bundle.js.map', async (c, next) => {
+	if (!c.env.ASSETS) return next();
+	const allowed = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1',
+		...c.get('systemConfig').mapAllowedIps.split(',').map((ip) => ip.trim()).filter(Boolean)]);
+	const clientIp = c.req.header('cf-connecting-ip')?.trim() ?? '';
+	if (!allowed.has(clientIp)) return c.text('Not Found', 404);
+	return next();
+});
+
 const apiGateway = createApiGateway((c) => c.get('techStackConfig').apiSuffix, {
 	routes: workerApiRoutes,
 	moduleSites: workerApiModuleSites,

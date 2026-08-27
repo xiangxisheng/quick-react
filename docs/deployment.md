@@ -50,3 +50,16 @@ npm run typecheck
 SKIP_SERVER_LISTEN=1 npm test
 npm run smoke:multi-site
 ```
+
+## 两种运行时的差异
+
+同一份代码可以跑在 Node 和 Cloudflare Worker 上，静态资源的处理方式不同：
+
+| 能力 | Node（`server/app.mts`） | Worker（`wrangler.jsonc` 的 `ASSETS`） |
+| --- | --- | --- |
+| `/bundle.js` 等静态资源 | `serveStatic` 从 `public/` 读取 | 非 HTML 请求交给 `ASSETS.fetch`，资源来自 `public/`，无需手工指定 |
+| `wwwroot/<hostname>/` 按域名覆盖 | 支持 | **不支持**：资源绑定只按路径匹配、不区分 Host，该域名会回到应用自身的首页 |
+| `/bundle.js.map` 访问限制 | 按连接地址匹配 `MAP_ALLOWED_IPS` | 按 `cf-connecting-ip` 匹配同一份配置 |
+| `/bundle.js` 的 `Cache-Control: no-cache` | 有 | 由 Cloudflare 资源缓存策略决定；`bundle.js` 文件名不带内容哈希，发布后如遇旧版本请清理缓存 |
+
+Worker 部署时静态资源随 `wrangler deploy` 一起上传，不需要额外配置资源路径。
