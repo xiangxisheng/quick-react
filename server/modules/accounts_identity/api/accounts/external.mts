@@ -1,6 +1,6 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiResponse } from '@server/api-response.mjs';
-import { clearExternalStateCookie, consumeExternalState, createExternalState, createPendingExternalIdentity, discardExternalEmailOtp, externalAuthorizationUrl, externalPendingCookie, externalProvider, externalQrState, externalStateCookie, externalIdentityUser, externalStateCookieName, externalVerifiedCookie, fetchExternalProfile, issueExternalEmailOtp, pendingExternalIdentityByQrState, resolveExternalUser, verifyExternalEmailOtp, type ExternalProviderId } from '@server/accounts/external.mjs';
+import { bindReturnCookieName, clearBindReturnCookie, clearExternalStateCookie, consumeExternalState, createExternalState, createPendingExternalIdentity, discardExternalEmailOtp, externalAuthorizationUrl, externalPendingCookie, externalProvider, externalQrState, externalStateCookie, externalIdentityUser, externalStateCookieName, externalVerifiedCookie, fetchExternalProfile, issueExternalEmailOtp, pendingExternalIdentityByQrState, resolveExternalUser, verifyExternalEmailOtp, type ExternalProviderId } from '@server/accounts/external.mjs';
 import { readCookie } from '@server/accounts/oidc.mjs';
 import { postLoginRedirect } from '@server/accounts/onboarding.mjs';
 import { createPassportSessionCookie, loadPassportSession } from '@server/passport/session.mjs';
@@ -112,10 +112,14 @@ const handler: ApiHandler = async (c, _next, params) => {
 			return consume ? apiResponse(c, 200, { status: 'signed_in' }) : c.html('<p>授权成功，请返回电脑页面。</p>');
 		}
 		if (current) {
-			// 已登录用户完成一次第三方认证，用于随后的邮箱绑定或密码重设。
+			// 已登录用户完成一次第三方认证：用于绑定身份、绑定邮箱或重设密码，按发起页面返回。
 			c.header('Set-Cookie', clearExternalStateCookie(secure));
 			c.header('Set-Cookie', externalVerifiedCookie(secure), { append: true });
-			const bindTarget = `/panel/accounts/bind-email${c.get('techStackConfig').pageSuffix}`;
+			const requested = readCookie(c.req.raw, bindReturnCookieName) ?? '';
+			const pageSuffix = c.get('techStackConfig').pageSuffix;
+			// 只接受账户中心内部路径，避免被引导到站外。
+			const bindTarget = /^\/panel\/accounts\/[a-z-]+(\.[a-z]+)?$/.test(requested) ? requested : `/panel/accounts/bind-email${pageSuffix}`;
+			if (requested) c.header('Set-Cookie', clearBindReturnCookie(secure), { append: true });
 			return consume ? apiResponse(c, 200, { status: 'linked', redirectTo: bindTarget }) : c.redirect(bindTarget, 302);
 		}
 		const sessionId = crypto.randomUUID(), now = Date.now(), maxAge = 24 * 60 * 60;

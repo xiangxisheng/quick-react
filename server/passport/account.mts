@@ -176,6 +176,68 @@ export const unbindAccountEmail = async (database: DatabaseAdapter, userId: stri
 	return target.email;
 };
 
+export type AccountIdentity = {
+	identity_key: string;
+	kind: 'external' | 'telegram';
+	provider_label: string;
+	detail: string;
+	created_at: number;
+};
+
+/** 账户中心的身份列表：外部身份源和 Telegram 账号；机器人信息来自 global 库。 */
+export const listAccountIdentities = async (database: DatabaseAdapter, globalDatabase: DatabaseAdapter, userId: string): Promise<AccountIdentity[]> => {
+	const [externals, providers, telegrams] = await Promise.all([
+		allSql<{ id: string; provider: string; subject: string; created_at: number }>(database, sql(database).select({
+			table: 'passport_external_identities',
+			columns: { id: { column: 'id', cast: 'text' }, provider: 'provider', subject: 'subject', created_at: 'created_at' },
+			where: [{ column: 'user_id', value: userId }],
+			orderBy: [{ column: 'created_at' }],
+		})),
+		allSql<{ id: string; display_name: string }>(database, sql(database).select({ table: 'passport_external_providers', columns: { id: 'id', display_name: 'display_name' } })),
+		allSql<{ id: string; bot_id: string; telegram_user_id: string; nickname: string; created_at: number }>(database, sql(database).select({
+			table: 'passport_telegram_accounts',
+			columns: { id: { column: 'id', cast: 'text' }, bot_id: { column: 'bot_id', cast: 'text' }, telegram_user_id: { column: 'telegram_user_id', cast: 'text' }, nickname: 'nickname', created_at: 'created_at' },
+			where: [{ column: 'user_id', value: userId }],
+			orderBy: [{ column: 'created_at' }],
+		})),
+	]);
+	const bots = telegrams.length
+		? await allSql<{ id: string; bot_username: string }>(globalDatabase, sql(globalDatabase).select({ table: 'global_telegram_bots', columns: { id: { column: 'id', cast: 'text' }, bot_username: 'bot_username' } }))
+		: [];
+	const providerNames = new Map(providers.map((provider) => [provider.id, provider.display_name]));
+	const botNames = new Map(bots.map((bot) => [bot.id, bot.bot_username]));
+	return [
+		...externals.map((item) => ({
+			identity_key: `external:${item.id}`,
+			kind: 'external' as const,
+			provider_label: providerNames.get(item.provider) ?? item.provider,
+			// 微信的 subject 是 appid:openid，只展示后半段，避免泄露应用标识。
+			detail: item.subject.includes(':') ? item.subject.slice(item.subject.indexOf(':') + 1) : item.subject,
+			created_at: item.created_at,
+		})),
+		...telegrams.map((item) => ({
+			identity_key: `telegram:${item.id}`,
+			kind: 'telegram' as const,
+			provider_label: 'Telegram',
+			detail: `${item.nickname} / @${botNames.get(item.bot_id) ?? item.bot_id} / ${item.telegram_user_id}`,
+			created_at: item.created_at,
+		})),
+	];
+};
+
+/** 解绑第三方身份；解绑后必须还留有可用的登录方式。 */
+export const unbindAccountIdentity = async (database: DatabaseAdapter, globalDatabase: DatabaseAdapter, userId: string, identityKey: string) => {
+	const identities = await listAccountIdentities(database, globalDatabase, userId);
+	const target = identities.find((item) => item.identity_key === identityKey);
+	if (!target) throw new Error('身份不存在或不属于当前账号');
+	if (target.kind === 'telegram') throw new Error('Telegram 账号请在 Telegram 机器人里解除绑定');
+	if (identities.length <= 1 && !await hasAccountPassword(database, userId)) {
+		throw new Error('这是账号最后一个登录方式，请先设置密码或绑定其它身份后再解绑');
+	}
+	await runSql(database, sql(database).delete('passport_external_identities', { id: identityKey.slice('external:'.length), user_id: userId }));
+	return target.provider_label;
+};
+
 /** 账户中心概览需要的聚合信息。 */
 export const loadAccountProfile = async (database: DatabaseAdapter, userId: string) => {
 	const [user, username, emails, hasPassword, identities, telegramAccounts] = await Promise.all([

@@ -27,6 +27,11 @@ export const signupEmailCookieName = 'accounts_signup_email';
 export const signupEmailCookie = (email: string, secure: boolean) => `${signupEmailCookieName}=${encodeURIComponent(email)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=1800${secure ? '; Secure' : ''}`;
 export const clearSignupEmailCookie = (secure: boolean) => `${signupEmailCookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`;
 
+/** 第三方授权完成后回到账户中心的哪个页面；只接受账户中心内部路径。 */
+export const bindReturnCookieName = 'accounts_bind_return';
+export const bindReturnCookie = (path: string, secure: boolean) => `${bindReturnCookieName}=${encodeURIComponent(path)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=1800${secure ? '; Secure' : ''}`;
+export const clearBindReturnCookie = (secure: boolean) => `${bindReturnCookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`;
+
 /** 第三方认证通过的短期凭证：发送任何邮箱验证码之前都必须持有它。 */
 export const externalVerifiedCookieName = 'accounts_external_verified';
 export const externalVerifiedCookie = (secure: boolean) => `${externalVerifiedCookieName}=1; Path=/; HttpOnly; SameSite=Lax; Max-Age=1800${secure ? '; Secure' : ''}`;

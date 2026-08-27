@@ -1,8 +1,9 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiResponse } from '@server/api-response.mjs';
 import { AccountEmailRateLimitError, discardAccountEmailOtp, issueAccountEmailOtp, pendingAccountEmailOtp, verifyAccountEmailOtp } from '@server/passport/account.mjs';
-import { externalProviders, externalVerifiedCookieName } from '@server/accounts/external.mjs';
+import { bindReturnCookie, externalProviders, externalVerifiedCookieName } from '@server/accounts/external.mjs';
 import { readCookie } from '@server/accounts/oidc.mjs';
+import { isSecureRequest } from '@server/request-origin.mjs';
 import { sendDefaultCloudEmail } from '@server/cloud/email.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 
@@ -56,6 +57,7 @@ const handler: ApiHandler = async (c, next) => {
 	if (action?.startsWith('provider:')) {
 		const provider = await externalProviders(database, true).then((items) => items.find((item) => item.id === action.slice('provider:'.length)));
 		if (!provider) return apiMessage(c, 400, '外部身份源不存在或未启用');
+		c.header('Set-Cookie', bindReturnCookie(`/panel/accounts/bind-email${c.get('techStackConfig').pageSuffix}`, isSecureRequest(c)));
 		return apiResponse(c, 200, { redirectTo: `/api/accounts/external/${provider.id}`, feedback: { component: 'message' as const, type: 'success' as const, message: `正在前往${provider.display_name}认证`, redirectAfter: 0 } });
 	}
 	if (action === 'restart') {

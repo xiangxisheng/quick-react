@@ -132,6 +132,45 @@ try {
 	assert.equal((await request(emailsPath, { method: 'DELETE', cookie, body: [primaryEmailId] })).status, 200);
 	assert.equal((await request(emailsPath, { method: 'DELETE', cookie, body: [secondEmailId] })).status, 409);
 
+	// 身份绑定：列出第三方账号和 Telegram 账号，可以解绑第三方账号。
+	const identitiesPath = '/api/panel/accounts/identities.php';
+	const identityDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
+	const identityNow = Date.now();
+	identityDatabase.prepare("INSERT INTO passport_external_providers (id,display_name,client_id,client_secret,status,created_at,updated_at) VALUES ('google','Google','g','s','enabled',?,?)").run(identityNow, identityNow);
+	identityDatabase.prepare("INSERT INTO passport_external_identities (user_id,provider,subject,profile,created_at,updated_at) VALUES (?,'google','google-sub','{}',?,?)").run(userId, identityNow, identityNow);
+	identityDatabase.prepare("INSERT INTO global_telegram_bots (id,name,bot_token,bot_username,secret_token,webhook_hostname,status,created_at,updated_at) VALUES (7,'bot','7:token','center_bot','secret','accounts.test','enabled',?,?)").run(identityNow, identityNow);
+	identityDatabase.close();
+
+	// 只剩最后一个登录方式且没有密码时，不允许解绑。
+	const lastIdentity = await request(identitiesPath, { method: 'DELETE', cookie, body: ['external:1'] });
+	assert.equal(lastIdentity.status, 409);
+	assert.match((await lastIdentity.json()).feedback.message, /最后一个登录方式/);
+
+	const telegramDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
+	telegramDatabase.prepare("INSERT INTO passport_external_identities (user_id,provider,subject,profile,created_at,updated_at) VALUES (?,'wechat','wx-appid:o6fZopenid','{}',?,?)").run(userId, identityNow, identityNow);
+	telegramDatabase.prepare("INSERT INTO passport_external_providers (id,display_name,client_id,client_secret,status,created_at,updated_at) VALUES ('wechat','微信','w','s','enabled',?,?)").run(identityNow, identityNow);
+	telegramDatabase.prepare('INSERT INTO passport_telegram_accounts (id,user_id,bot_id,telegram_user_id,chat_id,nickname,created_at,updated_at) VALUES (77,?,7,9001,9001,\'TG用户\',?,?)').run(userId, identityNow, identityNow);
+	telegramDatabase.close();
+	const identities = await (await request(identitiesPath, { cookie })).json();
+	assert.deepEqual(identities.table.dataSource.map((row) => [row.kind, row.provider_label]), [['external', 'Google'], ['external', '微信'], ['telegram', 'Telegram']]);
+	// 微信的 subject 是 appid:openid，列表只展示 openid。
+	assert.equal(identities.table.dataSource[1].detail, 'o6fZopenid');
+	assert.match(identities.table.dataSource[2].detail, /TG用户 \/ @center_bot \/ 9001/);
+	assert.deepEqual(identities.table.option.actions.row.map((action) => action.key), ['delete']);
+
+	// Telegram 账号要在机器人里解绑，这里给出明确提示。
+	const telegramUnbind = await request(identitiesPath, { method: 'DELETE', cookie, body: ['telegram:77'] });
+	assert.equal(telegramUnbind.status, 409);
+	assert.match((await telegramUnbind.json()).feedback.message, /Telegram 机器人/);
+
+	// 绑定身份页面列出可用的身份源，点击后跳转授权。
+	const bindIdentity = await (await request('/api/panel/accounts/bind-identity.php', { cookie })).json();
+	assert.deepEqual(bindIdentity.formPage.actions.map((action) => action.key), ['provider:google', 'provider:wechat']);
+	assert.match(bindIdentity.formPage.description, /当前已绑定：Google、微信、Telegram/);
+	const startBind = await request('/api/panel/accounts/bind-identity.php?action=provider:google', { method: 'POST', cookie, body: {} });
+	assert.equal((await startBind.json()).redirectTo, '/api/accounts/external/google');
+	assert.ok(startBind.headers.getSetCookie().some((value) => value.startsWith('accounts_bind_return=')), '要记住返回账户中心的页面');
+
 	// 安全设置：首次设置密码，然后需要当前密码才能修改。
 	const security = await (await request('/api/panel/accounts/security.php', { cookie })).json();
 	assert.deepEqual(security.formPage.fields.map((field) => field.name), ['password', 'password_confirm']);
@@ -141,6 +180,13 @@ try {
 	assert.deepEqual(secured.formPage.fields.map((field) => field.name), ['current_password', 'password', 'password_confirm']);
 	assert.equal((await request('/api/panel/accounts/security.php', { method: 'PUT', cookie, body: { current_password: 'wrong', password: 'center-password-2', password_confirm: 'center-password-2' } })).status, 401);
 	assert.equal((await request('/api/panel/accounts/security.php', { method: 'PUT', cookie, body: { current_password: 'center-password-1', password: 'center-password-2', password_confirm: 'center-password-2' } })).status, 200);
+	// 设置密码后才允许解绑最后一个第三方身份。
+	const unbound = await request(identitiesPath, { method: 'DELETE', cookie, body: ['external:1'] });
+	assert.equal(unbound.status, 200);
+	assert.match((await unbound.json()).feedback.message, /Google 已解绑/);
+	const afterUnbind = await (await request(identitiesPath, { cookie })).json();
+	assert.deepEqual(afterUnbind.table.dataSource.map((row) => row.provider_label), ['微信', 'Telegram']);
+
 	// 旧密码登录会被拒绝并提示新密码的修改时间。
 	const oldPasswordLogin = await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'password', email: 'second@example.com', password: 'center-password-1' } });
 	assert.equal(oldPasswordLogin.status, 401);
