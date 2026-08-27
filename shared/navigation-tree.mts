@@ -13,6 +13,10 @@ export type NavigationPageDefinition = {
 	redirectPath?: string;
 };
 
+export const stripPageSuffix = (path: string, pageSuffix: string) => (
+	pageSuffix && path.endsWith(pageSuffix) ? path.slice(0, -pageSuffix.length) : path
+);
+
 const resolveNodeKey = (key: string, parentPath: string) => {
 	if (key === '/') return '/';
 	if (key.startsWith('/')) return key;

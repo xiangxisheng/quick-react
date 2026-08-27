@@ -1,0 +1,103 @@
+import type { Context } from 'hono';
+import type { AppEnv } from './types.mjs';
+import type { AuthPage, AuthState, PageStatus } from '@shared/types/initial-data.mjs';
+import { stripPageSuffix } from '@shared/navigation-tree.mjs';
+import { getFullSiteNavigation, getPageDefinitions, getSiteNavigation } from './navigation.mjs';
+
+// 前端固定注册的第三方登录回调页面，不属于导航树。
+const callbackPagePaths = ['/accounts/external/callback', '/accounts/external/wechat', '/accounts/oidc/popup'];
+
+export const buildAuthState = (c: Context<AppEnv>): AuthState => {
+	const site = c.get('site');
+	const siteConfig = c.get('techStackConfig');
+	const signPages: AuthPage[] = [
+		{ path: `/sign${siteConfig.pageSuffix}`, title: '登录', description: '登录 Quick React', mode: 'sign', apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'POST', redirectPath: `/panel/admin${siteConfig.pageSuffix}` },
+		...(site.siteKey === 'global' ? [{ path: `/sign-up${siteConfig.pageSuffix}`, title: '注册', description: '创建初始管理员', mode: 'sign-up' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'PUT' as const, redirectPath: `/sign${siteConfig.pageSuffix}` }] : []),
+		...(site.siteKey === 'passport' && site.codeSiteChain.includes('accounts_identity')
+			? [{ path: `/accounts/sign${siteConfig.pageSuffix}`, title: 'Accounts 身份登录', description: '使用 Accounts 身份完成统一登录', mode: 'sign' as const, apiPath: `/api/accounts/sign${siteConfig.apiSuffix}`, submitMethod: 'POST' as const, redirectPath: `/` }]
+			: []),
+	];
+	return c.get('currentUser')
+		? {
+			component: 'dropdown',
+			actions: [
+				{ key: '/panel/me', label: '个人中心', action: 'navigate', icon: 'user' },
+				{ key: '/sign', label: '退出登录', action: 'logout', icon: 'logout' },
+			],
+			pages: signPages,
+		}
+		: {
+			component: 'buttons',
+			actions: [
+				{ key: '/sign', label: '登录', action: 'navigate', icon: 'login' },
+				...(site.siteKey === 'global' ? [{ key: '/sign-up', label: '注册', action: 'navigate' as const, icon: 'register' as const }] : []),
+			],
+			pages: signPages,
+		};
+};
+
+const authPagePaths = (auth: AuthState, pageSuffix: string) => auth.pages.map((page) => stripPageSuffix(page.path, pageSuffix));
+
+export const resolvePagePaths = (c: Context<AppEnv>, auth: AuthState) => {
+	const site = c.get('site');
+	const pageSuffix = c.get('techStackConfig').pageSuffix;
+	const shared = [...authPagePaths(auth, pageSuffix), ...callbackPagePaths];
+	return {
+		// 当前角色可以打开的页面。
+		allowed: new Set([...getPageDefinitions(getSiteNavigation(site.codeSiteChain, c.get('effectiveRoles'))).map((page) => page.path), ...shared]),
+		// 站点存在的全部页面，用于区分“路径不存在”和“无权访问”。
+		known: new Set([...getPageDefinitions(getFullSiteNavigation(site.codeSiteChain)).map((page) => page.path), ...shared]),
+	};
+};
+
+/**
+ * 判断请求的页面路径能否渲染，不能渲染时返回需要展示给用户的提示。
+ * 返回 undefined 表示当前角色可以正常打开该页面。
+ */
+export const resolvePageStatus = (
+	c: Context<AppEnv>,
+	requestPath: string,
+	auth: AuthState,
+	paths: ReturnType<typeof resolvePagePaths> = resolvePagePaths(c, auth),
+): PageStatus | undefined => {
+	const pageSuffix = c.get('techStackConfig').pageSuffix;
+	const logicalPath = stripPageSuffix(requestPath, pageSuffix);
+	const { allowed, known } = paths;
+	if (allowed.has(logicalPath)) return undefined;
+	const home = { key: '/', label: '返回首页', action: 'navigate' as const };
+	if (!known.has(logicalPath)) {
+		return {
+			path: requestPath,
+			status: 404,
+			title: '页面不存在',
+			description: `没有找到路径 ${requestPath}，请检查地址是否输入正确，或从导航菜单重新进入。`,
+			actions: [home],
+		};
+	}
+	if (!c.get('currentUser')) {
+		const signPath = auth.pages.find((page) => page.mode === 'sign')?.path ?? `/sign${pageSuffix}`;
+		return {
+			path: requestPath,
+			status: 401,
+			title: '请先登录',
+			description: `访问 ${requestPath} 需要先登录，登录后才能查看该页面。`,
+			actions: [{ key: stripPageSuffix(signPath, pageSuffix), label: '去登录', action: 'navigate', icon: 'login' }, home],
+		};
+	}
+	return {
+		path: requestPath,
+		status: 403,
+		title: '无权访问',
+		description: `当前账号 ${c.get('currentUser')?.username ?? ''} 没有访问 ${requestPath} 的权限，请联系管理员分配对应角色。`,
+		actions: [{ key: '/panel/me', label: '个人中心', action: 'navigate', icon: 'user' }, home],
+	};
+};
+
+/** 页面可以访问但前端没有对应渲染组件时的兜底提示。 */
+export const unavailablePageStatus = (requestPath: string): PageStatus => ({
+	path: requestPath,
+	status: 500,
+	title: '页面暂不可用',
+	description: `当前版本无法渲染 ${requestPath}，请刷新页面重试，若仍然无法打开请联系管理员。`,
+	actions: [{ key: '/', label: '返回首页', action: 'navigate' }],
+});

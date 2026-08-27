@@ -25,6 +25,14 @@ export type AuthState = {
 	pages: AuthPage[];
 };
 
+export type PageStatus = {
+	path: string;
+	status: number;
+	title: string;
+	description: string;
+	actions: HeaderAction[];
+};
+
 export type InitialData = {
 	apiSuffix: string;
 	pageSuffix: string;
@@ -32,4 +40,5 @@ export type InitialData = {
 	siteNavigation: NavigationItem[];
 	footer?: string;
 	auth?: AuthState;
+	pageStatus?: PageStatus;
 };

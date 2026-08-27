@@ -24,6 +24,8 @@
 		"test:database-migrations": "node scripts/test-database-migrations.mjs",
 		"test:database-transfer": "node scripts/test-database-transfer.mjs",
 		"test:table-form": "node scripts/test-table-form.mjs",
+		"test:page-status": "node scripts/test-page-status.mjs",
+		"test:page-status-browser": "node scripts/test-page-status-browser.mjs",
 		"test:form-linkage-browser": "node scripts/test-form-linkage-browser.mjs",
 		"import:legacy-passport": "node scripts/import-legacy-passport.mjs",
 		"migrate:sqlite": "node scripts/migrate-sqlite.mjs",

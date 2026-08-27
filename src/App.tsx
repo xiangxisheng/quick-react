@@ -19,6 +19,7 @@ import PersonalCenter from './components/panel/PersonalCenter.js';
 import ExternalCallback from './components/accounts/ExternalCallback.js';
 import WechatQrLogin from './components/accounts/WechatQrLogin.js';
 import OidcPopupCallback from './components/accounts/OidcPopupCallback.js';
+import StatusPage from './components/common/StatusPage.js';
 const { Content } = Layout;
 
 // 定义路由对应的页面组件
@@ -101,6 +102,8 @@ const App = ({ commonApi }: AppType) => {
 	routes.push({ path: pageUrl('/accounts/external/callback'), element: <ExternalCallback commonApi={commonApi} /> });
 	routes.push({ path: pageUrl('/accounts/external/wechat'), element: <WechatQrLogin commonApi={commonApi} /> });
 	routes.push({ path: pageUrl('/accounts/oidc/popup'), element: <OidcPopupCallback /> });
+	// 兜底路由：路径不存在、未登录或无权访问时展示后端下发的提示。
+	routes.push({ path: '*', element: <StatusPage commonApi={commonApi} apiSuffix={initialData.apiSuffix} pageSuffix={initialData.pageSuffix} pageStatus={initialData.pageStatus} /> });
 
 	const location = useLocation(); // 获取当前 URL 路径
 	const [current, setCurrent] = useState(location.pathname); // 同步选中状态
@@ -130,7 +133,9 @@ const App = ({ commonApi }: AppType) => {
 			}
 		}
 		const page = [...pages, ...authPages].find((item) => item.path === logicalPath);
-		document.title = page ? `${page.title} | ${initialData.siteName}` : initialData.siteName;
+		const statusTitle = initialData.pageStatus?.path === location.pathname ? initialData.pageStatus.title : undefined;
+		const pageTitle = page?.title ?? statusTitle;
+		document.title = pageTitle ? `${pageTitle} | ${initialData.siteName}` : initialData.siteName;
 	}, [location.pathname]);
 
 	const onClick: MenuProps['onClick'] = (e) => {

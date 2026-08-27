@@ -93,8 +93,11 @@ GET /api/panel/admin/dashboard
 /api/panel/admin/data/rows
 /api/panel/admin/settings/tech-stack
 /api/panel/admin/settings/system-config
+/api/page-status
 /api/sign
 ```
+
+`GET /api/page-status?path=<页面路径>` 返回该路径的访问状态，供前端路由兜底页面展示提示；路径不存在返回 `404`、未登录返回 `401`、角色不足返回 `403`，路径可访问但前端没有对应渲染组件时返回 `500`。接口本身始终以 `200` 返回 `pageStatus`，不触发全局错误弹窗。
 
 `global` 控制面额外提供：
 

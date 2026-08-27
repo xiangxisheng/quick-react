@@ -1,9 +1,11 @@
 import { Hono, type Context } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { compress } from 'hono/compress';
 import { etag } from 'hono/etag';
 import { renderIndexHtml } from './templates/index.mjs';
 import { createApiGateway } from './api-router.mjs';
 import { getPageMetadata, getSiteNavigation } from './navigation.mjs';
+import { buildAuthState, resolvePagePaths, resolvePageStatus } from './page-context.mjs';
 import { createDatabaseConfigStore } from './config-store.mjs';
 import { createD1Adapter, type D1DatabaseLike } from './database/d1.mjs';
 import { apiMessage } from './api-response.mjs';
@@ -105,38 +107,22 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 	const siteConfig = c.get('techStackConfig');
 	const systemConfig = c.get('systemConfig');
 	const menuItems = getSiteNavigation(site.codeSiteChain, c.get('effectiveRoles'));
-	const passportSsoPages = site.siteKey === 'passport' && site.codeSiteChain.includes('accounts_identity')
-		? [{ path: `/accounts/sign${siteConfig.pageSuffix}`, title: 'Accounts 身份登录', description: '使用 Accounts 身份完成统一登录', mode: 'sign' as const, apiPath: `/api/accounts/sign${siteConfig.apiSuffix}`, submitMethod: 'POST' as const, redirectPath: `/` }]
-		: [];
-	const auth = c.get('currentUser')
-		? {
-			component: 'dropdown' as const,
-			actions: [
-				{ key: '/panel/me', label: '个人中心', action: 'navigate' as const, icon: 'user' as const },
-				{ key: '/sign', label: '退出登录', action: 'logout' as const, icon: 'logout' as const },
-			],
-			pages: [
-				{ path: `/sign${siteConfig.pageSuffix}`, title: '登录', description: '登录 Quick React', mode: 'sign' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'POST' as const, redirectPath: `/panel/admin${siteConfig.pageSuffix}` },
-				...(site.siteKey === 'global' ? [{ path: `/sign-up${siteConfig.pageSuffix}`, title: '注册', description: '创建初始管理员', mode: 'sign-up' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'PUT' as const, redirectPath: `/sign${siteConfig.pageSuffix}` }] : []),
-				...passportSsoPages,
-			],
-		}
-		: {
-			component: 'buttons' as const,
-			actions: [
-				{ key: '/sign', label: '登录', action: 'navigate' as const, icon: 'login' as const },
-				...(site.siteKey === 'global' ? [{ key: '/sign-up', label: '注册', action: 'navigate' as const, icon: 'register' as const }] : []),
-			],
-			pages: [
-				{ path: `/sign${siteConfig.pageSuffix}`, title: '登录', description: '登录 Quick React', mode: 'sign' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'POST' as const, redirectPath: `/panel/admin${siteConfig.pageSuffix}` },
-				...(site.siteKey === 'global' ? [{ path: `/sign-up${siteConfig.pageSuffix}`, title: '注册', description: '创建初始管理员', mode: 'sign-up' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'PUT' as const, redirectPath: `/sign${siteConfig.pageSuffix}` }] : []),
-				...passportSsoPages,
-			],
-		};
-	const metadata = getPageMetadata(c.req.path, menuItems, siteConfig.pageSuffix);
+	const auth = buildAuthState(c);
+	const requestPath = c.req.path;
+	const pagePaths = resolvePagePaths(c, auth);
+	// 缺少页面后缀的合法路径统一跳转到带后缀的规范地址，避免被当成不存在的路径。
+	if (siteConfig.pageSuffix && requestPath !== '/' && !requestPath.endsWith(siteConfig.pageSuffix) && pagePaths.known.has(requestPath)) {
+		const target = new URL(c.req.url);
+		target.pathname = `${requestPath}${siteConfig.pageSuffix}`;
+		return c.redirect(target.toString(), 302);
+	}
+	const pageStatus = resolvePageStatus(c, requestPath, auth, pagePaths);
+	const metadata = pageStatus
+		? { title: pageStatus.title, description: pageStatus.description }
+		: getPageMetadata(requestPath, menuItems, siteConfig.pageSuffix);
 	const title = metadata.title === 'Quick React' ? site.name : `${metadata.title} | ${site.name}`;
 	const publicOrigin = systemConfig.publicOrigin || undefined;
-	const canonical = publicOrigin ? new URL(c.req.path, publicOrigin).toString() : undefined;
+	const canonical = publicOrigin && !pageStatus ? new URL(requestPath, publicOrigin).toString() : undefined;
 	c.header('Cache-Control', 'no-cache');
 	return c.html(renderIndexHtml({
 		...metadata,
@@ -149,8 +135,9 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 			siteNavigation: menuItems,
 			auth: { ...auth, currentUser: c.get('currentUser') },
 			footer: `Ant Design ©${new Date().getFullYear()} Created by Ant UED`,
+			pageStatus,
 		},
-	}));
+	}), (pageStatus?.status ?? 200) as ContentfulStatusCode);
 };
 
 app.use('*', async (c, next) => {
