@@ -9,7 +9,14 @@ import { isSecureRequest, requestOrigin } from '@server/request-origin.mjs';
 
 const handler: ApiHandler = async (c, next) => {
 	const config = await loadAccountsOidcConfig(c);
-	if (!config.enabled) return baseSign(c, next, {});
+	if (!config.enabled) {
+		// 未启用 Accounts 登录时，SDK 的登录请求不能被当成本地账号密码登录，否则会报"用户名或密码错误"。
+		if (c.req.method === 'POST') {
+			const body = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>));
+			if (body.action === 'login') return apiMessage(c, 409, '本站未启用 Accounts 登录，请使用本站账号密码登录');
+		}
+		return baseSign(c, next, {});
+	}
 	if (c.req.method === 'GET') {
 		const currentUser = c.get('currentUser') ?? null;
 		const formPage: FormPageConfig = {

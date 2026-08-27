@@ -21,6 +21,7 @@
 		"test:accounts-oidc": "node scripts/test-accounts-oidc.mjs",
 		"test:accounts-external": "node scripts/test-accounts-external.mjs",
 		"test:accounts-center": "node scripts/test-accounts-center.mjs",
+		"test:accounts-login-disabled": "node scripts/test-accounts-login-disabled.mjs",
 		"test:accounts-wechat-qr": "node scripts/test-accounts-wechat-qr.mjs",
 		"test:accounts-split-database": "node scripts/test-accounts-split-database.mjs",
 		"test:sql-builder": "node scripts/test-sql-builder.mjs",
