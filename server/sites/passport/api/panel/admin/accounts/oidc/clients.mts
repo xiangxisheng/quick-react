@@ -58,9 +58,10 @@ const handler: ApiHandler = async (c, next, params) => {
 		const rows: Array<Record<string, unknown>> = await oidcClients(database);
 		const redirectUriOptions = await loadRedirectUriOptions(c);
 		for (const row of rows) {
-			row.redirect_uris = JSON.parse(String(row.redirect_uris || '[]')).join(', ');
+			const redirectUris = JSON.parse(String(row.redirect_uris || '[]')) as string[];
+			row.redirect_uris = redirectUris.join(', ');
 			row.backchannel_logout_path = pathFromUri(row.backchannel_logout_uri);
-			row.redirect_uri_source = redirectUriOptions.some((option) => option.value === (row.redirect_uris as string[])[0]) ? (row.redirect_uris as string[])[0] : '__custom__';
+			row.redirect_uri_source = redirectUriOptions.some((option) => option.value === redirectUris[0]) ? redirectUris[0] : '__custom__';
 			delete row.backchannel_logout_uri;
 		}
 		redirectUriOptions.push({ value: '__custom__', text: '自定义回调地址', fieldValues: {} });

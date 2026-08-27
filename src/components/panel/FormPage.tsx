@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Form, Input, message, Modal, Select, Space, Switch, Typography } from 'antd';
 import { ClearOutlined, RollbackOutlined } from '@ant-design/icons';
 import type { CommonApi } from '@/utils/common/api.js';
-import type { FormPageResponse } from '@shared/types/form-page.mjs';
+import type { FormPageField, FormPageResponse } from '@shared/types/form-page.mjs';
 import { changedFieldsKey, type ChangedFieldsPayload } from '@shared/types/changed-fields.mjs';
 import { CountdownDisplay, formatCountdown } from '@/components/common/Countdown.js';
 import { runAfterFeedback } from '@/utils/common/feedback.js';
@@ -29,9 +29,18 @@ const isRecord = (value: unknown): value is Record<string, unknown> => (
 	Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 );
 
+const FieldControl = ({ field, form }: { field: FormPageField; form: ReturnType<typeof Form.useForm<Record<string, unknown>>>[0] }) => {
+	const dependencyValue = Form.useWatch(field.readOnlyWhen?.field ?? '__unlinked__', form);
+	const readOnly = field.readOnlyWhen ? (field.readOnlyWhen.values
+		? field.readOnlyWhen.values.includes(String(dependencyValue ?? ''))
+		: !field.readOnlyWhen.notValues?.includes(String(dependencyValue ?? ''))) : false;
+	if (field.type === 'switch') return <Switch checkedChildren={field.checkedChildren} unCheckedChildren={field.unCheckedChildren} />;
+	if (field.type === 'select') return <Select options={field.options?.map((option) => ({ value: option.value, label: option.text }))} placeholder={field.placeholder} />;
+	return <Input type={field.type === 'password' ? 'password' : 'text'} placeholder={field.placeholder} maxLength={field.maxLength} readOnly={readOnly} disabled={readOnly} />;
+};
+
 export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PUT', redirectOnFeedback = false, onSaved }: FormProps) {
 	const [form] = Form.useForm<Record<string, unknown>>();
-	const formValues = Form.useWatch([], form) as Record<string, unknown> | undefined;
 	const [messageApi, messageContextHolder] = message.useMessage();
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
@@ -177,9 +186,6 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 			{formConfig?.fields.map((field) => field.type === 'hidden' ? (
 				<Form.Item key={field.name} name={field.name} hidden><Input /></Form.Item>
 			) : (
-				(() => {
-					const readOnly = field.readOnlyWhen ? (field.readOnlyWhen.values ? field.readOnlyWhen.values.includes(String(formValues?.[field.readOnlyWhen.field] ?? '')) : !field.readOnlyWhen.notValues?.includes(String(formValues?.[field.readOnlyWhen.field] ?? ''))) : false;
-					return (
 				<Form.Item
 					key={field.name}
 					label={(
@@ -214,14 +220,8 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 					valuePropName={field.type === 'switch' ? 'checked' : 'value'}
 					rules={field.rules}
 				>
-					{field.type === 'switch'
-						? <Switch checkedChildren={field.checkedChildren} unCheckedChildren={field.unCheckedChildren} />
-						: field.type === 'select'
-							? <Select options={field.options?.map((option) => ({ value: option.value, label: option.text }))} placeholder={field.placeholder} />
-						: <Input type={field.type === 'password' ? 'password' : 'text'} placeholder={field.placeholder} maxLength={field.maxLength} readOnly={readOnly} disabled={readOnly} />}
+					<FieldControl field={field} form={form} />
 				</Form.Item>
-					);
-				})()
 			))}
 			<Space>
 				<Button type="primary" htmlType="submit" loading={saving}>{formConfig?.submitLabel}</Button>
