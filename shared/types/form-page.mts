@@ -18,8 +18,8 @@ export type FormPageField = {
 export type FormPageExternalLogin = { key: string; label: string };
 
 export type FormPageConfig = {
-	/** 需要跳转到 Accounts 完成登录的页面。跳转必须由用户点击触发，不提供自动跳转。 */
-	passportLogin?: { enabled: boolean; mode?: 'popup' | 'redirect' };
+	/** 需要前往 Accounts 完成登录的页面：只在用户点击后弹出登录窗口，本页既不自动跳转也不整页跳走。 */
+	passportLogin?: { enabled: boolean };
 	description?: string;
 	submitLabel?: string;
 	actions?: Array<{ key: string; label: string }>;
@@ -35,6 +35,8 @@ export type FormPageResponse<T = Record<string, unknown>> = {
 	formPage?: FormPageConfig;
 	feedback?: ApiFeedback;
 	redirectTo?: string;
+	/** 在弹窗里完成的流程：优先关闭窗口，关不掉时才回落到 redirectTo。 */
+	closeWindow?: boolean;
 };
 import type { ApiFeedback } from './api-response.mjs';
 import type { FieldReadOnlyWhen } from '../field-linkage.mjs';

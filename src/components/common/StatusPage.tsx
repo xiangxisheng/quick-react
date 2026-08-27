@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { HomeOutlined, LoginOutlined, UserOutlined } from '@ant-design/icons';
 import type { CommonApi } from '@/utils/common/api.js';
 import type { HeaderAction, PageStatus } from '@shared/types/initial-data.mjs';
+import { loginWithAccountsPopup } from '@/utils/common/passport.js';
 
 type StatusPageProps = {
 	commonApi: CommonApi;
@@ -41,8 +42,15 @@ export default function StatusPage({ commonApi, apiSuffix, pageSuffix, pageStatu
 
 	if (!status) return null;
 	const pageUrl = (path: string) => path === '/' ? path : `${path}${pageSuffix}`;
-	const execute = (action: HeaderAction) => {
-		if (action.action === 'navigate') navigate(pageUrl(action.key));
+	const execute = async (action: HeaderAction) => {
+		if (action.action === 'navigate') { navigate(pageUrl(action.key)); return; }
+		// 需要登录的页面直接弹出 Accounts 登录窗口，不再把用户送到登录页。
+		if (action.action === 'accounts-login') {
+			try {
+				await loginWithAccountsPopup();
+				window.location.reload();
+			} catch (error) { await commonApi.modalError([error instanceof Error ? error.message : 'Accounts 登录失败']); }
+		}
 	};
 	return <Result
 		status={resultStatus(status.status)}
@@ -54,7 +62,7 @@ export default function StatusPage({ commonApi, apiSuffix, pageSuffix, pageStatu
 					key={action.key}
 					type={index === 0 ? 'primary' : 'default'}
 					icon={icons[action.icon ?? 'home'] ?? icons.home}
-					onClick={() => execute(action)}
+					onClick={() => void execute(action)}
 				>{action.label}</Button>
 			))}
 		</Space>}

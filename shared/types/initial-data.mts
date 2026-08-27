@@ -4,7 +4,8 @@ import type { UserIdentity } from './user.mjs';
 export type HeaderAction = {
 	key: string;
 	label: string;
-	action: 'navigate' | 'logout';
+	/** accounts-login：在当前页弹出 Accounts 登录窗口，不跳转也不离开本页。 */
+	action: 'navigate' | 'logout' | 'accounts-login';
 	icon?: 'login' | 'register' | 'logout' | 'user';
 };
 

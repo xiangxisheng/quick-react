@@ -6,8 +6,8 @@ import type { FormPageConfig } from '@shared/types/form-page.mjs';
 
 const securityForm = (hasPassword: boolean): FormPageConfig => ({
 	description: hasPassword
-		? '修改密码需要先输入当前密码。修改后旧密码立即失效。'
-		: '还没有设置密码。设置后可以直接用邮箱和密码登录 Accounts。',
+		? '修改密码需要先输入当前密码。新密码生效后，原密码立即失效。'
+		: '尚未设置密码。设置后可使用邮箱和密码登录 Accounts。',
 	submitLabel: hasPassword ? '修改密码' : '设置密码',
 	initialValues: { current_password: '', password: '', password_confirm: '' },
 	fields: [
@@ -36,7 +36,7 @@ const handler: ApiHandler = async (c, next) => {
 	try { await setPassportPassword(database, userId, password); }
 	catch (error) { return apiMessage(c, 400, error instanceof Error ? error.message : '密码不合法'); }
 	const formPage = securityForm(true);
-	return apiMessageData(c, 200, hasPassword ? '密码已修改' : '密码已设置，下次可以直接用邮箱和密码登录', { formPage, currentValues: formPage.initialValues });
+	return apiMessageData(c, 200, hasPassword ? '密码已修改' : '密码已设置，下次可使用邮箱和密码登录', { formPage, currentValues: formPage.initialValues });
 };
 
 export default handler;

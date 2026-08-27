@@ -48,11 +48,14 @@ try {
 	const oidcRequestCookie = blocked.headers.getSetCookie().map((value) => value.split(';')[0]).find((value) => value.startsWith('accounts_oidc_request='));
 	assert.ok(oidcRequestCookie);
 	const fromClient = await (await request('/api/accounts/sign.php', { headers: { cookie: oidcRequestCookie } })).json();
-	assert.match(fromClient.formPage.description, /你正在为 client\.test 登录/);
+	assert.match(fromClient.formPage.description, /正在为 client\.test 登录/);
 	assert.deepEqual(fromClient.formPage.actions.map((action) => action.key), ['return_to_client']);
-	assert.match(fromClient.formPage.actions[0].label, /返回 client\.test/);
+	assert.equal(fromClient.formPage.actions[0].label, '取消登录');
 	const returned = await request('/api/accounts/sign.php?action=return_to_client', { method: 'POST', headers: { cookie: oidcRequestCookie, 'content-type': 'application/json' }, body: '{}' });
-	assert.equal((await returned.json()).redirectTo, 'https://client.test');
+	const cancelled = await returned.json();
+	// 弹窗里取消登录先关窗口，非弹窗场景才回落到来源站点。
+	assert.equal(cancelled.closeWindow, true);
+	assert.equal(cancelled.redirectTo, 'https://client.test');
 	assert.ok(returned.headers.getSetCookie().some((value) => value.startsWith('accounts_oidc_request=;')));
 
 	const usernameDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
@@ -72,12 +75,17 @@ try {
 	assert.equal(userinfo.sub, String(userId)); assert.equal(userinfo.name, 'AccountsUser');
 	assert.equal((await request('/api/oidc/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: tokenBody.toString() })).status, 400);
 	const jwks = await (await request('/api/oidc/jwks')).json(); assert.equal(jwks.keys[0].alg, 'RS256'); assert.ok(jwks.keys[0].n);
+	// 启用 Accounts 登录的业务站点：需要登录的页面直接弹窗，不再跳登录页，也不给本地注册入口。
+	const businessDocument = await (await app.request('https://site1.test/panel/admin.html', { headers: { accept: 'text/html' } })).text();
+	const businessInitial = JSON.parse(businessDocument.match(/__INITIAL_DATA__=(\{.*?\});<\/script>/s)[1]);
+	assert.deepEqual(businessInitial.auth.actions.map((action) => [action.key, action.action]), [['/sign', 'accounts-login']]);
+	assert.equal(businessInitial.pageStatus.status, 401);
+	assert.deepEqual(businessInitial.pageStatus.actions.map((action) => [action.label, action.action]), [['登录', 'accounts-login'], ['返回首页', 'navigate']]);
 	const businessSign = await (await app.request('https://site1.test/api/sign.php')).json();
 	assert.equal(businessSign.formPage.fields[0].name, 'action');
 	// 业务站点不允许自动跳转到 Accounts，必须由用户点击按钮确认。
-	assert.equal(businessSign.formPage.passportLogin.enabled, true);
-	assert.equal(businessSign.formPage.passportLogin.autoStart, undefined);
-	assert.equal(businessSign.formPage.passportLogin.mode, 'popup');
+	// 只保留弹窗登录：既不自动跳转，也不整页跳走。
+	assert.deepEqual(businessSign.formPage.passportLogin, { enabled: true });
 	assert.match(businessSign.formPage.description, /本页不会自动跳转/);
 	const businessStart = await app.request('https://site1.test/api/sign.php', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
 	const loginCookie = businessStart.headers.get('set-cookie')?.split(';')[0];
@@ -85,14 +93,18 @@ try {
 	const businessAuthorized = await app.request(businessAuthorizeUrl, { headers: { cookie: `passport_session=${sessionId}` } });
 	const businessCallback = businessAuthorized.headers.get('location');
 	const businessCallbackResponse = await app.request(businessCallback, { headers: { cookie: loginCookie } });
-	assert.equal(businessCallbackResponse.status, 302);
+	// 弹窗回调直接返回关闭窗口的页面，不再中转到 /accounts/oidc/popup。
+	assert.equal(businessCallbackResponse.status, 200);
+	const popupBody = await businessCallbackResponse.clone().text();
+	assert.match(popupBody, /postMessage/);
+	assert.equal(popupBody.includes('/accounts/oidc/popup'), false);
 	const businessSessionCookie = businessCallbackResponse.headers.getSetCookie().find((item) => item.startsWith('quick_react_session='))?.split(';')[0];
 	assert.ok(businessSessionCookie);
 	const signedInBusiness = await (await app.request('https://site1.test/api/sign.php', { headers: { cookie: businessSessionCookie } })).json();
 	// Accounts 用户名通过 preferred_username 下发，业务站点用它替换 passport_<user_id> 占位名。
 	assert.equal(claims.preferred_username, 'oidcuser1');
 	assert.equal(signedInBusiness.user.username, 'oidcuser1');
-	assert.equal(signedInBusiness.formPage.passportLogin.autoStart, undefined);
+	assert.deepEqual(signedInBusiness.formPage.passportLogin, { enabled: true });
 	const businessUsers = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
 	assert.equal(businessUsers.prepare("SELECT COUNT(*) AS count FROM base_system_users WHERE username LIKE 'passport\\_%' ESCAPE '\\'").get().count, 0);
 	businessUsers.close();

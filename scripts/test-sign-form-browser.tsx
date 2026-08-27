@@ -99,7 +99,7 @@ requests.length = 0;
 const passportForm = {
 	description: '本站使用 Accounts 账号中心统一登录。点击下面的按钮会打开 Accounts 登录窗口，完成后自动回到本站；本页不会自动跳转。',
 	submitLabel: '前往 Accounts 登录',
-	passportLogin: { enabled: true, mode: 'popup' },
+	passportLogin: { enabled: true },
 	initialValues: { action: 'login' },
 	fields: [{ name: 'action', label: '', type: 'hidden' }],
 };

@@ -7,14 +7,14 @@ import { sendDefaultCloudEmail } from '@server/cloud/email.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 
 const verifyIdentityForm = (actions: Array<{ key: string; label: string }>): FormPageConfig => ({
-	description: '发送邮箱验证码之前必须先完成一次第三方认证。请选择下面任意一种方式完成认证，认证后 30 分钟内可以绑定新邮箱。',
-	submitLabel: '我已完成认证，继续',
+	description: '发送邮箱验证码之前必须先完成一次第三方认证。请选择下方任意一种方式完成认证，认证后 30 分钟内可绑定新邮箱。',
+	submitLabel: '已完成认证，继续',
 	actions,
 	initialValues: { step: 'check' },
 	fields: [{ name: 'step', label: '', type: 'hidden' }],
 });
 const emailForm = (): FormPageConfig => ({
-	description: '第三方认证已通过。输入要绑定的邮箱，验证码会发送到该邮箱。',
+	description: '第三方认证已通过。请输入要绑定的邮箱，验证码将发送至该邮箱。',
 	submitLabel: '发送验证码',
 	initialValues: { step: 'send', email: '' },
 	fields: [
@@ -23,9 +23,9 @@ const emailForm = (): FormPageConfig => ({
 	],
 });
 const codeForm = (email: string): FormPageConfig => ({
-	description: `验证码已发送到 ${email}，输入验证码完成绑定。`,
+	description: `验证码已发送至 ${email}，请输入验证码完成绑定。`,
 	submitLabel: '完成绑定',
-	actions: [{ key: 'restart', label: '换个邮箱' }],
+	actions: [{ key: 'restart', label: '更换邮箱' }],
 	initialValues: { step: 'verify', code: '' },
 	fields: [
 		{ name: 'step', label: '', type: 'hidden' },
@@ -91,7 +91,7 @@ const handler: ApiHandler = async (c, next) => {
 		const result = await verifyAccountEmailOtp(database, c.env.SNOWFLAKE_WORKER_ID, userId, String(body.code ?? ''));
 		if (result.status === 'bound') {
 			const formPage = emailForm();
-			return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues, feedback: { component: 'inline' as const, type: 'success' as const, message: `${result.email} 已绑定，可以在邮箱管理里设为主邮箱` } });
+			return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues, feedback: { component: 'inline' as const, type: 'success' as const, message: `${result.email} 已绑定，可在邮箱管理中设为主邮箱` } });
 		}
 		if (result.status === 'conflict') return apiMessage(c, 409, result.message);
 		if (result.status === 'none') return apiMessage(c, 409, '没有待验证的邮箱，请重新发送验证码');

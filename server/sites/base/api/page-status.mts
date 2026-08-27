@@ -8,9 +8,10 @@ const normalizePath = (value: string) => {
 };
 
 // 前端匹配不到页面路由时调用，由后端判断是路径不存在、未登录还是无权访问。
-const handler: ApiHandler = (c) => {
+const handler: ApiHandler = async (c) => {
 	const path = normalizePath(c.req.query('path') ?? '/');
-	const pageStatus = resolvePageStatus(c, path, buildAuthState(c)) ?? unavailablePageStatus(path);
+	const auth = await buildAuthState(c);
+	const pageStatus = await resolvePageStatus(c, path, auth) ?? unavailablePageStatus(path);
 	return apiResponse(c, 200, { pageStatus });
 };
 

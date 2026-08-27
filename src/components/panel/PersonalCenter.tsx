@@ -31,7 +31,7 @@ export default function PersonalCenter({ commonApi, user: initialUser, title, pa
 				showIcon
 				style={{ marginBottom: 16 }}
 				message="账号资料由 Accounts 账号中心统一维护"
-				description="用户名、昵称、密码和邮箱的添加、验证、解绑都在 Accounts 账号中心完成，本站只展示当前登录身份。账号中心会在新标签页打开，本页不会离开。"
+				description="用户名、昵称、密码和邮箱的添加、验证、解绑均在 Accounts 账号中心完成，本站仅展示当前登录身份。账号中心将在新标签页打开，不会离开当前页面。"
 				action={<Button type="primary" href={accountsCenter.url} target="_blank" rel="noopener noreferrer">{accountsCenter.label}</Button>}
 			/> : null}
 			{/* 账号资料交给 Accounts 后，本站不再重复这些占位说明。 */}

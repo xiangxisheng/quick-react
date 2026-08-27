@@ -28,10 +28,10 @@ type SelectOption = { value: string; text: string };
 /** 登录页：邮箱输入框在上，第三方登录以图标链接的形式排在下方。 */
 const signInForm = (email: string, externalLogins: FormPageExternalLogin[], returnHost = ''): FormPageConfig => ({
 	description: returnHost
-		? `你正在为 ${returnHost} 登录。输入邮箱后点下一步，没有注册过也从这里开始；也可以直接用下面的第三方账号登录。`
-		: '输入邮箱后点下一步，没有注册过也从这里开始；也可以直接用下面的第三方账号登录。',
+		? `正在为 ${returnHost} 登录。请输入邮箱后点击下一步，未注册的邮箱同样从此处开始；也可以使用下方的第三方账号登录。`
+		: '请输入邮箱后点击下一步，未注册的邮箱同样从此处开始；也可以使用下方的第三方账号登录。',
 	submitLabel: '下一步',
-	...(returnHost ? { actions: [{ key: 'return_to_client', label: `不登录了，返回 ${returnHost}` }] } : {}),
+	...(returnHost ? { actions: [{ key: 'return_to_client', label: '取消登录' }] } : {}),
 	externalLogins,
 	initialValues: { step: 'email', email },
 	fields: [
@@ -53,9 +53,9 @@ const methodForm = (options: SelectOption[], mode: 'signup' | 'reset' | 'link', 
 	],
 });
 const passwordLoginForm = (email: string, externalLogins: FormPageExternalLogin[] = []): FormPageConfig => ({
-	description: `${email} 已注册，请输入密码登录，或用下面的第三方账号登录。`,
+	description: `${email} 已注册，请输入密码登录，或使用下方的第三方账号登录。`,
 	submitLabel: '登录',
-	actions: [{ key: 'forgot_password', label: '忘记密码' }, { key: 'change_email', label: '换个邮箱' }],
+	actions: [{ key: 'forgot_password', label: '忘记密码' }, { key: 'change_email', label: '更换邮箱' }],
 	externalLogins,
 	initialValues: { step: 'password', email, password: '' },
 	fields: [
@@ -66,8 +66,8 @@ const passwordLoginForm = (email: string, externalLogins: FormPageExternalLogin[
 });
 /** 已注册但没有设置过密码：只能用第三方登录，不给密码输入框。 */
 const externalOnlyForm = (email: string, externalLogins: FormPageExternalLogin[]): FormPageConfig => ({
-	description: `${email} 还没有设置过密码，请用下面的第三方账号登录；登录后可以在账户中心设置密码。`,
-	submitLabel: '换个邮箱',
+	description: `${email} 尚未设置密码，请使用下方的第三方账号登录；登录后可在账户中心设置密码。`,
+	submitLabel: '更换邮箱',
 	externalLogins,
 	initialValues: { step: 'restart', email },
 	fields: [
@@ -76,7 +76,7 @@ const externalOnlyForm = (email: string, externalLogins: FormPageExternalLogin[]
 	],
 });
 const telegramEmailForm = (email = ''): FormPageConfig => ({
-	description: '输入已绑定的邮箱，随后选择用于批准本次登录的 Telegram 账号。',
+	description: '请输入已绑定的邮箱，随后选择用于批准本次登录的 Telegram 账号。',
 	submitLabel: '下一步',
 	actions: [{ key: 'back_to_sign', label: '返回登录' }],
 	initialValues: { step: 'telegram_email', email },
@@ -291,12 +291,12 @@ const handler: ApiHandler = async (c, next) => {
 		const formPage = signInForm(text(body.email), await signInExternalLogins(), client ? new URL(client).host : '');
 		return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues });
 	}
-	// 放弃登录时回到来源站点，并清掉待授权请求，避免下次登录跳到过期的授权。
+	// 取消登录：登录在弹窗里进行，直接关闭窗口；不是弹窗时回落到来源站点。同时清掉待授权请求。
 	if (action === 'return_to_client') {
 		const client = await pendingClient();
-		if (!client) return apiMessage(c, 409, '没有待返回的站点');
+		if (!client) return apiMessage(c, 409, '没有待取消的登录');
 		c.header('Set-Cookie', clearOidcRequestCookie(secure));
-		return apiResponse(c, 200, { redirectTo: client, feedback: { component: 'message' as const, type: 'success' as const, message: `正在返回 ${new URL(client).host}`, redirectAfter: 0 } });
+		return apiResponse(c, 200, { closeWindow: true, redirectTo: client, feedback: { component: 'message' as const, type: 'success' as const, message: '已取消登录', redirectAfter: 0 } });
 	}
 	if (action === 'forgot_password') {
 		let email: string;
@@ -316,7 +316,7 @@ const handler: ApiHandler = async (c, next) => {
 			const formPage = onboardingForm(pendingOnboarding);
 			return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues, feedback: { component: 'inline' as const, type: 'warning' as const, message: '请先设置用户名' } });
 		}
-		return apiMessageData(c, 200, '已跳过密码设置，下次登录会再次提醒', { user: { id: user.id }, redirectTo: loginRedirectTarget(c) }, { redirectAfter: 0 });
+		return apiMessageData(c, 200, '已跳过密码设置，下次登录时将再次提示', { user: { id: user.id }, redirectTo: loginRedirectTarget(c) }, { redirectAfter: 0 });
 	}
 	if (action) return apiMessage(c, 400, '不支持的操作');
 
@@ -333,7 +333,7 @@ const handler: ApiHandler = async (c, next) => {
 		if (password !== confirm) return apiMessage(c, 400, '两次输入的密码不一致');
 		try { await setPassportPassword(database, userId, password); }
 		catch (error) { return apiMessage(c, 400, error instanceof Error ? error.message : '密码不合法'); }
-		return completeLogin(userId, '密码已设置，下次可以直接用邮箱和密码登录');
+		return completeLogin(userId, '密码已设置，下次可使用邮箱和密码登录');
 	}
 
 	if (step === 'external_email' || step === 'external_verify') {
@@ -449,10 +449,10 @@ const handler: ApiHandler = async (c, next) => {
 			const formPage = confirmEmailForm(email);
 			return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues, feedback: { component: 'inline' as const, type: 'warning' as const, message: '该邮箱还没有注册' } });
 		}
-		if (!await hasAccountPassword(database, userId)) return apiMessage(c, 409, '该账号还没有设置密码，请先用微信、Telegram 或 Google 登录，然后在账户中心设置密码');
+		if (!await hasAccountPassword(database, userId)) return apiMessage(c, 409, '该账号尚未设置密码，请先使用微信、Telegram 或 Google 登录，再前往账户中心设置密码');
 		const verified = await verifyPassportPasswordHistory(database, userId, String(body.password ?? ''));
 		if (verified.status === 'old') return apiMessage(c, 401, `密码已于 ${utcMinutes(verified.changedAt)} 修改，请使用新密码登录`);
-		if (verified.status !== 'current') return apiMessage(c, 401, '邮箱或密码不正确；忘记密码请用微信、Telegram 或 Google 登录后到账户中心重设');
+		if (verified.status !== 'current') return apiMessage(c, 401, '邮箱或密码不正确。忘记密码请使用微信、Telegram 或 Google 登录后，前往账户中心重设');
 		await startSession(userId);
 		return completeLogin(userId, 'Accounts 登录成功');
 	}

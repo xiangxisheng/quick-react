@@ -52,7 +52,7 @@ const handler: ApiHandler = async (c, _next, params) => {
 	}
 
 	// 待验证邮箱只是列表里的提示行，不能设主邮箱也不能解绑。
-	if (params.id === PENDING_ROW_KEY) return apiMessage(c, 409, '该邮箱还在验证中，请到“绑定邮箱”页面输入验证码完成绑定');
+	if (params.id === PENDING_ROW_KEY) return apiMessage(c, 409, '该邮箱正在验证中，请前往「绑定邮箱」页面输入验证码完成绑定');
 
 	if (c.req.method === 'POST' && params.id && action === 'primary') {
 		try { return apiMessage(c, 200, `${await setPrimaryAccountEmail(database, userId, params.id)} 已设为主邮箱`); }
@@ -63,7 +63,7 @@ const handler: ApiHandler = async (c, _next, params) => {
 		const ids = await c.req.json<unknown>().catch(() => []);
 		const targets = Array.isArray(ids) ? ids.map((value) => String(value)) : [];
 		if (!targets.length) return apiMessage(c, 400, '请选择要解绑的邮箱');
-		if (targets.includes(PENDING_ROW_KEY)) return apiMessage(c, 409, '该邮箱还在验证中，请到“绑定邮箱”页面输入验证码完成绑定');
+		if (targets.includes(PENDING_ROW_KEY)) return apiMessage(c, 409, '该邮箱正在验证中，请前往「绑定邮箱」页面输入验证码完成绑定');
 		const removed: string[] = [];
 		for (const target of targets) {
 			try { removed.push(await unbindAccountEmail(database, userId, target)); }

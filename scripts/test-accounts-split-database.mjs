@@ -68,12 +68,12 @@ try {
 	// 登录页读的是 passport 库里的邮箱：已注册但没设置过密码时不给密码框，直接引导第三方登录。
 	const known = await (await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'email', email: 'split@example.com' } })).json();
 	assert.equal(known.formPage.initialValues.step, 'restart');
-	assert.match(known.formPage.description, /还没有设置过密码/);
+	assert.match(known.formPage.description, /尚未设置密码/);
 	assert.equal(known.formPage.fields.some((field) => field.name === 'password'), false);
 	// 直接调用密码登录接口仍然会被挡住。
 	const forced = await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'password', email: 'split@example.com', password: 'whatever' } });
 	assert.equal(forced.status, 409);
-	assert.match((await forced.json()).feedback.message, /还没有设置密码/);
+	assert.match((await forced.json()).feedback.message, /尚未设置密码/);
 	const unknown = await (await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'password', email: 'nobody@example.com', password: 'whatever' } })).json();
 	assert.equal(unknown.formPage.initialValues.step, 'email_confirm');
 

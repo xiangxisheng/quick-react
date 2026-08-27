@@ -9,6 +9,12 @@ import { isSecureRequest, requestOrigin } from '@server/request-origin.mjs';
 
 type LoginRequest = { id: string; issuer: string; state: string; nonce: string; code_verifier: string; return_path: string; expires_at: number };
 
+/** 弹窗登录成功后通知打开方并自行关闭；内容是静态的，不拼接任何外部输入。 */
+const popupClosePage = () => `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>登录成功</title></head>`
+	+ `<body style="font-family:system-ui;padding:48px;text-align:center"><h2>登录成功</h2><p>正在返回原页面…</p>`
+	+ `<script>window.opener&&window.opener.postMessage({source:'passport',status:'success'},window.location.origin);setTimeout(function(){window.close();},100);</script>`
+	+ `</body></html>`;
+
 /** 未设置 Accounts 用户名时的本站占位用户名，带下划线，永远不会与合法用户名冲突。 */
 const placeholderUsername = (subject: string) => `passport_${subject}`;
 const generatedUsername = (username: string) => username.startsWith('passport_') || username.startsWith('accounts_');
@@ -63,7 +69,8 @@ const handler: ApiHandler = async (c) => {
 		await runSql(database, sql(database).delete('base_oidc_login_requests', { id: request.id }));
 		const secure = isSecureRequest(c);
 		c.header('Set-Cookie', clearAccountsLoginCookie(secure)); c.header('Set-Cookie', createSessionCookie(sessionId, secure, maxAge), { append: true });
-		return c.redirect(request.return_path || '/', 302);
+		// 登录只在弹窗里完成：直接返回关闭窗口的页面，不再中转到额外的回调页面。
+		return c.html(popupClosePage());
 	} catch (error) { return apiMessage(c, 502, error instanceof Error ? error.message : 'Accounts 登录回调失败'); }
 };
 export default handler;

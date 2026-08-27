@@ -34,9 +34,9 @@ export const usernameForm = (invalidUsername = ''): FormPageConfig => ({
 });
 
 export const passwordForm = (): FormPageConfig => ({
-	description: '设置密码后，下次可以直接用邮箱和密码登录。也可以跳过，下次登录会再次提醒。',
+	description: '设置密码后，下次可使用邮箱和密码登录。也可以跳过，下次登录时将再次提示。',
 	submitLabel: '保存密码',
-	actions: [{ key: 'skip_password', label: '暂时跳过' }],
+	actions: [{ key: 'skip_password', label: '跳过' }],
 	initialValues: { step: 'set_password', password: '', password_confirm: '' },
 	fields: [
 		{ name: 'step', label: '', type: 'hidden' },
@@ -47,7 +47,7 @@ export const passwordForm = (): FormPageConfig => ({
 
 /** 第三方认证通过后重设密码，不需要输入旧密码。 */
 export const resetPasswordForm = (): FormPageConfig => ({
-	description: '第三方认证已通过，请设置新密码。设置后旧密码立即失效。',
+	description: '第三方认证已通过，请设置新密码。新密码生效后，原密码立即失效。',
 	submitLabel: '保存新密码',
 	initialValues: { step: 'reset_password', password: '', password_confirm: '' },
 	fields: [

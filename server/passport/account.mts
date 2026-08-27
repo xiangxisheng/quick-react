@@ -11,7 +11,7 @@ const reservedUsernames = new Set(['admin', 'root', 'system', 'support', 'offici
 export const normalizeAccountUsername = (value: string) => {
 	const username = value.trim();
 	if (!usernamePattern.test(username)) throw new Error('用户名必须以小写字母开头，只能包含小写字母和数字，长度 6 到 12 位');
-	if (reservedUsernames.has(username)) throw new Error('该用户名属于系统保留名称，请换一个');
+	if (reservedUsernames.has(username)) throw new Error('该用户名属于系统保留名称，请更换后重试');
 	return username;
 };
 
@@ -41,13 +41,13 @@ export const setAccountUsername = async (database: DatabaseAdapter, userId: stri
 	const current = await accountUsernameState(database, userId);
 	if (current.state === 'ready') throw new Error('用户名已经设置，不能修改');
 	const taken = await firstSql(database, sql(database).select({ table: 'passport_usernames', columns: { user_id: 'user_id' }, where: [{ column: 'username', value: username }] }));
-	if (taken) throw new Error('该用户名已被占用，请换一个');
+	if (taken) throw new Error('该用户名已被占用，请更换后重试');
 	try {
 		// 占位或历史用户名允许改写，正式用户名只能新增一次。
 		if (current.state === 'invalid') await runSql(database, sql(database).update('passport_usernames', { username }, { user_id: userId }));
 		else await runSql(database, sql(database).insert('passport_usernames', { user_id: userId, username, created_at: Date.now() }));
 	} catch {
-		throw new Error('该用户名已被占用，请换一个');
+		throw new Error('该用户名已被占用，请更换后重试');
 	}
 	return username;
 };

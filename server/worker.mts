@@ -117,7 +117,7 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 	const siteConfig = c.get('techStackConfig');
 	const systemConfig = c.get('systemConfig');
 	const menuItems = getSiteNavigation(site.codeSiteChain, c.get('effectiveRoles'));
-	const auth = buildAuthState(c);
+	const auth = await buildAuthState(c);
 	const requestPath = c.req.path;
 	const pagePaths = resolvePagePaths(c, auth);
 	// 缺少页面后缀的合法路径统一跳转到带后缀的规范地址，避免被当成不存在的路径。
@@ -126,7 +126,7 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 		target.pathname = `${requestPath}${siteConfig.pageSuffix}`;
 		return c.redirect(target.toString(), 302);
 	}
-	const pageStatus = resolvePageStatus(c, requestPath, auth, pagePaths);
+	const pageStatus = await resolvePageStatus(c, requestPath, auth, pagePaths);
 	const metadata = pageStatus
 		? { title: pageStatus.title, description: pageStatus.description }
 		: getPageMetadata(requestPath, menuItems, siteConfig.pageSuffix);

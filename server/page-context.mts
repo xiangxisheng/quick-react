@@ -3,13 +3,21 @@ import type { AppEnv } from './types.mjs';
 import type { AuthPage, AuthState, PageStatus } from '@shared/types/initial-data.mjs';
 import { findNavigationItem, stripPageSuffix } from '@shared/navigation-tree.mjs';
 import { getFullSiteNavigation, getPageDefinitions, getSiteNavigation } from './navigation.mjs';
+import { loadAccountsOidcConfig } from './accounts/client.mjs';
 
 // 前端固定注册的第三方登录回调页面，不属于导航树。
-const callbackPagePaths = ['/accounts/external/callback', '/accounts/external/wechat', '/accounts/oidc/popup'];
+const callbackPagePaths = ['/accounts/external/callback', '/accounts/external/wechat'];
 
-export const buildAuthState = (c: Context<AppEnv>): AuthState => {
+/** 站点是否用 Accounts 作为登录入口：只有 OIDC 客户端站点算，Accounts 自己不算。 */
+export const usesAccountsLogin = async (c: Context<AppEnv>) => (
+	c.get('site').codeSiteChain.includes('accounts_oidc_client') && (await loadAccountsOidcConfig(c)).enabled
+);
+
+export const buildAuthState = async (c: Context<AppEnv>): Promise<AuthState> => {
 	const site = c.get('site');
 	const siteConfig = c.get('techStackConfig');
+	// 启用 Accounts 登录的站点不跳转登录页，直接在当前页弹出登录窗口。
+	const accountsLogin = await usesAccountsLogin(c);
 	const signPages: AuthPage[] = [
 		{ path: `/sign${siteConfig.pageSuffix}`, title: '登录', description: '登录 Quick React', mode: 'sign', apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'POST', redirectPath: `/panel/admin${siteConfig.pageSuffix}` },
 		...(site.siteKey === 'global' ? [{ path: `/sign-up${siteConfig.pageSuffix}`, title: '注册', description: '创建初始管理员', mode: 'sign-up' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'PUT' as const, redirectPath: `/sign${siteConfig.pageSuffix}` }] : []),
@@ -41,8 +49,9 @@ export const buildAuthState = (c: Context<AppEnv>): AuthState => {
 	return {
 		component: 'buttons',
 		actions: [
-			{ key: '/sign', label: '登录', action: 'navigate', icon: 'login' },
-			...(site.siteKey === 'global' ? [{ key: '/sign-up', label: '注册', action: 'navigate' as const, icon: 'register' as const }] : []),
+			{ key: '/sign', label: '登录', action: accountsLogin ? 'accounts-login' : 'navigate', icon: 'login' },
+			// 启用 Accounts 登录后不能再创建本地账号，注册入口一并隐藏。
+			...(site.siteKey === 'global' && !accountsLogin ? [{ key: '/sign-up', label: '注册', action: 'navigate' as const, icon: 'register' as const }] : []),
 		],
 		pages: signPages,
 	};
@@ -66,12 +75,12 @@ export const resolvePagePaths = (c: Context<AppEnv>, auth: AuthState) => {
  * 判断请求的页面路径能否渲染，不能渲染时返回需要展示给用户的提示。
  * 返回 undefined 表示当前角色可以正常打开该页面。
  */
-export const resolvePageStatus = (
+export const resolvePageStatus = async (
 	c: Context<AppEnv>,
 	requestPath: string,
 	auth: AuthState,
 	paths: ReturnType<typeof resolvePagePaths> = resolvePagePaths(c, auth),
-): PageStatus | undefined => {
+): Promise<PageStatus | undefined> => {
 	const pageSuffix = c.get('techStackConfig').pageSuffix;
 	const logicalPath = stripPageSuffix(requestPath, pageSuffix);
 	const { allowed, known } = paths;
@@ -94,6 +103,8 @@ export const resolvePageStatus = (
 	const signPath = (needsAccounts ? signIn.find((page) => page.apiPath.startsWith('/api/accounts/')) : undefined)?.path
 		?? signIn[0]?.path ?? `/sign${pageSuffix}`;
 	if (!c.get('currentUser') || needsAccounts) {
+		// 业务站点用弹窗登录，不再把用户送到登录页。
+		const popupLogin = !needsAccounts && await usesAccountsLogin(c);
 		return {
 			path: requestPath,
 			status: 401,
@@ -101,7 +112,10 @@ export const resolvePageStatus = (
 			description: needsAccounts
 				? `访问 ${requestPath} 需要先登录 Accounts 账号。`
 				: `访问 ${requestPath} 需要先登录，登录后才能查看该页面。`,
-			actions: [{ key: stripPageSuffix(signPath, pageSuffix), label: '去登录', action: 'navigate', icon: 'login' }, home],
+			actions: [
+				{ key: stripPageSuffix(signPath, pageSuffix), label: '登录', action: popupLogin ? 'accounts-login' : 'navigate', icon: 'login' },
+				home,
+			],
 		};
 	}
 	return {

@@ -4,6 +4,7 @@ import { Avatar, Button, Dropdown, Space } from 'antd';
 import { LoginOutlined, LogoutOutlined, UserAddOutlined, UserOutlined } from '@ant-design/icons';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { runAfterFeedback } from '@/utils/common/feedback.js';
+import { loginWithAccountsPopup } from '@/utils/common/passport.js';
 
 type AuthActionsProps = {
 	auth?: AuthState;
@@ -29,6 +30,14 @@ export default function AuthActions({ auth, commonApi, apiSuffix, pageSuffix }: 
 	const execute = async (action: HeaderAction) => {
 		if (action.action === 'navigate') {
 			navigate(pageUrl(action.key));
+			return;
+		}
+		// 弹窗登录：业务页面留在原地，登录成功后刷新当前页。
+		if (action.action === 'accounts-login') {
+			try {
+				await loginWithAccountsPopup();
+				window.location.reload();
+			} catch (error) { await commonApi.modalError([error instanceof Error ? error.message : 'Accounts 登录失败']); }
 			return;
 		}
 		const response = await commonApi.apiFetch('/api' + action.key + apiSuffix, { method: 'DELETE' });

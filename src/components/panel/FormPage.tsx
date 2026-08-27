@@ -7,6 +7,7 @@ import { isFieldReadOnly, type FieldLinkOption } from '@shared/field-linkage.mjs
 import { changedFieldsKey, type ChangedFieldsPayload } from '@shared/types/changed-fields.mjs';
 import { CountdownDisplay, formatCountdown } from '@/components/common/Countdown.js';
 import { runAfterFeedback } from '@/utils/common/feedback.js';
+import { loginWithAccountsPopup } from '@/utils/common/passport.js';
 
 const renderTemplate = (template: string, values: Record<string, React.ReactNode>) => template
 	.split(/(\{[^{}]+\})/g)
@@ -126,6 +127,12 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 			form.resetFields();
 			form.setFieldsValue(nextValues);
 		}
+		// 弹窗里的流程结束后先尝试关闭窗口，关不掉（不是脚本打开的窗口）再回落到跳转。
+		if (result.closeWindow) {
+			window.close();
+			if (result.redirectTo) window.setTimeout(() => { if (!window.closed) window.location.assign(result.redirectTo!); }, 300);
+			return;
+		}
 		const target = result.redirectTo ?? (result.formPage ? undefined : await onSaved?.(values));
 		const savedValues = isRecord(result.currentValues) ? result.currentValues : values;
 		setInitialValues(savedValues);
@@ -190,8 +197,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 	const loginWithPassport = async () => {
 		setPassportError('');
 		try {
-			if (!(window as any).Passport) await new Promise<void>((resolve, reject) => { const script = document.createElement('script'); script.src = '/passport.js'; script.onload = () => resolve(); script.onerror = () => reject(new Error('Passport SDK 加载失败')); document.head.appendChild(script); });
-			await (window as any).Passport.login({ mode: formConfig?.passportLogin?.mode ?? 'popup' });
+			await loginWithAccountsPopup();
 			window.location.reload();
 		} catch (error) { setPassportError(error instanceof Error ? error.message : 'Passport 登录失败'); }
 	};
