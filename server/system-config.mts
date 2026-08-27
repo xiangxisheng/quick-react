@@ -6,12 +6,16 @@ export type SystemConfig = {
 	publicOrigin: string;
 	trustedProxyIps: string;
 	mapAllowedIps: string;
+	/** Google 等身份源要求向用户提供的公共隐私权政策和服务条款链接。 */
+	privacyPolicyUrl: string;
+	termsOfServiceUrl: string;
 };
 
 let defaultConfig: SystemConfig = {
 	httpPort: '8088', domain: 'anan.cc', publicOrigin: '',
 	trustedProxyIps: '127.0.0.1,::1,::ffff:127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
 	mapAllowedIps: '127.0.0.1,::1,::ffff:127.0.0.1',
+	privacyPolicyUrl: '', termsOfServiceUrl: '',
 };
 let config = { ...defaultConfig };
 let store: ConfigStore = memoryConfigStore;
@@ -29,10 +33,20 @@ export const configureSystemConfig = (options: { store?: ConfigStore; defaults?:
 		httpPort: '8088', domain: 'anan.cc', publicOrigin: '',
 		trustedProxyIps: '127.0.0.1,::1,::ffff:127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
 		mapAllowedIps: '127.0.0.1,::1,::ffff:127.0.0.1',
+		privacyPolicyUrl: '', termsOfServiceUrl: '',
 		...options.defaults,
 	};
 	config = { ...defaultConfig };
 	loadedAt = 0;
+};
+
+/** 公开链接必须是可直接访问的 http(s) 绝对地址，非法值按未配置处理。 */
+const normalizePublicUrl = (value: unknown, fallback: string) => {
+	if (typeof value !== 'string') return fallback;
+	const url = value.trim().slice(0, 512);
+	if (!url) return '';
+	try { return ['http:', 'https:'].includes(new URL(url).protocol) ? url : ''; }
+	catch { return ''; }
 };
 
 export const normalizeSystemConfig = (value: unknown, defaults: SystemConfig = defaultConfig): SystemConfig => {
@@ -43,6 +57,8 @@ export const normalizeSystemConfig = (value: unknown, defaults: SystemConfig = d
 		publicOrigin: typeof source.publicOrigin === 'string' ? source.publicOrigin.trim().slice(0, 512) : defaults.publicOrigin,
 		trustedProxyIps: typeof source.trustedProxyIps === 'string' ? source.trustedProxyIps.trim().slice(0, 2048) : defaults.trustedProxyIps,
 		mapAllowedIps: typeof source.mapAllowedIps === 'string' ? source.mapAllowedIps.trim().slice(0, 2048) : defaults.mapAllowedIps,
+		privacyPolicyUrl: normalizePublicUrl(source.privacyPolicyUrl, defaults.privacyPolicyUrl),
+		termsOfServiceUrl: normalizePublicUrl(source.termsOfServiceUrl, defaults.termsOfServiceUrl),
 	};
 };
 
