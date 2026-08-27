@@ -5,7 +5,8 @@ import { normalizePassportEmail, setPassportPassword, verifyPassportPasswordHist
 import { hasAccountPassword, setAccountUsername, utcMinutes } from '@server/passport/account.mjs';
 import { accountOnboarding, loginRedirectTarget, onboardingForm, refreshOidcRequest, resetPasswordForm } from '@server/accounts/onboarding.mjs';
 import { clearPassportSessionCookie, createPassportSessionCookie, loadPassportSession, readPassportSessionId } from '@server/passport/session.mjs';
-import { oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
+import { clearOidcRequestCookie, oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
+import { authorizationRequest } from '@server/accounts/repository.mjs';
 import { oidcIssuer, revokeOidcSession } from '@server/accounts/provider.mjs';
 import { clearExternalPendingCookie, clearPasswordResetCookie, clearSignupEmailCookie, passwordResetCookie, passwordResetCookieName, discardExternalEmailOtp, externalPendingCookieName, externalProviders, issueExternalEmailOtp, pendingExternalEmailOtp, pendingExternalIdentity, signupEmailCookie, signupEmailCookieName, verifyExternalEmailOtp } from '@server/accounts/external.mjs';
 import { isSecureRequest } from '@server/request-origin.mjs';
@@ -25,9 +26,12 @@ type Bot = { id: string; name: string; bot_username: string; bot_token: string }
 type SelectOption = { value: string; text: string };
 
 /** 登录页：邮箱输入框在上，第三方登录以图标链接的形式排在下方。 */
-const signInForm = (email: string, externalLogins: FormPageExternalLogin[]): FormPageConfig => ({
-	description: '输入邮箱后点下一步，没有注册过也从这里开始；也可以直接用下面的第三方账号登录。',
+const signInForm = (email: string, externalLogins: FormPageExternalLogin[], returnHost = ''): FormPageConfig => ({
+	description: returnHost
+		? `你正在为 ${returnHost} 登录。输入邮箱后点下一步，没有注册过也从这里开始；也可以直接用下面的第三方账号登录。`
+		: '输入邮箱后点下一步，没有注册过也从这里开始；也可以直接用下面的第三方账号登录。',
 	submitLabel: '下一步',
+	...(returnHost ? { actions: [{ key: 'return_to_client', label: `不登录了，返回 ${returnHost}` }] } : {}),
 	externalLogins,
 	initialValues: { step: 'email', email },
 	fields: [
@@ -184,6 +188,16 @@ const handler: ApiHandler = async (c, next) => {
 		c.header('Set-Cookie', clearSignupEmailCookie(secure), { append: true });
 	};
 
+	/** 有待处理的 OIDC 授权请求时，记录来源站点，避免用户跳到 Accounts 后回不去。 */
+	const pendingClient = async () => {
+		const requestId = readCookie(c.req.raw, oidcRequestCookieName);
+		if (!requestId) return undefined;
+		const stored = await authorizationRequest(database, requestId);
+		if (!stored || stored.expires_at <= Date.now()) return undefined;
+		try { return new URL(stored.redirect_uri).origin; }
+		catch { return undefined; }
+	};
+
 	/** 登录页下方的第三方登录图标。 */
 	const signInExternalLogins = async (): Promise<FormPageExternalLogin[]> => {
 		const [providers, bot] = await Promise.all([
@@ -248,7 +262,8 @@ const handler: ApiHandler = async (c, next) => {
 			const formPage = otp ? externalCodeForm(otp.email) : externalEmailForm(pending.provider === 'wechat' ? '微信' : '外部身份源', signupEmail);
 			return apiResponse(c, 200, { user: null, registrationAvailable: true, formPage, currentValues: formPage.initialValues });
 		}
-		const formPage = signInForm(signupEmail, await signInExternalLogins());
+		const client = await pendingClient();
+		const formPage = signInForm(signupEmail, await signInExternalLogins(), client ? new URL(client).host : '');
 		return apiResponse(c, 200, { user: null, registrationAvailable: providers.length > 0, formPage, currentValues: formPage.initialValues });
 	}
 	if (c.req.method === 'DELETE') {
@@ -272,8 +287,16 @@ const handler: ApiHandler = async (c, next) => {
 		return apiResponse(c, 200, { redirectTo: `/api/accounts/external/${provider.id}`, feedback: { component: 'message' as const, type: 'success' as const, message: `正在前往${provider.display_name}`, redirectAfter: 0 } });
 	}
 	if (action === 'change_email' || action === 'back_to_sign') {
-		const formPage = signInForm(text(body.email), await signInExternalLogins());
+		const client = await pendingClient();
+		const formPage = signInForm(text(body.email), await signInExternalLogins(), client ? new URL(client).host : '');
 		return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues });
+	}
+	// 放弃登录时回到来源站点，并清掉待授权请求，避免下次登录跳到过期的授权。
+	if (action === 'return_to_client') {
+		const client = await pendingClient();
+		if (!client) return apiMessage(c, 409, '没有待返回的站点');
+		c.header('Set-Cookie', clearOidcRequestCookie(secure));
+		return apiResponse(c, 200, { redirectTo: client, feedback: { component: 'message' as const, type: 'success' as const, message: `正在返回 ${new URL(client).host}`, redirectAfter: 0 } });
 	}
 	if (action === 'forgot_password') {
 		let email: string;
@@ -358,7 +381,8 @@ const handler: ApiHandler = async (c, next) => {
 	}
 
 	if (step === 'restart') {
-		const formPage = signInForm(text(body.email), await signInExternalLogins());
+		const client = await pendingClient();
+		const formPage = signInForm(text(body.email), await signInExternalLogins(), client ? new URL(client).host : '');
 		return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues });
 	}
 

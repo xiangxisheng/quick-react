@@ -90,7 +90,9 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 		const start = async () => {
 			try {
 				if (!(window as any).Passport) await new Promise<void>((resolve, reject) => { const script = document.createElement('script'); script.src = '/passport.js'; script.onload = () => resolve(); script.onerror = () => reject(new Error('Passport SDK 加载失败')); document.head.appendChild(script); });
-				await (window as any).Passport.login({ mode: 'redirect' });
+				// 按后端配置的方式自动登录：popup 模式下本站页面保留，不把整个浏览器带去 Accounts。
+				await (window as any).Passport.login({ mode: formConfig.passportLogin?.mode ?? 'popup' });
+				window.location.reload();
 			} catch (error) { setPassportError(error instanceof Error ? error.message : 'Passport 自动登录失败'); }
 		};
 		void start();

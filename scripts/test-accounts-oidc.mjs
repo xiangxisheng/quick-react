@@ -44,6 +44,17 @@ try {
 	const blocked = await request(`${authorize.pathname}${authorize.search}`, { headers: { cookie: `passport_session=${sessionId}` } });
 	assert.equal(blocked.status, 302);
 	assert.match(blocked.headers.get('location'), /^\/accounts\/sign/);
+	// 从业务站点跳来登录时，登录页要说明来源并提供返回入口，避免用户回不去。
+	const oidcRequestCookie = blocked.headers.getSetCookie().map((value) => value.split(';')[0]).find((value) => value.startsWith('accounts_oidc_request='));
+	assert.ok(oidcRequestCookie);
+	const fromClient = await (await request('/api/accounts/sign.php', { headers: { cookie: oidcRequestCookie } })).json();
+	assert.match(fromClient.formPage.description, /你正在为 client\.test 登录/);
+	assert.deepEqual(fromClient.formPage.actions.map((action) => action.key), ['return_to_client']);
+	assert.match(fromClient.formPage.actions[0].label, /返回 client\.test/);
+	const returned = await request('/api/accounts/sign.php?action=return_to_client', { method: 'POST', headers: { cookie: oidcRequestCookie, 'content-type': 'application/json' }, body: '{}' });
+	assert.equal((await returned.json()).redirectTo, 'https://client.test');
+	assert.ok(returned.headers.getSetCookie().some((value) => value.startsWith('accounts_oidc_request=;')));
+
 	const usernameDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
 	usernameDatabase.prepare('INSERT INTO passport_usernames (user_id, username, created_at) VALUES (?, ?, ?)').run(String(userId), 'oidcuser1', Date.now());
 	usernameDatabase.close();
