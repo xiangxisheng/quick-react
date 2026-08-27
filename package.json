@@ -26,6 +26,8 @@
 		"test:form-linkage-browser": "node scripts/test-form-linkage-browser.mjs",
 		"import:legacy-passport": "node scripts/import-legacy-passport.mjs",
 		"migrate:sqlite": "node scripts/migrate-sqlite.mjs",
+		"schema:check": "node scripts/schema-repair.mjs --check",
+		"schema:repair": "node scripts/schema-repair.mjs",
 		"test": "node esbuild.cjs"
 	},
 	"repository": {

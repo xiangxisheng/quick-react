@@ -24,6 +24,7 @@ export const databaseTableActions = (editable: boolean): TableActions => ({
 });
 export type DatabaseTableResponse = TableResponse & { tables: TableSelectOption[]; editable: boolean };
 const tableColumn = (column: Awaited<ReturnType<typeof getColumns>>[number]): TableColumn => ({ dataIndex: column.name, title: column.name, component: 'textbox', dataType: /INT/i.test(column.type) ? 'int' : /REAL|FLOA|DOUB|DECIMAL|NUMERIC/i.test(column.type) ? 'float' : 'string' });
+export const databaseSelectColumns = (columns: Awaited<ReturnType<typeof getColumns>>) => Object.fromEntries(columns.map((column) => [column.name, /INT/i.test(column.type) ? { column: column.name, cast: 'text' as const } : column.name]));
 export const readTable = async (database: DatabaseAdapter, mode: 'columns' | 'rows', tableName: string | undefined, pageNumValue?: string, pageSizeValue?: string): Promise<DatabaseTableResponse> => {
 	const tables = await getTables(database);
 	const selectedTableName = tableName || tables[0]?.value;
@@ -38,7 +39,10 @@ export const readTable = async (database: DatabaseAdapter, mode: 'columns' | 'ro
 	const rowKey = primaryKey ?? (sqliteRowId ? '__rowid__' : '');
 	const pageNum = page(pageNumValue, 1), pageSize = page(pageSizeValue, 10);
 	const total = await firstSql<{ count: number | string }>(database, sql(database).count(selectedTableName));
-	const rows = await allSql<TableData>(database, sql(database).select({ table: selectedTableName, includeAll: true, sqliteRowIdAlias: sqliteRowId ? '__rowid__' : undefined, limit: pageSize, offset: (pageNum - 1) * pageSize }));
+	// Database administration pages must preserve 64-bit IDs. Casting integer
+	// columns to text prevents SQLite from coercing snowflake IDs to unsafe JS numbers.
+	const selectedColumns = databaseSelectColumns(info);
+	const rows = await allSql<TableData>(database, sql(database).select({ table: selectedTableName, columns: selectedColumns, sqliteRowIdAlias: sqliteRowId ? '__rowid__' : undefined, limit: pageSize, offset: (pageNum - 1) * pageSize }));
 	const dataSource = rows.map((row, index) => ({ ...row, key: rowKey ? String(row[rowKey]) : `readonly-${(pageNum - 1) * pageSize + index + 1}` }));
 	const dataColumns = info.map(tableColumn);
 	const idIndex = dataColumns.findIndex((column) => column.dataIndex === 'id');

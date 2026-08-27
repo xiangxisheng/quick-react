@@ -1,7 +1,7 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
 import { firstSql, runSql, sql } from '@server/database/sql.mjs';
-import { assertTable, databaseQueryFields, databaseTableActions, getColumns, readTable, tableRowKey } from '@server/sites/base/data/database-table.mjs';
+import { assertTable, databaseQueryFields, databaseSelectColumns, databaseTableActions, getColumns, readTable, tableRowKey } from '@server/sites/base/data/database-table.mjs';
 import { getChangedFields } from '@server/changed-fields.mjs';
 
 const body = async (c: Parameters<ApiHandler>[0]) => c.req.json<Record<string, unknown>>().catch(() => ({}));
@@ -16,7 +16,7 @@ const handler: ApiHandler = async (c, next, params) => {
 		let rowKey: string;
 		try { rowKey = tableRowKey(database, info); } catch (error) { return apiMessage(c, 400, error instanceof Error ? error.message : '数据表不能编辑'); }
 		const sqliteRowId = rowKey === 'rowid';
-		const row = await firstSql<Record<string, unknown>>(database, sql(database).select({ table: tableName, includeAll: true, sqliteRowIdAlias: sqliteRowId ? '__rowid__' : undefined, where: [{ column: rowKey, value: params.id }], limit: 1 }));
+		const row = await firstSql<Record<string, unknown>>(database, sql(database).select({ table: tableName, columns: databaseSelectColumns(info), sqliteRowIdAlias: sqliteRowId ? '__rowid__' : undefined, where: [{ column: rowKey, value: params.id }], limit: 1 }));
 		return row ? apiResponse(c, 200, row) : apiMessage(c, 404, '数据不存在');
 	}
 	if (c.req.method === 'GET') {
