@@ -76,13 +76,13 @@ const externalOnlyForm = (email: string, externalLogins: FormPageExternalLogin[]
 	],
 });
 const telegramEmailForm = (email = ''): FormPageConfig => ({
-	description: '请输入已绑定的邮箱，随后选择用于批准本次登录的 Telegram 账号。',
+	description: '输入已验证邮箱，随后选择已绑定的 Telegram 账号批准登录。',
 	submitLabel: '下一步',
 	actions: [{ key: 'back_to_sign', label: '返回登录' }],
 	initialValues: { step: 'telegram_email', email },
 	fields: [
 		{ name: 'step', label: '', type: 'hidden' },
-		{ name: 'email', label: '邮箱', maxLength: 254, rules: [{ required: true, message: '请输入邮箱' }] },
+		{ name: 'email', label: '邮箱', maxLength: 254, rules: [{ required: true, message: '请输入已验证邮箱' }] },
 	],
 });
 const confirmEmailForm = (email: string): FormPageConfig => ({
@@ -435,7 +435,7 @@ const handler: ApiHandler = async (c, next) => {
 		try { email = normalizePassportEmail(text(body.email)); }
 		catch { return apiMessage(c, 400, '邮箱格式不正确'); }
 		const options = await loadTelegramOptions(database, globalDatabase, email);
-		if (!options.length) return apiMessage(c, 404, '未找到该邮箱对应的可用 Telegram 登录身份，请确认邮箱，或先在 Telegram 机器人里绑定邮箱');
+		if (!options.length) return apiMessage(c, 404, '未找到该邮箱对应的可用 Telegram 登录身份');
 		const formPage = telegramForm(email, options.map((item) => item.option));
 		return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues });
 	}

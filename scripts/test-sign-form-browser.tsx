@@ -108,13 +108,13 @@ let openedWindows = 0, loginCalls = 0;
 (dom.window as unknown as { open: () => null }).open = () => { openedWindows += 1; return null; };
 (dom.window as unknown as { Passport: { login: () => Promise<void> } }).Passport = { login: async () => { loginCalls += 1; } };
 render(React.createElement(FormPage, { commonApi, apiPath: '/api/sign.php?mode=sign', title: '登录' }));
-await waitFor(() => assert.ok(screen.getByRole('button', { name: '前往 Accounts 登录' })));
+await waitFor(() => assert.ok(screen.getByRole('button', { name: '使用 Passport 登录' })));
 await new Promise((resolve) => setTimeout(resolve, 60));
 assert.deepEqual(requests.map((item) => item.method), [undefined], '加载时只应该有一次 GET，不应该发起登录请求');
 assert.equal(loginCalls, 0, '加载时不允许自动跳转到 Accounts');
 assert.equal(openedWindows, 0, '加载时不允许自动打开 Accounts 窗口');
 assert.ok(screen.getByText(/本页不会自动跳转/));
-await user.click(screen.getByRole('button', { name: '前往 Accounts 登录' }));
+await user.click(screen.getByRole('button', { name: '使用 Passport 登录' }));
 await waitFor(() => assert.equal(loginCalls, 1));
 cleanup();
 

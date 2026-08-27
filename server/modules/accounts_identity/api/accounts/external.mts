@@ -106,7 +106,8 @@ const handler: ApiHandler = async (c, _next, params) => {
 		const userId = await resolveExternalUser(database, c.env.SNOWFLAKE_WORKER_ID, provider, profile, current?.id ? String(current.id) : undefined);
 		if (provider.wechat_mode === 'official_account' && !cookieState) {
 			await runSql(database, sql(database).update('passport_external_login_states', { qr_status: 'authorized', qr_user_id: userId }, [{ column: 'id_hash', value: await sha256(returnedState) }]));
-			return c.html('<p>授权成功，请返回电脑页面。</p>');
+			// consume=1 来自手机上的回调页面，它按 JSON 解析响应；直接用浏览器打开时才返回提示页面。
+			return consume ? apiResponse(c, 200, { status: 'signed_in' }) : c.html('<p>授权成功，请返回电脑页面。</p>');
 		}
 		if (current) {
 			// 已登录用户完成一次第三方认证，用于随后的邮箱绑定或密码重设。

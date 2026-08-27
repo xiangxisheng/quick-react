@@ -220,7 +220,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 		{inlineFeedback}
 		{/* 跳转到 Accounts 必须由用户点击确认，页面不会自动跳走。 */}
 		{formConfig?.passportLogin?.enabled ? <div style={{ marginBottom: 16 }}>
-			<Button type="primary" onClick={loginWithPassport}>{formConfig.submitLabel ?? '前往 Accounts 登录'}</Button>
+			<Button type="primary" onClick={loginWithPassport}>使用 Passport 登录</Button>
 			{passportError ? <Alert type="error" showIcon message={passportError} style={{ marginTop: 12 }} /> : null}
 		</div> : null}
 		{formConfig?.description ? <Alert type="info" showIcon message={formConfig.description} style={{ marginBottom: 24 }} /> : null}
