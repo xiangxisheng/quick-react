@@ -27,6 +27,7 @@
 		"test:sql-builder": "node scripts/test-sql-builder.mjs",
 		"test:database-migrations": "node scripts/test-database-migrations.mjs",
 		"test:database-transfer": "node scripts/test-database-transfer.mjs",
+		"test:site-database": "node scripts/test-site-database.mjs",
 		"test:table-form": "node scripts/test-table-form.mjs",
 		"test:navigation-menu": "node scripts/test-navigation-menu.mjs",
 		"test:user-roles": "node scripts/test-user-roles.mjs",

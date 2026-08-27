@@ -11,6 +11,8 @@ export type RuntimeBindings = Record<string, unknown> & {
 	SNOWFLAKE_WORKER_ID?: string | number;
 	DATABASE_RESOLVER?: (site: SiteRequestContext) => Promise<DatabaseAdapter>;
 	MIGRATE_SITE?: (siteKey: string) => Promise<void>;
+	/** 按 DSN 打开站点数据库，用于连接测试和数据迁移；Worker 运行时不提供。 */
+	SITE_DATABASE?: (dsn: string) => DatabaseAdapter;
 	OIDC_FETCH?: typeof fetch;
 };
 

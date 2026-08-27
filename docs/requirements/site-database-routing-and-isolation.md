@@ -607,3 +607,35 @@ Prisma 生成的 SQL 需要检查 D1 兼容性，必要时手动调整后再部�
 - 不支持不同站点长期运行不同 schema 版本。同一发布版本下，所有可路由的共享库和独立库必须满足该版本要求的 migration 基线；独立库迁移完成前保持不可路由。
 
 多个 Prisma schema 可以共同描述同一个数据库，但 migration 必须由统一的构建或迁移流程编排：先校验所有 schema 的模型名和表名前缀，再按 `global -> base -> 父站点 -> 当前站点` 顺序生成或执行 SQL，不能让各个 schema 独立维护互相不知情的 migration 历史。
+
+## 站点数据库配置与迁移（2026-08-27 补充）
+
+### 部署形态
+
+global 站点跟随业务站点部署，不单独占一台服务器：每个部署都自带一份 global 数据（`global_*` 表在该部署的默认库里），passport 等站点即使使用独立数据库，读到的仍然是同一个部署的 global 数据。因此"站点迁出独立数据库"只搬 `base` 和站点自身的表，`global_*` 始终留在默认库。跨部署的 global 数据一致性后续由"global 数据下发"功能解决，不在本次范围内。
+
+### 结构化数据库配置
+
+站点管理页不再填写裸 DSN，改为按字段配置，保存时由后端拼成 DSN 写入 `global_sites.dsn`，运行时解析逻辑不变：
+
+| 字段 | 适用类型 | 说明 |
+| --- | --- | --- |
+| 数据库类型 | 全部 | 跟随默认库 / SQLite 文件 / MySQL / PostgreSQL / Cloudflare D1 Binding |
+| SQLite 文件 | sqlite | 相对路径基于项目目录 |
+| 主机、端口、数据库名、用户名、密码 | mysql、postgresql | 端口留空按 3306 / 5432 处理；密码留空表示保留原密码 |
+| D1 Binding | binding | 大写字母、数字和下划线 |
+
+- 列表和详情**不返回 DSN**，只返回不含密码的只读描述（例如 `MySQL db.internal:3306/shop`），避免数据库密码泄露到前端。
+- 字段按数据库类型条件显示（`dependsOn` + `parentValues`），切换类型会自动清掉不适用的字段。
+
+### 三个操作按钮
+
+| 按钮 | 请求 | 行为 |
+| --- | --- | --- |
+| 测试连接 | `POST .../sites/<key>?action=test` | 连接目标库并报告表数量；跟随默认库时提示无需测试，D1 Binding 由部署环境注入无法测试 |
+| 执行结构迁移 | `POST .../sites/<key>?action=migrate` | 在目标库按继承链执行 migration |
+| 迁移数据 | `POST .../sites/<key>?action=transfer` | 把默认库中该站点的数据（`base` + 继承链上有独立表的站点分组）复制到站点数据库 |
+
+数据迁移复用 `transferPortableDatabase`：目标库相关表必须为空、逐表校验行数、整体在事务中执行，源库必须是 SQLite，目标库必须是 MySQL 或 PostgreSQL。SQLite 之间的搬迁请直接复制文件。
+
+覆盖测试：`npm run test:site-database`。

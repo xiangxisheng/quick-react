@@ -139,6 +139,7 @@ nodeApp.all('*', (c) => worker.fetch(c.req.raw, {
 		return resolveSiteDsn(site.databaseTarget.value);
 	},
 	MIGRATE_SITE: migrateSite,
+	SITE_DATABASE: resolveSiteDsn,
 	OIDC_FETCH: fetch,
 } as WorkerBindings));
 

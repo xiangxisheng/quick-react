@@ -276,7 +276,7 @@ try {
 	assert.equal((await request('a.wild.test', '/api/panel/admin/global/site/sites.php', { cookie })).status, 404);
 	assert.equal((await request('a.b.wild.test', '/api/panel/admin/global/site/sites.php', { cookie })).status, 200);
 
-	await createSite('site2', { dsn: `sqlite://${join(temporaryDirectory, 'site2.sqlite')}` });
+	await createSite('site2', { db_kind: 'sqlite', db_file: join(temporaryDirectory, 'site2.sqlite') });
 	assert.equal((await request('localhost', '/api/panel/admin/global/site/hosts.php', {
 		method: 'POST', cookie, body: { hostname: 'site2.test', site_key: 'site2' },
 	})).status, 201);
