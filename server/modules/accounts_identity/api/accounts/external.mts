@@ -102,15 +102,15 @@ const handler: ApiHandler = async (c, _next, params) => {
 			return c.redirect(`/accounts/sign${c.get('techStackConfig').pageSuffix}`, 302);
 		}
 		const userId = await resolveExternalUser(database, c.env.SNOWFLAKE_WORKER_ID, provider, profile, current?.id ? String(current.id) : undefined);
+		if (provider.wechat_mode === 'official_account' && !cookieState) {
+			await runSql(database, sql(database).update('passport_external_login_states', { qr_status: 'authorized', qr_user_id: userId }, [{ column: 'id_hash', value: await sha256(returnedState) }]));
+			return c.html('<p>授权成功，请返回电脑页面。</p>');
+		}
 		if (current) {
 			// 已登录用户完成一次第三方认证，用于随后的邮箱绑定或密码重设。
 			c.header('Set-Cookie', clearExternalStateCookie(secure));
 			c.header('Set-Cookie', externalVerifiedCookie(secure), { append: true });
 			return c.redirect(`/accounts/center/bind-email${c.get('techStackConfig').pageSuffix}`, 302);
-		}
-		if (provider.wechat_mode === 'official_account' && !cookieState) {
-			await runSql(database, sql(database).update('passport_external_login_states', { qr_status: 'authorized', qr_user_id: userId }, [{ column: 'id_hash', value: await sha256(returnedState) }]));
-			return c.html('<p>授权成功，请返回电脑页面。</p>');
 		}
 		const sessionId = crypto.randomUUID(), now = Date.now(), maxAge = 24 * 60 * 60;
 		await runSql(database, sql(database).insert('passport_sessions', { id: sessionId, user_id: userId, expires_at: now + maxAge * 1000, created_at: now }));
