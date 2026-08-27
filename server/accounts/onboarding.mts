@@ -76,9 +76,13 @@ export const refreshOidcRequest = async (c: Context<AppEnv>, database: DatabaseA
  * 否则会把弹窗带到 Accounts 首页，业务站点拿不到登录结果。
  */
 export const postLoginRedirect = async (c: Context<AppEnv>, database: DatabaseAdapter, userId: string) => {
-	if (readCookie(c.req.raw, oidcRequestCookieName)) return loginRedirectTarget(c);
 	const onboarding = await accountOnboarding(database, userId);
-	return onboarding.step === 'done' ? '/' : `/accounts/sign${c.get('techStackConfig').pageSuffix}`;
+	// 用户名和密码都要按规则提示，补全完成后登录页再带 request_id 回授权端点。
+	if (onboarding.step !== 'done') {
+		await refreshOidcRequest(c, database);
+		return `/accounts/sign${c.get('techStackConfig').pageSuffix}`;
+	}
+	return loginRedirectTarget(c);
 };
 
 /** 登录流程真正结束时才清除 OIDC cookie 并给出回跳目标。 */

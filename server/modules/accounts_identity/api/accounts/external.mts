@@ -1,8 +1,8 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiResponse } from '@server/api-response.mjs';
 import { clearExternalStateCookie, consumeExternalState, createExternalState, createPendingExternalIdentity, discardExternalEmailOtp, externalAuthorizationUrl, externalPendingCookie, externalProvider, externalQrState, externalStateCookie, externalIdentityUser, externalStateCookieName, externalVerifiedCookie, fetchExternalProfile, issueExternalEmailOtp, pendingExternalIdentityByQrState, resolveExternalUser, verifyExternalEmailOtp, type ExternalProviderId } from '@server/accounts/external.mjs';
-import { clearOidcRequestCookie, oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
-import { accountOnboarding, postLoginRedirect, refreshOidcRequest } from '@server/accounts/onboarding.mjs';
+import { readCookie } from '@server/accounts/oidc.mjs';
+import { postLoginRedirect } from '@server/accounts/onboarding.mjs';
 import { createPassportSessionCookie, loadPassportSession } from '@server/passport/session.mjs';
 import { runSql, sql } from '@server/database/sql.mjs';
 import { isSecureRequest, requestOrigin } from '@server/request-origin.mjs';
@@ -50,7 +50,8 @@ const handler: ApiHandler = async (c, _next, params) => {
 	const pollState = c.req.query('poll')?.trim();
 	if (pollState) {
 		const polled = await externalQrState(database, await sha256(pollState));
-		if (!polled || polled.provider !== id || polled.expires_at <= Date.now()) return apiResponse(c, 410, { status: 'expired' });
+		// 过期是正常轮询结果，不能用错误状态码，否则通用请求层会弹出"请求失败"。
+		if (!polled || polled.provider !== id || polled.expires_at <= Date.now()) return apiResponse(c, 200, { status: 'expired' });
 		if (polled.qr_status === 'authorized' && !polled.qr_user_id) return apiResponse(c, 200, { status: 'needs_email', bindUrl: `/api/accounts/external/${id}?bind=${encodeURIComponent(pollState)}` });
 		if (polled.qr_status !== 'authorized' || !polled.qr_user_id) return apiResponse(c, 200, { status: polled.qr_status });
 		const sessionId = crypto.randomUUID(), now = Date.now();
@@ -114,7 +115,8 @@ const handler: ApiHandler = async (c, _next, params) => {
 			// 已登录用户完成一次第三方认证，用于随后的邮箱绑定或密码重设。
 			c.header('Set-Cookie', clearExternalStateCookie(secure));
 			c.header('Set-Cookie', externalVerifiedCookie(secure), { append: true });
-			return c.redirect(`/panel/accounts/bind-email${c.get('techStackConfig').pageSuffix}`, 302);
+			const bindTarget = `/panel/accounts/bind-email${c.get('techStackConfig').pageSuffix}`;
+			return consume ? apiResponse(c, 200, { status: 'linked', redirectTo: bindTarget }) : c.redirect(bindTarget, 302);
 		}
 		const sessionId = crypto.randomUUID(), now = Date.now(), maxAge = 24 * 60 * 60;
 		await runSql(database, sql(database).insert('passport_sessions', { id: sessionId, user_id: userId, expires_at: now + maxAge * 1000, created_at: now }));
@@ -122,14 +124,10 @@ const handler: ApiHandler = async (c, _next, params) => {
 		c.header('Set-Cookie', createPassportSessionCookie(sessionId, secure, maxAge), { append: true });
 		// 第三方认证通过：30 分钟内允许发送邮箱验证码、重设密码。
 		c.header('Set-Cookie', externalVerifiedCookie(secure), { append: true });
-		// 还没有用户名或密码时先回登录页补全，补全完成后再由登录页回跳授权。
-		if ((await accountOnboarding(database, userId)).step !== 'done') {
-			await refreshOidcRequest(c, database);
-			return c.redirect(`/accounts/sign${c.get('techStackConfig').pageSuffix}`, 302);
-		}
-		const oidcRequestId = readCookie(c.req.raw, oidcRequestCookieName);
-		if (oidcRequestId) c.header('Set-Cookie', clearOidcRequestCookie(secure), { append: true });
-		return c.redirect(oidcRequestId ? `/api/oidc/authorize?request_id=${encodeURIComponent(oidcRequestId)}` : '/', 302);
+		// 去向由后端统一决定：先补全用户名和密码，再继续待处理的 OIDC 授权。
+		const target = await postLoginRedirect(c, database, userId);
+		// consume=1 来自手机上的回调页面，它按 JSON 解析响应，不能返回跳转。
+		return consume ? apiResponse(c, 200, { status: 'signed_in', redirectTo: target }) : c.redirect(target, 302);
 	} catch (error) {
 		c.header('Set-Cookie', clearExternalStateCookie(secure));
 		const message = error instanceof Error ? error.message : '外部身份登录失败';
