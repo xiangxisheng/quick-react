@@ -79,19 +79,35 @@ try {
 	assert.equal(savedProfile.status, 200);
 	assert.equal((await savedProfile.json()).currentValues.nickname, '新昵称');
 
-	// 邮箱管理：添加、验证、设为主邮箱、解绑。
+	// 邮箱管理只做展示、设为主邮箱和解绑。
 	const emailsPath = '/api/accounts/center/emails.php';
 	const initialEmails = await (await request(emailsPath, { cookie })).json();
 	assert.deepEqual(initialEmails.table.dataSource.map((row) => [row.email, row.is_primary, row.verified]), [['center@example.com', '1', '1']]);
-	assert.deepEqual(initialEmails.table.option.actions.toolbar.map((action) => action.key), ['create', 'verify']);
-	assert.equal((await request(emailsPath, { method: 'POST', cookie, body: { email: 'center@example.com' } })).status, 400);
-	assert.equal((await request(emailsPath, { method: 'POST', cookie, body: { email: 'not-an-email' } })).status, 400);
-	assert.equal((await request(emailsPath, { method: 'POST', cookie, body: { email: 'second@example.com' } })).status, 201);
+	assert.equal(initialEmails.table.option.actions.toolbar, undefined);
+	assert.deepEqual(initialEmails.table.option.actions.row.map((action) => action.key), ['primary', 'delete']);
+
+	// 绑定邮箱：没有第三方认证凭证时不允许发送验证码。
+	const bindPath = '/api/accounts/center/bind-email.php';
+	const needVerify = await (await request(bindPath, { cookie })).json();
+	assert.equal(needVerify.formPage.initialValues.step, 'check');
+	assert.match(needVerify.formPage.description, /必须先完成一次第三方认证/);
+	assert.equal((await request(bindPath, { method: 'POST', cookie, body: { step: 'send', email: 'second@example.com' } })).status, 403);
+	assert.equal(deliveredCode, '', '未通过第三方认证不应该发出验证码');
+
+	// 带上第三方认证凭证后才能发送验证码并绑定。
+	const verifiedCookie = `${cookie}; accounts_external_verified=1`;
+	const bindForm = await (await request(bindPath, { cookie: verifiedCookie })).json();
+	assert.equal(bindForm.formPage.initialValues.step, 'send');
+	assert.equal((await request(bindPath, { method: 'POST', cookie: verifiedCookie, body: { step: 'send', email: 'center@example.com' } })).status, 400);
+	assert.equal((await request(bindPath, { method: 'POST', cookie: verifiedCookie, body: { step: 'send', email: 'not-an-email' } })).status, 400);
+	const sent = await request(bindPath, { method: 'POST', cookie: verifiedCookie, body: { step: 'send', email: 'second@example.com' } });
+	assert.equal(sent.status, 200);
+	assert.equal((await sent.json()).formPage.initialValues.step, 'verify');
 	assert.match(deliveredCode, /^\d{6}$/);
 	const pendingEmails = await (await request(emailsPath, { cookie })).json();
 	assert.deepEqual(pendingEmails.table.dataSource.map((row) => [row.email, row.verified]), [['center@example.com', '1'], ['second@example.com', '0']]);
-	assert.equal((await request(`${emailsPath}?action=verify`, { method: 'POST', cookie, body: { code: '000000' } })).status, 409);
-	assert.equal((await request(`${emailsPath}?action=verify`, { method: 'POST', cookie, body: { code: deliveredCode } })).status, 200);
+	assert.equal((await request(bindPath, { method: 'POST', cookie: verifiedCookie, body: { step: 'verify', code: '000000' } })).status, 409);
+	assert.equal((await request(bindPath, { method: 'POST', cookie: verifiedCookie, body: { step: 'verify', code: deliveredCode } })).status, 200);
 	const boundEmails = await (await request(emailsPath, { cookie })).json();
 	assert.deepEqual(boundEmails.table.dataSource.map((row) => [row.email, row.is_primary, row.verified]), [['center@example.com', '1', '1'], ['second@example.com', '0', '1']]);
 	const secondEmailId = boundEmails.table.dataSource.find((row) => row.email === 'second@example.com').email_id;

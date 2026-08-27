@@ -58,9 +58,10 @@ try {
 		VALUES ('passport', 92, 93, 'email_verification', 1, 'enabled', ?, ?)`).run(now, now);
 	database.close();
 
-	// 登录页第一步是邮箱；未注册邮箱先确认，再选择用于注册的第三方身份源。
+	// 登录页是邮箱输入框 + 第三方按钮；未注册的邮箱先让用户确认。
 	const sign = await (await app.request('http://accounts.test/api/accounts/sign.php')).json();
 	assert.equal(sign.formPage.initialValues.step, 'email');
+	assert.deepEqual(sign.formPage.actions.map((item) => item.key), ['provider:google', 'provider:wechat']);
 	const unknownEmail = await jsonRequest(app, '/api/accounts/sign.php', { step: 'email', email: 'wechat@example.com' });
 	const unknownEmailResult = await unknownEmail.json();
 	assert.equal(unknownEmail.status, 200);
@@ -71,7 +72,7 @@ try {
 	assert.deepEqual(confirmedResult.formPage.fields.find((field) => field.name === 'method').options.map((item) => item.value), ['google', 'wechat']);
 	const signupEmailCookie = cookie(confirmed, 'accounts_signup_email');
 	assert.ok(signupEmailCookie);
-	// 换个邮箱回到第一步。
+	// 换个邮箱回到登录页第一步。
 	const changed = await (await app.request('http://accounts.test/api/accounts/sign.php?action=change_email', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ step: 'email_confirm', email: 'wechat@example.com' }) })).json();
 	assert.equal(changed.formPage.initialValues.step, 'email');
 
@@ -164,12 +165,19 @@ try {
 	// 设置完成后登录页回到身份绑定表单。
 	assert.equal((await (await app.request('http://accounts.test/api/accounts/sign.php', { headers: { cookie: wechatSession } })).json()).formPage.initialValues.step, 'method');
 
-	// 已注册邮箱列出可用登录方式，并支持邮箱 + 密码登录。
+	// 已注册邮箱走密码登录：第一步给出密码表单，密码错误有提示。
 	const knownEmail = await (await jsonRequest(app, '/api/accounts/sign.php', { step: 'email', email: 'wechat@example.com' })).json();
-	assert.deepEqual(knownEmail.formPage.fields.find((field) => field.name === 'method').options.map((item) => item.value), ['password', 'google', 'wechat']);
-	const passwordStep = await (await jsonRequest(app, '/api/accounts/sign.php', { step: 'method', email: 'wechat@example.com', method: 'password' })).json();
-	assert.equal(passwordStep.formPage.initialValues.step, 'password');
-	assert.equal((await jsonRequest(app, '/api/accounts/sign.php', { step: 'password', email: 'wechat@example.com', password: 'wrong-password' })).status, 401);
+	assert.equal(knownEmail.formPage.initialValues.step, 'password');
+	assert.deepEqual(knownEmail.formPage.actions.map((item) => item.key), ['forgot_password', 'change_email']);
+	const wrongPassword = await (await jsonRequest(app, '/api/accounts/sign.php', { step: 'password', email: 'wechat@example.com', password: 'wrong-password' })).json();
+	assert.match(wrongPassword.feedback.message, /邮箱或密码不正确/);
+	// 忘记密码必须先做第三方认证。
+	const forgot = await app.request('http://accounts.test/api/accounts/sign.php?action=forgot_password', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ step: 'password', email: 'wechat@example.com' }) });
+	const forgotResult = await forgot.json();
+	assert.equal(forgotResult.formPage.initialValues.step, 'method');
+	assert.match(forgotResult.formPage.description, /重设.*密码需要先完成一次第三方认证/);
+	assert.ok(cookie(forgot, 'accounts_password_reset'));
+	assert.equal((await jsonRequest(app, '/api/accounts/sign.php', { step: 'reset_password', password: 'new-password-1', password_confirm: 'new-password-1' }, wechatSession)).status, 409);
 	const passwordLogin = await jsonRequest(app, '/api/accounts/sign.php', { step: 'password', email: 'wechat@example.com', password: 'wechat-password-1' });
 	assert.equal(passwordLogin.status, 200);
 	assert.ok(cookie(passwordLogin, 'passport_session'));

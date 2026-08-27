@@ -27,6 +27,16 @@ export const signupEmailCookieName = 'accounts_signup_email';
 export const signupEmailCookie = (email: string, secure: boolean) => `${signupEmailCookieName}=${encodeURIComponent(email)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=1800${secure ? '; Secure' : ''}`;
 export const clearSignupEmailCookie = (secure: boolean) => `${signupEmailCookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`;
 
+/** 第三方认证通过的短期凭证：发送任何邮箱验证码之前都必须持有它。 */
+export const externalVerifiedCookieName = 'accounts_external_verified';
+export const externalVerifiedCookie = (secure: boolean) => `${externalVerifiedCookieName}=1; Path=/; HttpOnly; SameSite=Lax; Max-Age=1800${secure ? '; Secure' : ''}`;
+export const clearExternalVerifiedCookie = (secure: boolean) => `${externalVerifiedCookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`;
+
+/** 忘记密码时先记下重设意图，第三方认证通过后才允许直接设置新密码。 */
+export const passwordResetCookieName = 'accounts_password_reset';
+export const passwordResetCookie = (email: string, secure: boolean) => `${passwordResetCookieName}=${encodeURIComponent(email)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=1800${secure ? '; Secure' : ''}`;
+export const clearPasswordResetCookie = (secure: boolean) => `${passwordResetCookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`;
+
 export const externalPendingCookieName = 'accounts_external_pending';
 export const externalPendingCookie = (value: string, secure: boolean) => `${externalPendingCookieName}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${secure ? '; Secure' : ''}`;
 export const clearExternalPendingCookie = (secure: boolean) => `${externalPendingCookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`;

@@ -1,6 +1,7 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage } from '@server/api-response.mjs';
 import { loadPassportSession, readPassportSessionId } from '@server/passport/session.mjs';
+import { accountOnboarding } from '@server/accounts/onboarding.mjs';
 import { oidcRequestCookie, randomToken, sha256 } from '@server/accounts/oidc.mjs';
 import { runSql, sql } from '@server/database/sql.mjs';
 import { authorizationRequest, oidcClient } from '@server/accounts/repository.mjs';
@@ -35,9 +36,12 @@ const handler: ApiHandler = async (c) => {
 	if (!scopes.includes('openid') || scopes.some((scope) => !allowed.has(scope))) return apiMessage(c, 400, '请求的 scope 不被允许');
 	if (client.require_pkce && (!/^[A-Za-z0-9_-]{43,128}$/.test(values.code_challenge) || values.code_challenge_method !== 'S256')) return apiMessage(c, 400, '该客户端要求 PKCE S256');
 	const current = await loadPassportSession(database, c.req.raw);
-	if (!current) {
+	// 未登录，或者已登录但还没有合法用户名，都先回登录页；密码是可跳过项，不在这里拦截，否则跳过后会来回跳。
+	const pending = current ? (await accountOnboarding(database, String(current.id))).step === 'username' : false;
+	if (!current || pending) {
 		const id = requestId || crypto.randomUUID(), now = Date.now();
 		if (!requestId) await runSql(database, sql(database).insert('passport_oidc_authorization_requests', { id, client_id: values.client_id, redirect_uri: values.redirect_uri, scope: scopes.join(' '), state: values.state, nonce: values.nonce, code_challenge: values.code_challenge, code_challenge_method: values.code_challenge_method, expires_at: now + 600_000, created_at: now }));
+		else await runSql(database, sql(database).update('passport_oidc_authorization_requests', { expires_at: now + 600_000 }, { id }));
 		c.header('Set-Cookie', oidcRequestCookie(id, isSecureRequest(c)));
 		return c.redirect(`/accounts/sign${c.get('techStackConfig').pageSuffix}`, 302);
 	}

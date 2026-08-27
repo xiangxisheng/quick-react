@@ -40,6 +40,13 @@ try {
 	assert.equal(forwardedDiscovery.issuer, 'https://accounts.test');
 	const authorize = new URL('/api/oidc/authorize', 'https://accounts.test');
 	authorize.search = new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: 'https://client.test/callback', scope: 'openid profile', state: 'state-1', nonce: 'nonce-1', code_challenge: challenge, code_challenge_method: 'S256' }).toString();
+	// 还没有设置用户名的账号即使已登录，也要先回登录页补全，不发授权码。
+	const blocked = await request(`${authorize.pathname}${authorize.search}`, { headers: { cookie: `passport_session=${sessionId}` } });
+	assert.equal(blocked.status, 302);
+	assert.match(blocked.headers.get('location'), /^\/accounts\/sign/);
+	const usernameDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
+	usernameDatabase.prepare('INSERT INTO passport_usernames (user_id, username, created_at) VALUES (?, ?, ?)').run(String(userId), 'oidcuser1', Date.now());
+	usernameDatabase.close();
 	const authorized = await request(`${authorize.pathname}${authorize.search}`, { headers: { cookie: `passport_session=${sessionId}` } });
 	assert.equal(authorized.status, 302);
 	const callback = new URL(authorized.headers.get('location'));
@@ -67,23 +74,13 @@ try {
 	const businessSessionCookie = businessCallbackResponse.headers.getSetCookie().find((item) => item.startsWith('quick_react_session='))?.split(';')[0];
 	assert.ok(businessSessionCookie);
 	const signedInBusiness = await (await app.request('https://site1.test/api/sign.php', { headers: { cookie: businessSessionCookie } })).json();
-	// 还没设置 Accounts 用户名时，本站用户名是 passport_<user_id> 占位。
-	assert.equal(claims.preferred_username, undefined);
-	assert.equal(signedInBusiness.user.username, `passport_${userId}`);
+	// Accounts 用户名通过 preferred_username 下发，业务站点用它替换 passport_<user_id> 占位名。
+	assert.equal(claims.preferred_username, 'oidcuser1');
+	assert.equal(signedInBusiness.user.username, 'oidcuser1');
 	assert.equal(signedInBusiness.formPage.passportLogin.autoStart, false);
-
-	// 设置 Accounts 用户名后，ID Token 带上 preferred_username，本站占位用户名同步改写。
-	const usernameDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
-	usernameDatabase.prepare('INSERT INTO passport_usernames (user_id, username, created_at) VALUES (?, ?, ?)').run(String(userId), 'oidcuser1', Date.now());
-	usernameDatabase.close();
-	const secondStart = await app.request('https://site1.test/api/sign.php', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
-	const secondLoginCookie = secondStart.headers.get('set-cookie')?.split(';')[0];
-	const secondAuthorized = await app.request((await secondStart.json()).redirectTo, { headers: { cookie: `passport_session=${sessionId}` } });
-	const secondCallback = await app.request(secondAuthorized.headers.get('location'), { headers: { cookie: secondLoginCookie } });
-	assert.equal(secondCallback.status, 302);
-	const secondSessionCookie = secondCallback.headers.getSetCookie().find((item) => item.startsWith('quick_react_session='))?.split(';')[0];
-	const renamedBusiness = await (await app.request('https://site1.test/api/sign.php', { headers: { cookie: secondSessionCookie } })).json();
-	assert.equal(renamedBusiness.user.username, 'oidcuser1');
+	const businessUsers = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
+	assert.equal(businessUsers.prepare("SELECT COUNT(*) AS count FROM base_system_users WHERE username LIKE 'passport\\_%' ESCAPE '\\'").get().count, 0);
+	businessUsers.close();
 	const completed = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
 	assert.equal(completed.prepare('SELECT COUNT(*) AS count FROM base_oidc_accounts').get().count, 1); completed.close();
 	assert.equal((await app.request('https://accounts.test/api/oidc/logout', { headers: { cookie: `passport_session=${sessionId}` } })).status, 200);

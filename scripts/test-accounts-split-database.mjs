@@ -65,11 +65,11 @@ try {
 		body: options.body === undefined ? undefined : JSON.stringify(options.body),
 	});
 
-	// 登录页读的是 passport 库里的邮箱：已注册但还没有任何可用登录方式时给出明确提示。
-	const known = await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'email', email: 'split@example.com' } });
+	// 登录页读的是 passport 库里的邮箱：已注册但没设置密码时给出明确指引，未注册则先确认邮箱。
+	const known = await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'password', email: 'split@example.com', password: 'whatever' } });
 	assert.equal(known.status, 409);
-	assert.match((await known.json()).feedback.message, /没有可用的登录方式/);
-	const unknown = await (await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'email', email: 'nobody@example.com' } })).json();
+	assert.match((await known.json()).feedback.message, /还没有设置密码/);
+	const unknown = await (await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'password', email: 'nobody@example.com', password: 'whatever' } })).json();
 	assert.equal(unknown.formPage.initialValues.step, 'email_confirm');
 
 	// 用户名校验和补全流程只依赖 passport 库。
@@ -88,12 +88,15 @@ try {
 
 	// 账户中心：邮件模板和云凭据来自 global 库，验证码和绑定写在 passport 库。
 	const emailsPath = '/api/accounts/center/emails.php';
-	assert.equal((await request(emailsPath, { method: 'POST', cookie, body: { email: 'split-second@example.com' } })).status, 201);
+	const bindPath = '/api/accounts/center/bind-email.php';
+	const verifiedCookie = `${cookie}; accounts_external_verified=1`;
+	assert.equal((await request(bindPath, { method: 'POST', cookie, body: { step: 'send', email: 'split-second@example.com' } })).status, 403);
+	assert.equal((await request(bindPath, { method: 'POST', cookie: verifiedCookie, body: { step: 'send', email: 'split-second@example.com' } })).status, 200);
 	assert.match(deliveredCode, /^\d{6}$/);
 	const otpDatabase = new DatabaseSync(passportFile, { readOnly: true });
 	assert.equal(otpDatabase.prepare("SELECT COUNT(*) AS count FROM passport_user_email_otps WHERE status = 'pending'").get().count, 1);
 	otpDatabase.close();
-	assert.equal((await request(`${emailsPath}?action=verify`, { method: 'POST', cookie, body: { code: deliveredCode } })).status, 200);
+	assert.equal((await request(bindPath, { method: 'POST', cookie: verifiedCookie, body: { step: 'verify', code: deliveredCode } })).status, 200);
 	const boundEmails = await (await request(emailsPath, { cookie })).json();
 	assert.deepEqual(boundEmails.table.dataSource.map((row) => row.email), ['split@example.com', 'split-second@example.com']);
 
@@ -104,8 +107,6 @@ try {
 
 	// 设置密码后可以直接用邮箱密码登录。
 	assert.equal((await request('/api/accounts/center/security.php', { method: 'PUT', cookie, body: { password: 'split-password-1', password_confirm: 'split-password-1' } })).status, 200);
-	const methods = await (await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'email', email: 'split@example.com' } })).json();
-	assert.deepEqual(methods.formPage.fields.find((field) => field.name === 'method').options.map((option) => option.value), ['password']);
 	const passwordLogin = await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'password', email: 'split@example.com', password: 'split-password-1' } });
 	assert.equal(passwordLogin.status, 200);
 	assert.equal((await passwordLogin.json()).redirectTo, '/');

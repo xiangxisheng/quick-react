@@ -51,14 +51,14 @@ try {
 	};
 	const localSign = await (await request('/api/sign.php')).json();
 	assert.equal(localSign.formPage.fields[0].name, 'username');
-	// 登录页第一步是邮箱，已注册邮箱才会列出可用的登录方式。
+	// 登录页是邮箱输入框 + 第三方按钮，Telegram 按钮进入邮箱 + 消息批准。
 	const initial = await (await request('/api/accounts/sign.php')).json();
 	assert.equal(initial.formPage.initialValues.step, 'email');
-	const methodStep = await (await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'email', email: 'USER@example.com' } })).json();
-	assert.equal(methodStep.formPage.initialValues.step, 'method');
-	assert.deepEqual(methodStep.formPage.fields.find((field) => field.name === 'method').options.map((option) => option.value), ['telegram']);
+	assert.deepEqual(initial.formPage.actions.map((action) => action.key), ['provider:telegram']);
+	const emailStep = await (await request('/api/accounts/sign.php?action=provider:telegram', { method: 'POST', body: { step: 'email', email: '' } })).json();
+	assert.equal(emailStep.formPage.initialValues.step, 'telegram_email');
 	const telegramSelection = await (await request('/api/accounts/sign.php', {
-		method: 'POST', body: { step: 'method', email: 'USER@example.com', method: 'telegram' },
+		method: 'POST', body: { step: 'telegram_email', email: 'USER@example.com' },
 	})).json();
 	assert.equal(telegramSelection.formPage.fields.find((field) => field.name === 'account_id').type, 'select');
 	assert.equal(telegramSelection.currentValues.account_id, '201');

@@ -1,6 +1,6 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiResponse } from '@server/api-response.mjs';
-import { clearExternalStateCookie, consumeExternalState, createExternalState, createPendingExternalIdentity, discardExternalEmailOtp, externalAuthorizationUrl, externalPendingCookie, externalProvider, externalQrState, externalStateCookie, externalStateCookieName, fetchExternalProfile, issueExternalEmailOtp, pendingExternalIdentityByQrState, resolveExternalUser, verifyExternalEmailOtp, type ExternalProviderId } from '@server/accounts/external.mjs';
+import { clearExternalStateCookie, consumeExternalState, createExternalState, createPendingExternalIdentity, discardExternalEmailOtp, externalAuthorizationUrl, externalPendingCookie, externalProvider, externalQrState, externalStateCookie, externalStateCookieName, externalVerifiedCookie, fetchExternalProfile, issueExternalEmailOtp, pendingExternalIdentityByQrState, resolveExternalUser, verifyExternalEmailOtp, type ExternalProviderId } from '@server/accounts/external.mjs';
 import { clearOidcRequestCookie, oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
 import { accountOnboarding, refreshOidcRequest } from '@server/accounts/onboarding.mjs';
 import { createPassportSessionCookie, loadPassportSession } from '@server/passport/session.mjs';
@@ -102,6 +102,12 @@ const handler: ApiHandler = async (c, _next, params) => {
 			return c.redirect(`/accounts/sign${c.get('techStackConfig').pageSuffix}`, 302);
 		}
 		const userId = await resolveExternalUser(database, c.env.SNOWFLAKE_WORKER_ID, provider, profile, current?.id ? String(current.id) : undefined);
+		if (current) {
+			// 已登录用户完成一次第三方认证，用于随后的邮箱绑定或密码重设。
+			c.header('Set-Cookie', clearExternalStateCookie(secure));
+			c.header('Set-Cookie', externalVerifiedCookie(secure), { append: true });
+			return c.redirect(`/accounts/center/bind-email${c.get('techStackConfig').pageSuffix}`, 302);
+		}
 		if (provider.wechat_mode === 'official_account' && !cookieState) {
 			await runSql(database, sql(database).update('passport_external_login_states', { qr_status: 'authorized', qr_user_id: userId }, [{ column: 'id_hash', value: await sha256(returnedState) }]));
 			return c.html('<p>授权成功，请返回电脑页面。</p>');
@@ -110,6 +116,8 @@ const handler: ApiHandler = async (c, _next, params) => {
 		await runSql(database, sql(database).insert('passport_sessions', { id: sessionId, user_id: userId, expires_at: now + maxAge * 1000, created_at: now }));
 		c.header('Set-Cookie', clearExternalStateCookie(secure));
 		c.header('Set-Cookie', createPassportSessionCookie(sessionId, secure, maxAge), { append: true });
+		// 第三方认证通过：30 分钟内允许发送邮箱验证码、重设密码。
+		c.header('Set-Cookie', externalVerifiedCookie(secure), { append: true });
 		// 还没有用户名或密码时先回登录页补全，补全完成后再由登录页回跳授权。
 		if ((await accountOnboarding(database, userId)).step !== 'done') {
 			await refreshOidcRequest(c, database);

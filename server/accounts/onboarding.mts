@@ -45,6 +45,18 @@ export const passwordForm = (): FormPageConfig => ({
 	],
 });
 
+/** 第三方认证通过后重设密码，不需要输入旧密码。 */
+export const resetPasswordForm = (): FormPageConfig => ({
+	description: '第三方认证已通过，请设置新密码。设置后旧密码立即失效。',
+	submitLabel: '保存新密码',
+	initialValues: { step: 'reset_password', password: '', password_confirm: '' },
+	fields: [
+		{ name: 'step', label: '', type: 'hidden' },
+		{ name: 'password', label: '新密码', type: 'password', placeholder: '至少 8 个字符', rules: [{ required: true, message: '请输入新密码' }] },
+		{ name: 'password_confirm', label: '确认新密码', type: 'password', rules: [{ required: true, message: '请再次输入新密码' }] },
+	],
+});
+
 export const onboardingForm = (onboarding: AccountOnboarding) => onboarding.step === 'username' ? usernameForm(onboarding.invalidUsername) : passwordForm();
 
 /**
