@@ -51,13 +51,14 @@ try {
 	};
 	const localSign = await (await request('/api/sign.php')).json();
 	assert.equal(localSign.formPage.fields[0].name, 'username');
+	// 登录页第一步是邮箱，已注册邮箱才会列出可用的登录方式。
 	const initial = await (await request('/api/accounts/sign.php')).json();
-	assert.equal(initial.formPage.initialValues.step, 'method');
-	assert.equal(initial.formPage.fields.find((field) => field.name === 'method').options[0].value, 'telegram');
-	const emailStep = await (await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'method', method: 'telegram' } })).json();
-	assert.equal(emailStep.formPage.initialValues.step, 'email');
+	assert.equal(initial.formPage.initialValues.step, 'email');
+	const methodStep = await (await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'email', email: 'USER@example.com' } })).json();
+	assert.equal(methodStep.formPage.initialValues.step, 'method');
+	assert.deepEqual(methodStep.formPage.fields.find((field) => field.name === 'method').options.map((option) => option.value), ['telegram']);
 	const telegramSelection = await (await request('/api/accounts/sign.php', {
-		method: 'POST', body: { step: 'email', email: 'USER@example.com' },
+		method: 'POST', body: { step: 'method', email: 'USER@example.com', method: 'telegram' },
 	})).json();
 	assert.equal(telegramSelection.formPage.fields.find((field) => field.name === 'account_id').type, 'select');
 	assert.equal(telegramSelection.currentValues.account_id, '201');
@@ -88,6 +89,10 @@ try {
 	assert.equal(loginResponse.status, 200);
 	const passportCookie = loginResponse.headers.get('set-cookie')?.split(';')[0];
 	assert.match(passportCookie ?? '', /^passport_session=/);
+	// 历史用户没有用户名，登录后先补全再回跳。
+	const loginResult = await loginResponse.json();
+	assert.equal(loginResult.formPage.initialValues.step, 'set_username');
+	assert.equal(loginResult.redirectTo, undefined);
 	const signedIn = await (await request('/api/accounts/sign.php', { cookie: passportCookie })).json();
 	assert.equal(signedIn.user.id, userId);
 	assert.equal(signedIn.user.username, 'PassportUser');

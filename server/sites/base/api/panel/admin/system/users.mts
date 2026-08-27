@@ -4,12 +4,13 @@ import { createStoredPassword, readStoredPassword } from '@server/auth.mjs';
 import { getChangedFields } from '@server/changed-fields.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
+import { assignableRoleOptions, parseRoles, serializeRoles, unknownAssignableRoles } from '@shared/types/role.mjs';
 
 const columns = [
 	{ dataIndex: 'id', title: 'ID', dataType: 'int' as const },
 	{ dataIndex: 'username', title: '用户名', component: 'textbox' as const },
 	{ dataIndex: 'password', title: '新密码', component: 'textbox' as const, inputType: 'password' as const, placeholder: '留空表示不修改', form: { create: { title: '密码', placeholder: '至少 8 个字符', rules: [{ required: true, message: '请输入密码' }] } } },
-	{ dataIndex: 'roles', title: '角色', component: 'textbox' as const },
+	{ dataIndex: 'roles', title: '角色', component: 'select' as const, multiple: true, options: assignableRoleOptions, placeholder: '不选表示只有登录用户权限' },
 	{ dataIndex: 'status', title: '状态', component: 'switch' as const, checkedValue: statusValues.enabled, uncheckedValue: statusValues.disabled, options: enabledDisabledOptions },
 	{ dataIndex: 'created_at', title: '创建时间', dataType: 'js_timestamp' as const, dayjsFormat: 'YYYY-MM-DD HH:mm:ss' },
 	{ dataIndex: 'updated_at', title: '更新时间', dataType: 'js_timestamp' as const, dayjsFormat: 'YYYY-MM-DD HH:mm:ss' },
@@ -19,7 +20,7 @@ const publicUser = (row: Record<string, unknown>) => ({
 	id: row.id,
 	username: row.username,
 	password: readStoredPassword(row.password)?.pattern ?? '',
-	roles: row.roles,
+	roles: parseRoles(row.roles),
 	status: row.status,
 	created_at: row.created_at,
 	updated_at: row.updated_at,
@@ -40,9 +41,12 @@ const handler: ApiHandler = async (c, next, params) => {
 		const username = String(body.username ?? '').trim();
 		const password = String(body.password ?? '');
 		if (!/^[a-zA-Z0-9_.-]{3,64}$/.test(username) || password.length < 8) return apiMessage(c, 400, '用户名至少 3 个合法字符，密码至少 8 个字符');
+		const roles = parseRoles(body.roles);
+		const unknownRoles = unknownAssignableRoles(roles);
+		if (unknownRoles.length) return apiMessage(c, 400, `不支持的角色：${unknownRoles.join('、')}`);
 		const now = Date.now();
 		try {
-			await runSql(database, sql(database).insert('base_system_users', { username, password: await createStoredPassword(password), roles: String(body.roles ?? '["user"]'), status: String(body.status ?? 'enabled'), created_at: now, updated_at: now }));
+			await runSql(database, sql(database).insert('base_system_users', { username, password: await createStoredPassword(password), roles: serializeRoles(roles), status: String(body.status ?? 'enabled'), created_at: now, updated_at: now }));
 			const created = await firstSql<{ id: number | string }>(database, sql(database).select({ table: 'base_system_users', columns: { id: 'id' }, where: [{ column: 'username', value: username }] }));
 			return apiMessageData(c, 201, '用户已创建', { id: created?.id, username });
 		} catch {
@@ -55,8 +59,14 @@ const handler: ApiHandler = async (c, next, params) => {
 		if (!current) return apiMessage(c, 404, '用户不存在');
 		const changedFields = getChangedFields(body, ['username', 'roles', 'status', 'password']);
 		const values: Record<string, unknown> = {};
-		for (const key of ['username', 'roles', 'status']) {
+		for (const key of ['username', 'status']) {
 			if (changedFields.has(key)) values[key] = String(body[key] ?? '');
+		}
+		if (changedFields.has('roles')) {
+			const roles = parseRoles(body.roles);
+			const unknownRoles = unknownAssignableRoles(roles);
+			if (unknownRoles.length) return apiMessage(c, 400, `不支持的角色：${unknownRoles.join('、')}`);
+			values.roles = serializeRoles(roles);
 		}
 		const password = String(body.password ?? '');
 		if (changedFields.has('password') && password) {

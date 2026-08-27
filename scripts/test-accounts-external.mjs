@@ -58,8 +58,22 @@ try {
 		VALUES ('passport', 92, 93, 'email_verification', 1, 'enabled', ?, ?)`).run(now, now);
 	database.close();
 
+	// 登录页第一步是邮箱；未注册邮箱先确认，再选择用于注册的第三方身份源。
 	const sign = await (await app.request('http://accounts.test/api/accounts/sign.php')).json();
-	assert.deepEqual(sign.formPage.fields.find((field) => field.name === 'method').options.map((item) => item.value), ['google', 'wechat']);
+	assert.equal(sign.formPage.initialValues.step, 'email');
+	const unknownEmail = await jsonRequest(app, '/api/accounts/sign.php', { step: 'email', email: 'wechat@example.com' });
+	const unknownEmailResult = await unknownEmail.json();
+	assert.equal(unknownEmail.status, 200);
+	assert.equal(unknownEmailResult.formPage.initialValues.step, 'email_confirm');
+	assert.match(unknownEmailResult.formPage.description, /还没有注册/);
+	const confirmed = await jsonRequest(app, '/api/accounts/sign.php', { step: 'email_confirm', email: 'wechat@example.com' });
+	const confirmedResult = await confirmed.json();
+	assert.deepEqual(confirmedResult.formPage.fields.find((field) => field.name === 'method').options.map((item) => item.value), ['google', 'wechat']);
+	const signupEmailCookie = cookie(confirmed, 'accounts_signup_email');
+	assert.ok(signupEmailCookie);
+	// 换个邮箱回到第一步。
+	const changed = await (await app.request('http://accounts.test/api/accounts/sign.php?action=change_email', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ step: 'email_confirm', email: 'wechat@example.com' }) })).json();
+	assert.equal(changed.formPage.initialValues.step, 'email');
 
 	const googleStart = await app.request('http://accounts.test/api/accounts/external/google');
 	assert.equal(googleStart.status, 302);
@@ -71,6 +85,8 @@ try {
 	const googleCallback = await app.request(`http://accounts.test/api/accounts/external/google?code=google-code&state=${encodeURIComponent(googleState)}`, { headers: { cookie: googleStateCookie } });
 	assert.equal(googleCallback.status, 302);
 	assert.ok(cookie(googleCallback, 'passport_session'));
+	// 新用户还没有用户名，回到登录页继续补全。
+	assert.match(googleCallback.headers.get('location'), /\/accounts\/sign/);
 	const afterGoogle = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
 	assert.equal(afterGoogle.prepare("SELECT COUNT(*) AS count FROM passport_external_identities WHERE provider = 'google'").get().count, 1);
 	assert.equal(afterGoogle.prepare("SELECT COUNT(*) AS count FROM passport_emails WHERE email = 'google@example.com' AND verified = 1").get().count, 1);
@@ -103,20 +119,62 @@ try {
 	assert.equal(beforeEmail.prepare("SELECT COUNT(*) AS count FROM passport_external_identities WHERE provider = 'wechat'").get().count, 0);
 	assert.equal(beforeEmail.prepare('SELECT COUNT(*) AS count FROM passport_users').get().count, 1);
 	beforeEmail.close();
-	const emailForm = await (await app.request('http://accounts.test/api/accounts/sign.php', { headers: { cookie: pendingCookie } })).json();
+	const emailForm = await (await app.request('http://accounts.test/api/accounts/sign.php', { headers: { cookie: `${pendingCookie}; ${signupEmailCookie}` } })).json();
 	assert.equal(emailForm.formPage.initialValues.step, 'external_email');
+	// 第一步输入过的邮箱会预填到验证步骤。
+	assert.equal(emailForm.formPage.initialValues.email, 'wechat@example.com');
 	const issued = await jsonRequest(app, '/api/accounts/sign.php', { step: 'external_email', email: 'wechat@example.com' }, pendingCookie);
 	assert.equal(issued.status, 200);
 	assert.match(deliveredCode, /^\d{6}$/);
 	assert.equal((await (await jsonRequest(app, '/api/accounts/sign.php', { step: 'external_verify', code: '000000' }, pendingCookie)).json()).feedback.type, 'error');
 	const verified = await jsonRequest(app, '/api/accounts/sign.php', { step: 'external_verify', code: deliveredCode }, pendingCookie);
 	assert.equal(verified.status, 200);
-	assert.ok(cookie(verified, 'passport_session'));
+	const wechatSession = cookie(verified, 'passport_session');
+	assert.ok(wechatSession);
+	// 建号后立即进入用户名补全，不直接跳转。
+	const verifiedResult = await verified.json();
+	assert.equal(verifiedResult.formPage.initialValues.step, 'set_username');
+	assert.equal(verifiedResult.redirectTo, undefined);
 	const completed = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
 	assert.equal(completed.prepare("SELECT COUNT(*) AS count FROM passport_external_identities WHERE provider = 'wechat'").get().count, 1);
 	assert.equal(completed.prepare("SELECT COUNT(*) AS count FROM passport_emails WHERE email = 'wechat@example.com' AND verified = 1").get().count, 1);
 	assert.equal(completed.prepare("SELECT COUNT(*) AS count FROM passport_external_pending_identities WHERE status = 'completed'").get().count, 1);
 	completed.close();
+	// 用户名必填且有格式限制，密码可以跳过。
+	assert.equal((await (await app.request('http://accounts.test/api/accounts/sign.php', { headers: { cookie: wechatSession } })).json()).formPage.initialValues.step, 'set_username');
+	for (const username of ['abc', 'Wechat1', 'wechat_1', '1wechat', 'admin', 'wechatuser2026x']) {
+		const rejected = await jsonRequest(app, '/api/accounts/sign.php', { step: 'set_username', username }, wechatSession);
+		assert.equal(rejected.status, 400, `用户名 ${username} 应该被拒绝`);
+	}
+	const namedResponse = await jsonRequest(app, '/api/accounts/sign.php', { step: 'set_username', username: 'wechat2026' }, wechatSession);
+	const named = await namedResponse.json();
+	assert.equal(namedResponse.status, 200);
+	assert.equal(named.formPage.initialValues.step, 'set_password');
+	assert.deepEqual(named.formPage.actions.map((action) => action.key), ['skip_password']);
+	assert.equal((await jsonRequest(app, '/api/accounts/sign.php', { step: 'set_username', username: 'wechat2027' }, wechatSession)).status, 400);
+	const skipped = await (await app.request('http://accounts.test/api/accounts/sign.php?action=skip_password', { method: 'POST', headers: { 'content-type': 'application/json', cookie: wechatSession }, body: JSON.stringify({ step: 'set_password' }) })).json();
+	assert.equal(skipped.redirectTo, '/');
+	// 跳过只对本次登录生效，下次进入登录页仍然提示设置密码。
+	assert.equal((await (await app.request('http://accounts.test/api/accounts/sign.php', { headers: { cookie: wechatSession } })).json()).formPage.initialValues.step, 'set_password');
+	assert.equal((await jsonRequest(app, '/api/accounts/sign.php', { step: 'set_password', password: 'wechat-password-1', password_confirm: 'other' }, wechatSession)).status, 400);
+	assert.equal((await jsonRequest(app, '/api/accounts/sign.php', { step: 'set_password', password: 'short', password_confirm: 'short' }, wechatSession)).status, 400);
+	const savedPassword = await jsonRequest(app, '/api/accounts/sign.php', { step: 'set_password', password: 'wechat-password-1', password_confirm: 'wechat-password-1' }, wechatSession);
+	assert.equal(savedPassword.status, 200);
+	assert.equal((await savedPassword.json()).redirectTo, '/');
+	// 设置完成后登录页回到身份绑定表单。
+	assert.equal((await (await app.request('http://accounts.test/api/accounts/sign.php', { headers: { cookie: wechatSession } })).json()).formPage.initialValues.step, 'method');
+
+	// 已注册邮箱列出可用登录方式，并支持邮箱 + 密码登录。
+	const knownEmail = await (await jsonRequest(app, '/api/accounts/sign.php', { step: 'email', email: 'wechat@example.com' })).json();
+	assert.deepEqual(knownEmail.formPage.fields.find((field) => field.name === 'method').options.map((item) => item.value), ['password', 'google', 'wechat']);
+	const passwordStep = await (await jsonRequest(app, '/api/accounts/sign.php', { step: 'method', email: 'wechat@example.com', method: 'password' })).json();
+	assert.equal(passwordStep.formPage.initialValues.step, 'password');
+	assert.equal((await jsonRequest(app, '/api/accounts/sign.php', { step: 'password', email: 'wechat@example.com', password: 'wrong-password' })).status, 401);
+	const passwordLogin = await jsonRequest(app, '/api/accounts/sign.php', { step: 'password', email: 'wechat@example.com', password: 'wechat-password-1' });
+	assert.equal(passwordLogin.status, 200);
+	assert.ok(cookie(passwordLogin, 'passport_session'));
+	assert.equal((await passwordLogin.json()).redirectTo, '/');
+
 	const modeDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
 	modeDatabase.prepare("UPDATE passport_external_providers SET wechat_mode = 'official_account' WHERE id = 'wechat'").run();
 	modeDatabase.close();

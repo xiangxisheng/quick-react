@@ -14,7 +14,7 @@ export const portableTableGroups = {
 		'base_oidc_login_requests', 'base_oidc_accounts', 'base_oidc_sessions',
 	],
 	passport: [
-		'passport_users', 'passport_user_credentials', 'passport_sessions', 'passport_telegram_accounts',
+		'passport_users', 'passport_usernames', 'passport_user_credentials', 'passport_sessions', 'passport_telegram_accounts',
 		'passport_oauth_accounts', 'passport_emails', 'passport_user_emails', 'passport_email_otp',
 		'passport_user_roles', 'passport_group_prompts', 'passport_snowflake_state', 'passport_telegram_menus',
 		'passport_telegram_updates', 'passport_telegram_identity_choices', 'passport_login_challenges',
@@ -22,6 +22,7 @@ export const portableTableGroups = {
 		'passport_oidc_clients', 'passport_oidc_authorization_requests', 'passport_oidc_authorization_codes',
 		'passport_oidc_access_tokens', 'passport_oidc_signing_keys', 'passport_external_providers',
 		'passport_external_login_states', 'passport_external_pending_identities', 'passport_external_email_otps',
+		'passport_external_pending_qr_states', 'passport_user_email_otps',
 	],
 } as const;
 

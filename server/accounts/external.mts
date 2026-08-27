@@ -22,6 +22,11 @@ export const externalProvider = (database: DatabaseAdapter, id: string) => first
 export const externalStateCookieName = 'accounts_external_state';
 export const externalStateCookie = (value: string, secure: boolean) => `${externalStateCookieName}=${encodeURIComponent(value)}; Path=/api/accounts/external/; HttpOnly; SameSite=Lax; Max-Age=1800${secure ? '; Secure' : ''}`;
 export const clearExternalStateCookie = (secure: boolean) => `${externalStateCookieName}=; Path=/api/accounts/external/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`;
+/** 未注册邮箱确认后暂存 30 分钟，供第三方认证回来后预填邮箱验证步骤。 */
+export const signupEmailCookieName = 'accounts_signup_email';
+export const signupEmailCookie = (email: string, secure: boolean) => `${signupEmailCookieName}=${encodeURIComponent(email)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=1800${secure ? '; Secure' : ''}`;
+export const clearSignupEmailCookie = (secure: boolean) => `${signupEmailCookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`;
+
 export const externalPendingCookieName = 'accounts_external_pending';
 export const externalPendingCookie = (value: string, secure: boolean) => `${externalPendingCookieName}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${secure ? '; Secure' : ''}`;
 export const clearExternalPendingCookie = (secure: boolean) => `${externalPendingCookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`;

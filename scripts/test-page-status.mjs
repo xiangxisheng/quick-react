@@ -71,7 +71,7 @@ try {
 	assert.equal(adminPanel.pageStatus, undefined);
 
 	assert.equal((await request('/api/panel/admin/system/users.php', {
-		method: 'POST', cookie: adminCookie, body: { username: 'page_user', password: 'test-password-123', roles: '["user"]', status: 'enabled' },
+		method: 'POST', cookie: adminCookie, body: { username: 'page_user', password: 'test-password-123', roles: [], status: 'enabled' },
 	})).status, 201);
 	const userLogin = await request('/api/sign.php', { method: 'POST', body: { username: 'page_user', password: 'test-password-123' } });
 	const userCookie = userLogin.headers.get('set-cookie')?.split(';')[0];

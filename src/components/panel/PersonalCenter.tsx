@@ -2,6 +2,7 @@ import { Card, Descriptions, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import type { CommonApi } from '@/utils/common/api.js';
 import type { UserIdentity } from '@shared/types/user.mjs';
+import { roleLabel } from '@shared/types/role.mjs';
 
 const initialData = (window as Window & { __INITIAL_DATA__?: { apiSuffix?: string } }).__INITIAL_DATA__;
 const apiSuffix = initialData?.apiSuffix ?? '';
@@ -27,7 +28,7 @@ export default function PersonalCenter({ commonApi, user: initialUser, title, pa
 			</Typography.Paragraph>
 			{isSecurity || isSessions ? null : <Descriptions column={1} bordered>
 				<Descriptions.Item label="用户名">{user?.username ?? '—'}</Descriptions.Item>
-				<Descriptions.Item label="角色">{user?.roles.join('、') || '—'}</Descriptions.Item>
+				<Descriptions.Item label="角色">{user?.roles.map(roleLabel).join('、') || '—'}</Descriptions.Item>
 			</Descriptions>}
 		</Card>
 	);

@@ -11,6 +11,26 @@ model passport_users {
   updated_at BigInt
 }
 
+model passport_usernames {
+  user_id    BigInt @id
+  username   String @unique
+  created_at BigInt
+}
+
+model passport_user_email_otps {
+  id            String @id
+  user_id       BigInt
+  email         String
+  code_hash     String
+  attempt_count Int    @default(0)
+  status        String @default("pending")
+  expires_at    BigInt
+  created_at    BigInt
+  updated_at    BigInt
+
+  @@index([user_id, status, created_at])
+}
+
 model passport_user_credentials {
   id         BigInt @id @default(autoincrement())
   user_id    BigInt

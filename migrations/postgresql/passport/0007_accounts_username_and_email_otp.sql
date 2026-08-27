@@ -1,0 +1,3 @@
+CREATE TABLE IF NOT EXISTS passport_usernames (user_id BIGINT PRIMARY KEY REFERENCES passport_users(user_id) ON DELETE CASCADE, username VARCHAR(12) NOT NULL UNIQUE, created_at BIGINT NOT NULL);
+CREATE TABLE IF NOT EXISTS passport_user_email_otps (id VARCHAR(64) PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES passport_users(user_id) ON DELETE CASCADE, email VARCHAR(320) NOT NULL, code_hash TEXT NOT NULL, attempt_count INTEGER NOT NULL DEFAULT 0, status VARCHAR(16) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'used', 'expired')), expires_at BIGINT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL);
+CREATE INDEX IF NOT EXISTS passport_user_email_otps_lookup ON passport_user_email_otps(user_id, status, created_at);

@@ -112,6 +112,33 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 		return () => { active = false; };
 	}, [apiPath, commonApi, form]);
 
+	// 后端返回新的 formPage 表示流程还在继续，这时不安排跳转，避免多步表单在中间步骤被反馈倒计时带走。
+	const applyResult = async (result: FormResponse, values: Record<string, unknown>) => {
+		Modal.destroyAll();
+		setResponseFeedback(result.feedback);
+		if (result.formPage) {
+			const nextValues = isRecord(result.currentValues) ? result.currentValues : result.formPage.initialValues;
+			setFormConfig(result.formPage);
+			setInitialValues(nextValues);
+			setLiveValues(nextValues);
+			form.resetFields();
+			form.setFieldsValue(nextValues);
+		}
+		const target = result.redirectTo ?? (result.formPage ? undefined : await onSaved?.(values));
+		const savedValues = isRecord(result.currentValues) ? result.currentValues : values;
+		setInitialValues(savedValues);
+		changedFields.current.clear();
+		setDirty(false);
+		setSaved(true);
+		if (target && result.feedback && (redirectOnFeedback || result.feedback.redirectAfter !== undefined)) {
+			const schedule = runAfterFeedback(result.feedback, () => window.location.assign(target));
+			refreshSchedule.current = schedule;
+			setRefreshCancelled(false);
+			setRefreshTarget(target);
+			setRefreshDeadline(schedule.deadline);
+		}
+	};
+
 	const onFinish = async (values: Record<string, unknown>) => {
 		if (!dirty && formConfig?.confirmOnUnchangedSubmit) {
 			const confirmed = await commonApi.modalConfirm([formConfig.confirmOnUnchangedSubmit]);
@@ -124,30 +151,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ ...values, [changedFieldsKey]: [...changedFields.current] } satisfies ChangedFieldsPayload & Record<string, unknown>),
 			});
-			const result = await response.json() as FormResponse;
-			Modal.destroyAll();
-			setResponseFeedback(result.feedback);
-			if (result.formPage) {
-				const nextValues = isRecord(result.currentValues) ? result.currentValues : result.formPage.initialValues;
-				setFormConfig(result.formPage);
-				setInitialValues(nextValues);
-				setLiveValues(nextValues);
-				form.resetFields();
-				form.setFieldsValue(nextValues);
-			}
-			const target = result.redirectTo ?? await onSaved?.(values);
-			const savedValues = isRecord(result.currentValues) ? result.currentValues : values;
-			setInitialValues(savedValues);
-			changedFields.current.clear();
-			setDirty(false);
-			setSaved(true);
-			if (target && result.feedback && (redirectOnFeedback || result.feedback.redirectAfter !== undefined)) {
-				const schedule = runAfterFeedback(result.feedback, () => window.location.assign(target));
-				refreshSchedule.current = schedule;
-				setRefreshCancelled(false);
-				setRefreshTarget(target);
-				setRefreshDeadline(schedule.deadline);
-			}
+			await applyResult(await response.json() as FormResponse, values);
 		} catch (error) {
 			console.error(`保存配置失败: ${apiPath}`, error);
 		} finally {
@@ -156,12 +160,14 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 	};
 	const runAction = async (key: string) => {
 		setRunningAction(key);
+		const values = form.getFieldsValue(true) as Record<string, unknown>;
 		try {
-			await commonApi.apiFetch(`${apiPath}?action=${encodeURIComponent(key)}`, {
+			const response = await commonApi.apiFetch(`${apiPath}?action=${encodeURIComponent(key)}`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(form.getFieldsValue(true)),
+				body: JSON.stringify({ ...values, [changedFieldsKey]: [...changedFields.current] } satisfies ChangedFieldsPayload & Record<string, unknown>),
 			});
+			await applyResult(await response.json() as FormResponse, values);
 		} catch (error) {
 			console.error(`执行配置操作失败: ${apiPath}?action=${key}`, error);
 		} finally {
