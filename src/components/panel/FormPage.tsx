@@ -52,6 +52,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 	const [refreshCancelled, setRefreshCancelled] = useState(false);
 	const [saved, setSaved] = useState(false);
 	const [responseFeedback, setResponseFeedback] = useState<FormResponse['feedback']>();
+	const [passportError, setPassportError] = useState('');
 	const changedFields = useRef(new Set<string>());
 
 	useEffect(() => {
@@ -163,6 +164,14 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 	const inlineFeedback = saved && feedback?.component === 'inline'
 			? <Alert type={feedback.type ?? 'success'} showIcon={feedback.showIcon} message={feedbackContent} style={{ marginBottom: 24 }} />
 		: null;
+	const loginWithPassport = async () => {
+		setPassportError('');
+		try {
+			if (!(window as any).Passport) await new Promise<void>((resolve, reject) => { const script = document.createElement('script'); script.src = '/passport.js'; script.onload = () => resolve(); script.onerror = () => reject(new Error('Passport SDK 加载失败')); document.head.appendChild(script); });
+			await (window as any).Passport.login({ mode: formConfig?.passportLogin?.mode ?? 'popup' });
+			window.location.reload();
+		} catch (error) { setPassportError(error instanceof Error ? error.message : 'Passport 登录失败'); }
+	};
 	const modalFeedback = saved && !refreshCancelled && feedback?.component === 'modal' ? (
 		<Modal
 			open
@@ -180,6 +189,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 		{messageContextHolder}
 		{modalFeedback}
 		{inlineFeedback}
+		{formConfig?.passportLogin?.enabled ? <div style={{ marginBottom: 16 }}><Button onClick={loginWithPassport}>使用 Passport 登录</Button>{passportError ? <Alert type="error" showIcon message={passportError} style={{ marginTop: 12 }} /> : null}</div> : null}
 		{formConfig?.description ? <Alert type="info" showIcon message={formConfig.description} style={{ marginBottom: 24 }} /> : null}
 		<Form
 			form={form}
@@ -248,7 +258,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 			})())}
 			<Space>
 				{formConfig?.actions?.map((action) => <Button key={action.key} loading={runningAction === action.key} disabled={saving || Boolean(runningAction)} onClick={() => runAction(action.key)}>{action.label}</Button>)}
-				<Button type="primary" htmlType="submit" loading={saving}>{formConfig?.submitLabel}</Button>
+				{!formConfig?.passportLogin?.enabled ? <Button type="primary" htmlType="submit" loading={saving}>{formConfig?.submitLabel}</Button> : null}
 				{formConfig?.submitHint ? <Typography.Text type="secondary">{formConfig.submitHint}</Typography.Text> : null}
 			</Space>
 		</Form>

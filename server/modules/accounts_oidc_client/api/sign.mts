@@ -11,14 +11,15 @@ const handler: ApiHandler = async (c, next) => {
 	const config = await loadAccountsOidcConfig(c);
 	if (!config.enabled) return baseSign(c, next, {});
 	if (c.req.method === 'GET') {
-		const formPage: FormPageConfig = { description: '使用 Accounts 账号中心完成统一登录。', submitLabel: '前往 Accounts 登录', initialValues: { action: 'login' }, fields: [{ name: 'action', label: '', type: 'hidden' }] };
+		const formPage: FormPageConfig = { description: '使用 Accounts 账号中心完成统一登录。', submitLabel: '前往 Accounts 登录', passportLogin: { enabled: true, mode: 'popup' }, initialValues: { action: 'login' }, fields: [{ name: 'action', label: '', type: 'hidden' }] };
 		return apiResponse(c, 200, { user: c.get('currentUser') ?? null, registrationAvailable: false, formPage });
 	}
 	if (c.req.method === 'POST') {
 		try {
+			const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
 			const discovery = await loadDiscovery(c, config.issuer), id = crypto.randomUUID(), state = randomToken(), nonce = randomToken(), verifier = randomToken(48), now = Date.now();
 			const database = c.get('database');
-			await runSql(database, sql(database).insert('base_oidc_login_requests', { id, issuer: config.issuer, state, nonce, code_verifier: verifier, return_path: '/', expires_at: now + 600_000, created_at: now }));
+			await runSql(database, sql(database).insert('base_oidc_login_requests', { id, issuer: config.issuer, state, nonce, code_verifier: verifier, return_path: (body as Record<string, unknown>).popup === true ? '/accounts/oidc/popup' : '/', expires_at: now + 600_000, created_at: now }));
 			const callback = `${requestOrigin(c)}/api/accounts/oidc/callback`;
 			const authorize = new URL(discovery.authorization_endpoint); authorize.search = new URLSearchParams({ response_type: 'code', client_id: config.clientId, redirect_uri: callback, scope: 'openid profile email', state, nonce, code_challenge: await sha256Base64Url(verifier), code_challenge_method: 'S256' }).toString();
 			c.header('Set-Cookie', accountsLoginCookie(id, isSecureRequest(c)));

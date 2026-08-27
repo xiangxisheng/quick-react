@@ -15,6 +15,7 @@ export type FormPageField = {
 };
 
 export type FormPageConfig = {
+	passportLogin?: { enabled: boolean; mode?: 'popup' | 'redirect' };
 	description?: string;
 	submitLabel?: string;
 	actions?: Array<{ key: string; label: string }>;

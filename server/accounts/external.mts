@@ -20,7 +20,7 @@ export const externalProviders = (database: DatabaseAdapter, enabledOnly = false
 export const externalProvider = (database: DatabaseAdapter, id: string) => firstSql<ExternalProvider>(database, sql(database).select({ table: 'passport_external_providers', columns: providerColumns, where: [{ column: 'id', value: id }, { column: 'status', value: 'enabled' }] }));
 
 export const externalStateCookieName = 'accounts_external_state';
-export const externalStateCookie = (value: string, secure: boolean) => `${externalStateCookieName}=${encodeURIComponent(value)}; Path=/api/accounts/external/; HttpOnly; SameSite=Lax; Max-Age=600${secure ? '; Secure' : ''}`;
+export const externalStateCookie = (value: string, secure: boolean) => `${externalStateCookieName}=${encodeURIComponent(value)}; Path=/api/accounts/external/; HttpOnly; SameSite=Lax; Max-Age=1800${secure ? '; Secure' : ''}`;
 export const clearExternalStateCookie = (secure: boolean) => `${externalStateCookieName}=; Path=/api/accounts/external/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`;
 export const externalPendingCookieName = 'accounts_external_pending';
 export const externalPendingCookie = (value: string, secure: boolean) => `${externalPendingCookieName}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${secure ? '; Secure' : ''}`;
@@ -108,7 +108,7 @@ export const resolveExternalUser = async (database: DatabaseAdapter, workerId: u
 
 export const createExternalState = async (database: DatabaseAdapter, provider: ExternalProviderId, redirectUri: string) => {
 	const state = randomToken(32), codeVerifier = randomToken(48), nonce = randomToken(24), now = Date.now();
-	await runSql(database, sql(database).insert('passport_external_login_states', { id_hash: await sha256(state), provider, code_verifier: codeVerifier, nonce, redirect_uri: redirectUri, expires_at: now + 600_000, created_at: now }));
+	await runSql(database, sql(database).insert('passport_external_login_states', { id_hash: await sha256(state), provider, code_verifier: codeVerifier, nonce, redirect_uri: redirectUri, expires_at: now + 1_800_000, created_at: now }));
 	return { state, codeVerifier, nonce };
 };
 
@@ -127,10 +127,12 @@ const generateEmailCode = () => {
 	return String(values[0] % 1_000_000).padStart(6, '0');
 };
 
-export const createPendingExternalIdentity = async (database: DatabaseAdapter, profile: ExternalProfile, provider: ExternalProviderId) => {
+export const createPendingExternalIdentity = async (database: DatabaseAdapter, profile: ExternalProfile, provider: ExternalProviderId, qrStateHash?: string) => {
 	const token = randomToken(32), now = Date.now();
 	await runSql(database, sql(database).update('passport_external_pending_identities', { status: 'expired', updated_at: now }, [{ column: 'provider', value: provider }, { column: 'subject', value: profile.subject }, { column: 'status', value: 'pending' }]));
-	await runSql(database, sql(database).insert('passport_external_pending_identities', { id_hash: await sha256(token), provider, subject: profile.subject, nickname: normalizedNickname(profile.nickname, provider), profile: JSON.stringify(profile.raw), status: 'pending', expires_at: now + 600_000, created_at: now, updated_at: now }));
+	const idHash = await sha256(token);
+	await runSql(database, sql(database).insert('passport_external_pending_identities', { id_hash: idHash, provider, subject: profile.subject, nickname: normalizedNickname(profile.nickname, provider), profile: JSON.stringify(profile.raw), status: 'pending', expires_at: now + 1_800_000, created_at: now, updated_at: now }));
+	if (qrStateHash) await runSql(database, sql(database).insert('passport_external_pending_qr_states', { pending_identity_hash: idHash, qr_state_hash: qrStateHash, created_at: now }));
 	return token;
 };
 
@@ -142,6 +144,12 @@ export const pendingExternalIdentity = async (database: DatabaseAdapter, token: 
 	if (pending.expires_at > now) return pending;
 	await runSql(database, sql(database).update('passport_external_pending_identities', { status: 'expired', updated_at: now }, { id_hash: idHash }));
 	return null;
+};
+
+export const pendingExternalIdentityByQrState = async (database: DatabaseAdapter, state: string) => {
+	if (!state) return null;
+	const stateHash = await sha256(state), now = Date.now();
+	return firstSql<PendingExternalIdentity>(database, sql(database).select({ table: 'passport_external_pending_identities', alias: 'p', columns: { id_hash: 'p.id_hash', provider: 'p.provider', subject: 'p.subject', nickname: 'p.nickname', profile: 'p.profile', status: 'p.status', expires_at: 'p.expires_at' }, joins: [{ table: 'passport_external_pending_qr_states', alias: 'q', left: 'q.pending_identity_hash', right: 'p.id_hash' }], where: [{ column: 'q.qr_state_hash', value: stateHash }, { column: 'p.status', value: 'pending' }, { column: 'p.expires_at', operator: '>', value: now }] }));
 };
 
 export class ExternalEmailRateLimitError extends Error {

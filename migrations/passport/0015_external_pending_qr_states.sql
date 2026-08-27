@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS passport_external_pending_qr_states (
+	pending_identity_hash TEXT PRIMARY KEY NOT NULL,
+	qr_state_hash TEXT UNIQUE NOT NULL CHECK (length(qr_state_hash) = 64),
+	created_at INTEGER NOT NULL,
+	FOREIGN KEY (pending_identity_hash) REFERENCES passport_external_pending_identities(id_hash) ON DELETE CASCADE
+);

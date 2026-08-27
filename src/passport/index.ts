@@ -1,5 +1,4 @@
 export type PassportLoginOptions = {
-	clientId: string;
 	provider?: string;
 	mode?: 'popup' | 'redirect';
 	width?: number;
@@ -7,36 +6,19 @@ export type PassportLoginOptions = {
 };
 
 const currentOrigin = () => window.location.origin;
-const authorizeUrl = (clientId: string, provider?: string) => {
-	const url = new URL('/api/accounts/oidc/authorize', currentOrigin());
-	url.searchParams.set('client_id', clientId);
-	url.searchParams.set('redirect_uri', `${currentOrigin()}/api/accounts/oidc/callback`);
-	if (provider) url.searchParams.set('provider', provider);
-	return url.toString();
-};
-
 const Passport = {
-	login(options: PassportLoginOptions) {
-		const url = authorizeUrl(options.clientId, options.provider);
-		if (options.mode === 'redirect') { window.location.assign(url); return Promise.resolve(); }
+	async login(options: PassportLoginOptions = {}) {
+		const response = await fetch('/api/sign.php', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include', body: JSON.stringify({ action: 'login', popup: options.mode === 'popup', ...(options.provider ? { provider: options.provider } : {}) }) });
+		const result = await response.json();
+		if (!response.ok || !result.redirectTo) throw new Error(result?.feedback?.message || 'Passport 登录初始化失败');
+		if (options.mode !== 'popup') { window.location.assign(result.redirectTo); return; }
+		const popup = window.open(result.redirectTo, 'passport_login', `width=${options.width ?? 480},height=${options.height ?? 680},resizable=yes,scrollbars=yes`);
+		if (!popup) throw new Error('登录窗口被浏览器拦截');
 		return new Promise<void>((resolve, reject) => {
-			const popup = window.open(url, 'passport_login', `width=${options.width ?? 480},height=${options.height ?? 680},resizable=yes,scrollbars=yes`);
-			if (!popup) { reject(new Error('登录窗口被浏览器拦截')); return; }
-			const listener = (event: MessageEvent) => {
-				if (event.origin !== currentOrigin() || event.data?.source !== 'passport') return;
-				window.removeEventListener('message', listener);
-				popup.close();
-				event.data.status === 'success' ? resolve() : reject(new Error(event.data.message || 'Passport 登录失败'));
-			};
+			const timer = window.setTimeout(() => { popup.close(); reject(new Error('Passport 登录已超时')); }, 10 * 60 * 1000);
+			const listener = (event: MessageEvent) => { if (event.origin !== currentOrigin() || event.data?.source !== 'passport') return; window.clearTimeout(timer); window.removeEventListener('message', listener); popup.close(); event.data.status === 'success' ? resolve() : reject(new Error(event.data.message || 'Passport 登录失败')); };
 			window.addEventListener('message', listener);
 		});
-	},
-	async getSession() {
-		const response = await fetch('/api/accounts/session', { credentials: 'include' });
-		return response.ok ? response.json() : null;
-	},
-	async logout() {
-		await fetch('/api/accounts/logout', { method: 'POST', credentials: 'include' });
 	},
 };
 

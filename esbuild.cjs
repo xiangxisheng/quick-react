@@ -57,6 +57,11 @@ const main = async () => {
 	const frontend = await createBuildContext('src/index.tsx', publicDir, 'bundle.js', {
 		minify: true,
 	});
+	const passportSdk = await createBuildContext('src/passport/index.ts', publicDir, 'passport.js', {
+		bundle: true,
+		format: 'iife',
+		minify: true,
+	});
 	const backend = await createBuildContext('server/app.mts', distDir, 'server.mjs', {
 		platform: 'node',
 		format: 'esm',
@@ -68,7 +73,7 @@ const main = async () => {
 		format: 'esm',
 		target: 'es2022',
 	});
-	const builds = [frontend, backend, worker];
+	const builds = [frontend, passportSdk, backend, worker];
 	const contexts = builds.map(({ context }) => context);
 	if (watch) {
 		await Promise.all(contexts.map((context) => context.watch()));

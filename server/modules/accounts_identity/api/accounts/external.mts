@@ -1,22 +1,43 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiResponse } from '@server/api-response.mjs';
-import { clearExternalStateCookie, consumeExternalState, createExternalState, createPendingExternalIdentity, externalAuthorizationUrl, externalPendingCookie, externalProvider, externalQrState, externalStateCookie, externalStateCookieName, fetchExternalProfile, resolveExternalUser, type ExternalProviderId } from '@server/accounts/external.mjs';
+import { clearExternalStateCookie, consumeExternalState, createExternalState, createPendingExternalIdentity, discardExternalEmailOtp, externalAuthorizationUrl, externalPendingCookie, externalProvider, externalQrState, externalStateCookie, externalStateCookieName, fetchExternalProfile, issueExternalEmailOtp, pendingExternalIdentityByQrState, resolveExternalUser, verifyExternalEmailOtp, type ExternalProviderId } from '@server/accounts/external.mjs';
 import { clearOidcRequestCookie, oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
 import { createPassportSessionCookie, loadPassportSession } from '@server/passport/session.mjs';
 import { runSql, sql } from '@server/database/sql.mjs';
 import { isSecureRequest, requestOrigin } from '@server/request-origin.mjs';
 import { sha256 } from '@server/accounts/oidc.mjs';
+import { sendDefaultCloudEmail } from '@server/cloud/email.mjs';
 
 const providerId = (value: string): ExternalProviderId | undefined => value === 'google' || value === 'wechat' ? value : undefined;
 
 const handler: ApiHandler = async (c, _next, params) => {
-	if (c.get('site').siteKey !== 'passport' || c.req.method !== 'GET') return apiMessage(c, 404);
+	if (c.get('site').siteKey !== 'passport' || !['GET', 'POST'].includes(c.req.method)) return apiMessage(c, 404);
 	const database = c.get('passportDatabase'), id = providerId(params.id);
 	if (!database) return apiMessage(c, 503, 'Accounts 数据库不可用');
 	if (!id) return apiMessage(c, 404, '外部身份源不存在');
 	const provider = await externalProvider(database, id);
 	if (!provider) return apiMessage(c, 404, `${id === 'google' ? 'Google' : '微信'}登录尚未启用`);
 	const secure = isSecureRequest(c);
+	const bindState = c.req.query('bind')?.trim();
+	if (c.req.method === 'POST' && bindState) {
+		const pending = await pendingExternalIdentityByQrState(database, bindState);
+		if (!pending || pending.provider !== id) return apiMessage(c, 410, '邮箱绑定状态不存在或已过期，请重新扫码');
+		const body = await c.req.json<Record<string, unknown>>().catch(() => ({})) as Record<string, unknown>;
+		const step = String(body.step ?? 'email');
+		if (step === 'email') {
+			let issued: Awaited<ReturnType<typeof issueExternalEmailOtp>>;
+			try { issued = await issueExternalEmailOtp(database, pending, String(body.email ?? '')); }
+			catch (error) { return apiMessage(c, 400, error instanceof Error ? error.message : '邮箱不合法'); }
+			try { await sendDefaultCloudEmail(c.get('globalDatabase'), 'passport', 'email_verification', issued.email, { code: issued.code, email: issued.email, expires_minutes: '10' }); }
+			catch (error) { await discardExternalEmailOtp(database, pending.id_hash); return apiMessage(c, 502, error instanceof Error ? error.message : '邮箱验证码发送失败'); }
+			return apiResponse(c, 200, { status: 'email_sent' });
+		}
+		const verified = await verifyExternalEmailOtp(database, c.env.SNOWFLAKE_WORKER_ID, pending, String(body.code ?? ''));
+		if (verified.status !== 'created') return apiMessage(c, 409, verified.status === 'conflict' ? verified.message : verified.status === 'expired' ? '验证码已过期' : '验证码不正确');
+		await runSql(database, sql(database).update('passport_external_login_states', { qr_status: 'authorized', qr_user_id: verified.userId }, { id_hash: await sha256(bindState) }));
+		return apiResponse(c, 200, { status: 'completed' });
+	}
+	if (c.req.method !== 'GET') return apiMessage(c, 400, '缺少邮箱绑定状态');
 	const publicOrigin = c.get('systemConfig').publicOrigin?.trim();
 	const configuredOrigin = id === 'wechat' && provider.wechat_redirect_domain ? `${isSecureRequest(c) ? 'https' : 'http'}://${provider.wechat_redirect_domain}` : (publicOrigin || requestOrigin(c));
 	const redirectUri = new URL(`/api/accounts/external/${id}`, configuredOrigin).toString();
@@ -25,6 +46,7 @@ const handler: ApiHandler = async (c, _next, params) => {
 	if (pollState) {
 		const polled = await externalQrState(database, await sha256(pollState));
 		if (!polled || polled.provider !== id || polled.expires_at <= Date.now()) return apiResponse(c, 410, { status: 'expired' });
+		if (polled.qr_status === 'authorized' && !polled.qr_user_id) return apiResponse(c, 200, { status: 'needs_email', bindUrl: `/api/accounts/external/${id}?bind=${encodeURIComponent(pollState)}` });
 		if (polled.qr_status !== 'authorized' || !polled.qr_user_id) return apiResponse(c, 200, { status: polled.qr_status });
 		const sessionId = crypto.randomUUID(), now = Date.now();
 		await runSql(database, sql(database).insert('passport_sessions', { id: sessionId, user_id: polled.qr_user_id, expires_at: now + 24 * 60 * 60 * 1000, created_at: now }));
@@ -66,8 +88,9 @@ const handler: ApiHandler = async (c, _next, params) => {
 		const current = await loadPassportSession(database, c.req.raw);
 		if (!current && !profile.email) {
 			if (provider.wechat_mode === 'official_account' && !cookieState && consume) {
-				await runSql(database, sql(database).update('passport_external_login_states', { qr_status: 'expired' }, [{ column: 'id_hash', value: await sha256(returnedState) }]));
-				return apiMessage(c, 422, '服务号未返回邮箱，暂不能完成跨设备登录，请先在 Accounts 绑定邮箱');
+				await createPendingExternalIdentity(database, profile, provider.id, await sha256(returnedState));
+				await runSql(database, sql(database).update('passport_external_login_states', { qr_status: 'authorized' }, [{ column: 'id_hash', value: await sha256(returnedState) }]));
+				return apiResponse(c, 200, { status: 'authorized' });
 			}
 			const pendingToken = await createPendingExternalIdentity(database, profile, provider.id);
 			c.header('Set-Cookie', clearExternalStateCookie(secure));
