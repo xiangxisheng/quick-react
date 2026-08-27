@@ -3,7 +3,7 @@ import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mj
 import type { DatabaseAdapter, DatabaseBatchStatement } from '@server/database/index.mjs';
 import { normalizePassportEmail, setPassportPassword, verifyPassportPasswordHistory } from '@server/passport/identity.mjs';
 import { hasAccountPassword, setAccountUsername, utcMinutes } from '@server/passport/account.mjs';
-import { accountOnboardingStep, loginRedirectTarget, onboardingForm, refreshOidcRequest } from '@server/accounts/onboarding.mjs';
+import { accountOnboarding, loginRedirectTarget, onboardingForm, refreshOidcRequest } from '@server/accounts/onboarding.mjs';
 import { clearPassportSessionCookie, createPassportSessionCookie, loadPassportSession, readPassportSessionId } from '@server/passport/session.mjs';
 import { oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
 import { oidcIssuer, revokeOidcSession } from '@server/accounts/provider.mjs';
@@ -162,10 +162,10 @@ const handler: ApiHandler = async (c, next) => {
 
 	/** 登录成功后先补全用户名和密码，全部完成才回跳目标站点。 */
 	const completeLogin = async (userId: string, message: string) => {
-		const step = await accountOnboardingStep(database, userId);
-		if (step !== 'done') {
+		const onboarding = await accountOnboarding(database, userId);
+		if (onboarding.step !== 'done') {
 			await refreshOidcRequest(c, database);
-			const formPage = onboardingForm(step);
+			const formPage = onboardingForm(onboarding);
 			return apiResponse(c, 200, { user: { id: userId }, formPage, currentValues: formPage.initialValues, feedback: { component: 'inline' as const, type: 'success' as const, message } });
 		}
 		return apiMessageData(c, 200, message, { user: { id: userId }, redirectTo: loginRedirectTarget(c) }, { redirectAfter: 0 });
@@ -188,10 +188,10 @@ const handler: ApiHandler = async (c, next) => {
 			pendingToken ? pendingExternalIdentity(database, pendingToken) : null,
 		]);
 		if (user) {
-			const step = await accountOnboardingStep(database, String(user.id));
-			if (step !== 'done') {
+			const onboarding = await accountOnboarding(database, String(user.id));
+			if (onboarding.step !== 'done') {
 				await refreshOidcRequest(c, database);
-				const formPage = onboardingForm(step);
+				const formPage = onboardingForm(onboarding);
 				return apiResponse(c, 200, { user, registrationAvailable: false, formPage, currentValues: formPage.initialValues });
 			}
 			const linkOptions = providers.map((provider) => ({ value: provider.id, text: provider.display_name }));
@@ -221,9 +221,9 @@ const handler: ApiHandler = async (c, next) => {
 	if (action === 'skip_password') {
 		const user = await loadPassportSession(database, c.req.raw);
 		if (!user) return apiMessage(c, 401, '登录状态已失效，请重新登录');
-		const pendingStep = await accountOnboardingStep(database, String(user.id));
-		if (pendingStep === 'username') {
-			const formPage = onboardingForm('username');
+		const pendingOnboarding = await accountOnboarding(database, String(user.id));
+		if (pendingOnboarding.step === 'username') {
+			const formPage = onboardingForm(pendingOnboarding);
 			return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues, feedback: { component: 'inline' as const, type: 'warning' as const, message: '请先设置用户名' } });
 		}
 		return apiMessageData(c, 200, '已跳过密码设置，下次登录会再次提醒', { user: { id: user.id }, redirectTo: loginRedirectTarget(c) }, { redirectAfter: 0 });

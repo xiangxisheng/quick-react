@@ -67,8 +67,23 @@ try {
 	const businessSessionCookie = businessCallbackResponse.headers.getSetCookie().find((item) => item.startsWith('quick_react_session='))?.split(';')[0];
 	assert.ok(businessSessionCookie);
 	const signedInBusiness = await (await app.request('https://site1.test/api/sign.php', { headers: { cookie: businessSessionCookie } })).json();
-	assert.match(signedInBusiness.user.username, /^accounts_[0-9a-f]{16}$/);
+	// 还没设置 Accounts 用户名时，本站用户名是 passport_<user_id> 占位。
+	assert.equal(claims.preferred_username, undefined);
+	assert.equal(signedInBusiness.user.username, `passport_${userId}`);
 	assert.equal(signedInBusiness.formPage.passportLogin.autoStart, false);
+
+	// 设置 Accounts 用户名后，ID Token 带上 preferred_username，本站占位用户名同步改写。
+	const usernameDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
+	usernameDatabase.prepare('INSERT INTO passport_usernames (user_id, username, created_at) VALUES (?, ?, ?)').run(String(userId), 'oidcuser1', Date.now());
+	usernameDatabase.close();
+	const secondStart = await app.request('https://site1.test/api/sign.php', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+	const secondLoginCookie = secondStart.headers.get('set-cookie')?.split(';')[0];
+	const secondAuthorized = await app.request((await secondStart.json()).redirectTo, { headers: { cookie: `passport_session=${sessionId}` } });
+	const secondCallback = await app.request(secondAuthorized.headers.get('location'), { headers: { cookie: secondLoginCookie } });
+	assert.equal(secondCallback.status, 302);
+	const secondSessionCookie = secondCallback.headers.getSetCookie().find((item) => item.startsWith('quick_react_session='))?.split(';')[0];
+	const renamedBusiness = await (await app.request('https://site1.test/api/sign.php', { headers: { cookie: secondSessionCookie } })).json();
+	assert.equal(renamedBusiness.user.username, 'oidcuser1');
 	const completed = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
 	assert.equal(completed.prepare('SELECT COUNT(*) AS count FROM base_oidc_accounts').get().count, 1); completed.close();
 	assert.equal((await app.request('https://accounts.test/api/oidc/logout', { headers: { cookie: `passport_session=${sessionId}` } })).status, 200);

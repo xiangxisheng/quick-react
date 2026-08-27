@@ -2,7 +2,7 @@ import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiResponse } from '@server/api-response.mjs';
 import { clearExternalStateCookie, consumeExternalState, createExternalState, createPendingExternalIdentity, discardExternalEmailOtp, externalAuthorizationUrl, externalPendingCookie, externalProvider, externalQrState, externalStateCookie, externalStateCookieName, fetchExternalProfile, issueExternalEmailOtp, pendingExternalIdentityByQrState, resolveExternalUser, verifyExternalEmailOtp, type ExternalProviderId } from '@server/accounts/external.mjs';
 import { clearOidcRequestCookie, oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
-import { accountOnboardingStep, refreshOidcRequest } from '@server/accounts/onboarding.mjs';
+import { accountOnboarding, refreshOidcRequest } from '@server/accounts/onboarding.mjs';
 import { createPassportSessionCookie, loadPassportSession } from '@server/passport/session.mjs';
 import { runSql, sql } from '@server/database/sql.mjs';
 import { isSecureRequest, requestOrigin } from '@server/request-origin.mjs';
@@ -111,7 +111,7 @@ const handler: ApiHandler = async (c, _next, params) => {
 		c.header('Set-Cookie', clearExternalStateCookie(secure));
 		c.header('Set-Cookie', createPassportSessionCookie(sessionId, secure, maxAge), { append: true });
 		// 还没有用户名或密码时先回登录页补全，补全完成后再由登录页回跳授权。
-		if (await accountOnboardingStep(database, userId) !== 'done') {
+		if ((await accountOnboarding(database, userId)).step !== 'done') {
 			await refreshOidcRequest(c, database);
 			return c.redirect(`/accounts/sign${c.get('techStackConfig').pageSuffix}`, 302);
 		}

@@ -27,7 +27,7 @@ const handler: ApiHandler = async (c) => {
 	const builder = sql(database), consumeCode = builder.update('passport_oidc_authorization_codes', { consumed_at: now }, [{ column: 'code_hash', value: authorizationCodeHash }, { column: 'consumed_at', operator: 'IS NULL' }]);
 	const insertToken = builder.insert('passport_oidc_access_tokens', { token_hash: await sha256(accessToken), client_id: clientId, user_id: code.user_id, scope: code.scope, expires_at: now + expiresIn * 1000, created_at: now, session_id: code.session_id, authorization_code_hash: authorizationCodeHash });
 	await database.batch([consumeCode, insertToken]);
-	const idToken = await signIdToken(database, { iss: issuer, sub: user.sub, aud: clientId, exp: Math.floor(now / 1000) + expiresIn, iat: Math.floor(now / 1000), sid: code.session_id, ...(code.nonce ? { nonce: code.nonce } : {}), name: user.name, ...(user.email ? { email: user.email, email_verified: true } : {}) });
+	const idToken = await signIdToken(database, { iss: issuer, sub: user.sub, aud: clientId, exp: Math.floor(now / 1000) + expiresIn, iat: Math.floor(now / 1000), sid: code.session_id, ...(code.nonce ? { nonce: code.nonce } : {}), name: user.name, ...(user.preferred_username ? { preferred_username: user.preferred_username } : {}), ...(user.email ? { email: user.email, email_verified: true } : {}) });
 	return apiResponse(c, 200, { access_token: accessToken, token_type: 'Bearer', expires_in: expiresIn, scope: code.scope, id_token: idToken });
 };
 export default handler;

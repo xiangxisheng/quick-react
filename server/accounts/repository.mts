@@ -1,5 +1,6 @@
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { allSql, firstSql, sql } from '@server/database/sql.mjs';
+import { loadAccountUsername } from '@server/passport/account.mjs';
 
 export type OidcClientRecord = { id: string; name: string; secret_hash: string; redirect_uris: string; backchannel_logout_uri: string; allowed_scopes: string; require_pkce: number; status: string; created_at: number; updated_at: number };
 export type AuthorizationRequestRecord = { client_id: string; redirect_uri: string; scope: string; state: string; nonce: string; code_challenge: string; code_challenge_method: string; expires_at: number };
@@ -15,8 +16,10 @@ export const authorizationCode = (database: DatabaseAdapter, hash: string) => fi
 export const accountUser = async (database: DatabaseAdapter, userId: string) => {
 	const user = await firstSql<{ sub: string; name: string; status: string }>(database, sql(database).select({ table: 'passport_users', columns: { sub: { column: 'user_id', cast: 'text' }, name: 'nickname', status: 'status' }, where: [{ column: 'user_id', value: userId }] }));
 	if (!user) return null;
+	// 用户名是可选能力，只有设置过才作为 preferred_username 下发。
+	const username = await loadAccountUsername(database, userId);
 	const email = await firstSql<{ email: string }>(database, sql(database).select({ table: 'passport_user_emails', alias: 'ue', columns: { email: 'e.email' }, joins: [{ table: 'passport_emails', alias: 'e', left: 'e.id', right: 'ue.email_id' }], where: [{ column: 'ue.user_id', value: userId }, { column: 'ue.is_primary', value: 1 }, { column: 'e.verified', value: 1 }], limit: 1 }));
-	return { ...user, email: email?.email };
+	return { ...user, ...(username ? { preferred_username: username } : {}), email: email?.email };
 };
 
 export const accessTokenUser = async (database: DatabaseAdapter, tokenHash: string, now: number) => {

@@ -1,12 +1,26 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage } from '@server/api-response.mjs';
 import { clearAccountsLoginCookie, accountsLoginCookieName, loadAccountsOidcConfig, loadDiscovery, oidcFetch, verifyIdToken } from '@server/accounts/client.mjs';
-import { readCookie, sha256 } from '@server/accounts/oidc.mjs';
+import { readCookie } from '@server/accounts/oidc.mjs';
+import { isValidAccountUsername } from '@server/passport/account.mjs';
 import { createSessionCookie } from '@server/auth.mjs';
 import { firstSql, runSql, sql } from '@server/database/sql.mjs';
 import { isSecureRequest, requestOrigin } from '@server/request-origin.mjs';
 
 type LoginRequest = { id: string; issuer: string; state: string; nonce: string; code_verifier: string; return_path: string; expires_at: number };
+
+/** 未设置 Accounts 用户名时的本站占位用户名，带下划线，永远不会与合法用户名冲突。 */
+const placeholderUsername = (subject: string) => `passport_${subject}`;
+const generatedUsername = (username: string) => username.startsWith('passport_') || username.startsWith('accounts_');
+
+/** Accounts 设置用户名后同步改写本站占位用户名；管理员手工改过的名字不覆盖。 */
+const syncLocalUsername = async (database: Parameters<typeof runSql>[0], userId: number, username: string) => {
+	const current = await firstSql<{ username: string }>(database, sql(database).select({ table: 'base_system_users', columns: { username: 'username' }, where: [{ column: 'id', value: userId }] }));
+	if (!current || current.username === username || !generatedUsername(current.username)) return;
+	const taken = await firstSql(database, sql(database).select({ table: 'base_system_users', columns: { id: 'id' }, where: [{ column: 'username', value: username }] }));
+	if (taken) return;
+	await runSql(database, sql(database).update('base_system_users', { username, updated_at: Date.now() }, { id: userId }));
+};
 
 const handler: ApiHandler = async (c) => {
 	if (c.req.method !== 'GET') return apiMessage(c, 405, '只允许 GET 请求');
@@ -26,16 +40,20 @@ const handler: ApiHandler = async (c) => {
 		const subject = String(claims.sub), now = Date.now();
 		const oidcSessionId = String(claims.sid ?? ''); if (!oidcSessionId) throw new Error('ID Token 缺少 sid');
 		let account = await firstSql<{ user_id: number; status: string }>(database, sql(database).select({ table: 'base_oidc_accounts', alias: 'a', columns: { user_id: 'a.user_id', status: 'u.status' }, joins: [{ table: 'base_system_users', alias: 'u', left: 'u.id', right: 'a.user_id' }], where: [{ column: 'a.issuer', value: config.issuer }, { column: 'a.subject', value: subject }] }));
+		const preferred = typeof claims.preferred_username === 'string' ? claims.preferred_username : '';
 		if (!account) {
-			const suffix = (await sha256(`${config.issuer}\n${subject}`)).slice(0, 16), username = `accounts_${suffix}`;
+			// 先用占位用户名建号，再按 Accounts 用户名改写，避免撞上本站已有的同名账号。
+			const username = placeholderUsername(subject);
 			await runSql(database, sql(database).ignoreInsert('base_system_users', ['username'], { username, password: '!oidc', roles: '[]', status: 'enabled', created_at: now, updated_at: now }));
-			const user = await firstSql<{ id: number; status: string }>(database, sql(database).select({ table: 'base_system_users', columns: { id: 'id', status: 'status' }, where: [{ column: 'username', value: username }] }));
+			const user = await firstSql<{ id: number; status: string; password: string }>(database, sql(database).select({ table: 'base_system_users', columns: { id: 'id', status: 'status', password: 'password' }, where: [{ column: 'username', value: username }] }));
 			if (!user) throw new Error('无法创建本站 Accounts 用户');
+			if (user.password !== '!oidc') throw new Error('本站已存在同名用户，无法绑定 Accounts 身份');
 			await runSql(database, sql(database).insert('base_oidc_accounts', { issuer: config.issuer, subject, user_id: user.id, profile: JSON.stringify(claims), created_at: now, updated_at: now }));
 			account = { user_id: user.id, status: user.status };
 		} else {
 			await runSql(database, sql(database).update('base_oidc_accounts', { profile: JSON.stringify(claims), updated_at: now }, { issuer: config.issuer, subject }));
 		}
+		if (isValidAccountUsername(preferred)) await syncLocalUsername(database, account.user_id, preferred);
 		if (account.status !== 'enabled') return apiMessage(c, 403, '本站用户已停用');
 		const sessionId = crypto.randomUUID(), maxAge = 24 * 60 * 60;
 		const previousSession = await firstSql<{ session_id: string }>(database, sql(database).select({ table: 'base_oidc_sessions', columns: { session_id: 'session_id' }, where: [{ column: 'issuer', value: config.issuer }, { column: 'sid', value: oidcSessionId }] }));

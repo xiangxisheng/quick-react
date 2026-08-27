@@ -21,17 +21,31 @@ export const normalizeAccountNickname = (value: string) => {
 	return Array.from(normalized).slice(0, 12).join('');
 };
 
+/** 合法用户名：小写字母开头的小写字母数字组合，长度 6-12，且不是保留名称。 */
+export const isValidAccountUsername = (value: string) => usernamePattern.test(value) && !reservedUsernames.has(value);
+
+/** 历史导入或占位用户名（例如 passport_<user_id>）不符合规则，登录前必须改成合法用户名。 */
+export const accountUsernameState = async (database: DatabaseAdapter, userId: string) => {
+	const username = await loadAccountUsername(database, userId);
+	if (!username) return { state: 'missing' as const, username: '' };
+	if (!isValidAccountUsername(username)) return { state: 'invalid' as const, username };
+	return { state: 'ready' as const, username };
+};
+
 export const loadAccountUsername = async (database: DatabaseAdapter, userId: string) => (
 	await firstSql<{ username: string }>(database, sql(database).select({ table: 'passport_usernames', columns: { username: 'username' }, where: [{ column: 'user_id', value: userId }] }))
 )?.username;
 
 export const setAccountUsername = async (database: DatabaseAdapter, userId: string, rawUsername: string) => {
 	const username = normalizeAccountUsername(rawUsername);
-	if (await loadAccountUsername(database, userId)) throw new Error('用户名已经设置，不能修改');
+	const current = await accountUsernameState(database, userId);
+	if (current.state === 'ready') throw new Error('用户名已经设置，不能修改');
 	const taken = await firstSql(database, sql(database).select({ table: 'passport_usernames', columns: { user_id: 'user_id' }, where: [{ column: 'username', value: username }] }));
 	if (taken) throw new Error('该用户名已被占用，请换一个');
 	try {
-		await runSql(database, sql(database).insert('passport_usernames', { user_id: userId, username, created_at: Date.now() }));
+		// 占位或历史用户名允许改写，正式用户名只能新增一次。
+		if (current.state === 'invalid') await runSql(database, sql(database).update('passport_usernames', { username }, { user_id: userId }));
+		else await runSql(database, sql(database).insert('passport_usernames', { user_id: userId, username, created_at: Date.now() }));
 	} catch {
 		throw new Error('该用户名已被占用，请换一个');
 	}

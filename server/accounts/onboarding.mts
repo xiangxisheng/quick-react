@@ -5,19 +5,26 @@ import type { FormPageConfig } from '@shared/types/form-page.mjs';
 import { runSql, sql } from '@server/database/sql.mjs';
 import { clearOidcRequestCookie, oidcRequestCookie, oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
 import { isSecureRequest } from '@server/request-origin.mjs';
-import { hasAccountPassword, loadAccountUsername } from '@server/passport/account.mjs';
+import { accountUsernameState, hasAccountPassword } from '@server/passport/account.mjs';
 
 export type OnboardingStep = 'username' | 'password' | 'done';
+export type AccountOnboarding = { step: OnboardingStep; invalidUsername: string };
 
-/** 登录成功后必须补全的内容：用户名必填，密码可跳过但每次登录都会再问。 */
-export const accountOnboardingStep = async (database: DatabaseAdapter, userId: string): Promise<OnboardingStep> => {
-	if (!await loadAccountUsername(database, userId)) return 'username';
-	if (!await hasAccountPassword(database, userId)) return 'password';
-	return 'done';
+/**
+ * 登录成功后必须补全的内容：用户名必填（占位或历史用户名也要改成合法用户名），
+ * 密码可跳过，但每次登录都会再问。
+ */
+export const accountOnboarding = async (database: DatabaseAdapter, userId: string): Promise<AccountOnboarding> => {
+	const username = await accountUsernameState(database, userId);
+	if (username.state !== 'ready') return { step: 'username', invalidUsername: username.state === 'invalid' ? username.username : '' };
+	if (!await hasAccountPassword(database, userId)) return { step: 'password', invalidUsername: '' };
+	return { step: 'done', invalidUsername: '' };
 };
 
-export const usernameForm = (): FormPageConfig => ({
-	description: '请为账号设置用户名：以小写字母开头，只能包含小写字母和数字，长度 6 到 12 位。设置后不能修改。',
+export const usernameForm = (invalidUsername = ''): FormPageConfig => ({
+	description: invalidUsername
+		? `当前用户名 ${invalidUsername} 不符合规则，请改成以小写字母开头、只包含小写字母和数字、长度 6 到 12 位的用户名后再继续。`
+		: '请为账号设置用户名：以小写字母开头，只能包含小写字母和数字，长度 6 到 12 位。设置后不能修改。',
 	submitLabel: '保存用户名',
 	initialValues: { step: 'set_username', username: '' },
 	fields: [
@@ -38,7 +45,7 @@ export const passwordForm = (): FormPageConfig => ({
 	],
 });
 
-export const onboardingForm = (step: Exclude<OnboardingStep, 'done'>) => step === 'username' ? usernameForm() : passwordForm();
+export const onboardingForm = (onboarding: AccountOnboarding) => onboarding.step === 'username' ? usernameForm(onboarding.invalidUsername) : passwordForm();
 
 /**
  * 补全步骤会延长登录耗时，而 OIDC 授权请求和 cookie 的有效期都是 10 分钟，

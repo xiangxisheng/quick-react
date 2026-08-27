@@ -53,9 +53,12 @@ passport_usernames                      -- 用户设置用户名后才创建
 ```
 
 - 格式：小写字母开头，只允许小写字母和数字，长度 6–12，正则 `^[a-z][a-z0-9]{5,11}$`。
+- 业务站点由 OIDC 建立的本地账号，在 Accounts 用户名设置之前使用 `passport_<user_id>` 作为占位用户名；因为占位名带下划线，永远不可能等于合法用户名，所以"用户名不符合规则"本身就代表还没设置。
+- Accounts 用户名一旦设置，会通过 OIDC 的 `preferred_username` 声明下发，业务站点在下次登录时把占位用户名同步改写；管理员手工改过的用户名不覆盖。
+- 历史导入或占位的用户名（不符合规则）在登录时必须先改成合法用户名才能继续，提示文案要说明当前用户名不符合规则。
 - 保留名单：`admin`、`root`、`system`、`support`、`official`、`passport`、`accounts`、`service`、`security` 不允许被普通用户占用。
 - 每次 Accounts 登录成功后，如果还没有用户名，必须先设置才能进入目标站点，**不提供跳过**。
-- 用户名设置后不允许自助修改（避免历史引用错乱），账户中心只展示。
+- 合法用户名设置后不允许自助修改（避免历史引用错乱），账户中心只展示；不合法的历史用户名可以改写一次。
 
 ### 验收标准
 
@@ -171,3 +174,12 @@ passport_user_email_otps                -- 已登录用户添加邮箱时的验�
 - 待验证邮箱以只读行的形式出现在邮箱列表里，数据来自 `passport_user_email_otps`，不写入 `passport_emails`。
 - 业务站点的个人中心由 `accounts_oidc_client` 模块覆盖 `/api/panel/me`，启用 Accounts 登录时下发"前往账号中心"的链接（不带页面后缀，由 Accounts 站点跳转到规范地址）。
 - 覆盖测试：`npm run test:user-roles`、`npm run test:accounts-center`，以及扩展后的 `npm run test:accounts-external`、`npm run test:passport-login`。
+
+## 分离部署约束（2026-08-27 补充）
+
+global、passport 和业务站点会分别部署，数据库也各自独立，因此：
+
+- Accounts 的身份判断（用户名、密码、邮箱、验证码）全部只读写 passport 数据库，不依赖 global 或业务库。
+- 业务站点不读 passport 数据库，只通过 OIDC 的 `sub` 和 `preferred_username` 声明获得身份信息。
+- 仍然跨库的是既有能力：Telegram 机器人配置（`global_telegram_bots`）和邮件通道、模板、云凭据（`global_cloud_*`）来自当前部署的 global 表。**独立部署 passport 时，这些配置必须配在 passport 所在部署的 global 表里**，否则发不出验证码、也列不出 Telegram 登录方式。
+- 回归测试 `npm run test:accounts-split-database` 用独立 passport 数据库覆盖上述结论。
