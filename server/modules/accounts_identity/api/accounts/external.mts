@@ -2,7 +2,7 @@ import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiResponse } from '@server/api-response.mjs';
 import { clearExternalStateCookie, consumeExternalState, createExternalState, createPendingExternalIdentity, discardExternalEmailOtp, externalAuthorizationUrl, externalPendingCookie, externalProvider, externalQrState, externalStateCookie, externalIdentityUser, externalStateCookieName, externalVerifiedCookie, fetchExternalProfile, issueExternalEmailOtp, pendingExternalIdentityByQrState, resolveExternalUser, verifyExternalEmailOtp, type ExternalProviderId } from '@server/accounts/external.mjs';
 import { clearOidcRequestCookie, oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
-import { accountOnboarding, refreshOidcRequest } from '@server/accounts/onboarding.mjs';
+import { accountOnboarding, postLoginRedirect, refreshOidcRequest } from '@server/accounts/onboarding.mjs';
 import { createPassportSessionCookie, loadPassportSession } from '@server/passport/session.mjs';
 import { runSql, sql } from '@server/database/sql.mjs';
 import { isSecureRequest, requestOrigin } from '@server/request-origin.mjs';
@@ -39,7 +39,8 @@ const handler: ApiHandler = async (c, _next, params) => {
 		await runSql(database, sql(database).insert('passport_sessions', { id: sessionId, user_id: verified.userId, expires_at: now + maxAge * 1000, created_at: now }));
 		await runSql(database, sql(database).update('passport_external_login_states', { qr_status: 'consumed', qr_user_id: verified.userId }, { id_hash: await sha256(bindState) }));
 		c.header('Set-Cookie', createPassportSessionCookie(sessionId, secure, maxAge));
-		return apiResponse(c, 200, { status: 'completed' });
+		// 二维码页可能开在业务站点的登录弹窗里，必须把后续去向一并返回，不能让它自己跳首页。
+		return apiResponse(c, 200, { status: 'completed', redirectTo: await postLoginRedirect(c, database, verified.userId) });
 	}
 	if (c.req.method !== 'GET') return apiMessage(c, 400, '缺少邮箱绑定状态');
 	const publicOrigin = c.get('systemConfig').publicOrigin?.trim();
@@ -56,7 +57,7 @@ const handler: ApiHandler = async (c, _next, params) => {
 		await runSql(database, sql(database).insert('passport_sessions', { id: sessionId, user_id: polled.qr_user_id, expires_at: now + 24 * 60 * 60 * 1000, created_at: now }));
 		await runSql(database, sql(database).update('passport_external_login_states', { qr_status: 'consumed' }, [{ column: 'id_hash', value: await sha256(pollState) }, { column: 'qr_status', value: 'authorized' }]));
 		c.header('Set-Cookie', createPassportSessionCookie(sessionId, secure, 24 * 60 * 60));
-		return apiResponse(c, 200, { status: 'authenticated' });
+		return apiResponse(c, 200, { status: 'authenticated', redirectTo: await postLoginRedirect(c, database, String(polled.qr_user_id)) });
 	}
 	if (!code && !returnedState) {
 		const created = await createExternalState(database, id, redirectUri);

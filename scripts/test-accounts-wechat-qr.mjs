@@ -49,9 +49,12 @@ try {
 	assert.equal(phone.headers.get('content-type')?.includes('application/json'), true, '手机回调页需要 JSON 响应');
 	assert.deepEqual(await phone.json(), { status: 'signed_in' });
 
-	// 电脑轮询拿到会话。
-	const polled = await app.request(`https://accounts.test${qr.pollUrl}`);
-	assert.deepEqual(await polled.json(), { status: 'authenticated' });
+	// 电脑轮询拿到会话；二维码页可能开在业务站点的登录弹窗里，必须继续 OIDC 授权而不是跳首页。
+	const polled = await app.request(`https://accounts.test${qr.pollUrl}`, { headers: { cookie: 'accounts_oidc_request=qr-request' } });
+	const polledResult = await polled.json();
+	assert.equal(polledResult.status, 'authenticated');
+	assert.equal(polledResult.redirectTo, '/api/oidc/authorize?request_id=qr-request');
+	assert.ok(polled.headers.getSetCookie().some((value) => value.startsWith('accounts_oidc_request=;')), '继续授权后要清掉待授权 cookie');
 	const sessionCookie = setCookie(polled, 'passport_session');
 	assert.ok(sessionCookie, '电脑端必须拿到 Accounts 会话');
 
@@ -60,6 +63,21 @@ try {
 	const initialData = JSON.parse(document.match(/__INITIAL_DATA__=(\{.*?\});<\/script>/s)[1]);
 	assert.equal(initialData.auth.currentUser?.username, '微信用户');
 	assert.ok(initialData.siteNavigation.some((item) => item.label === '账户中心'));
+
+	// 没有待授权请求时：还没设置密码就回登录页继续提示，设置过就回首页。
+	const secondQr = await (await app.request('https://accounts.test/api/accounts/external/wechat?format=json')).json();
+	const secondState = new URL(secondQr.authorizationUrl).searchParams.get('state');
+	await app.request(`https://accounts.test/api/accounts/external/wechat?code=wechat-code&state=${encodeURIComponent(secondState)}&consume=1`);
+	const standalone = await (await app.request(`https://accounts.test${secondQr.pollUrl}`)).json();
+	assert.deepEqual(standalone, { status: 'authenticated', redirectTo: '/accounts/sign.html' });
+
+	const credentialDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
+	credentialDatabase.prepare('INSERT INTO passport_user_credentials (user_id,password,created_at) VALUES (?,?,?)').run(userId, '{"hash":"x","pattern":"LLLL"}', Date.now());
+	credentialDatabase.close();
+	const thirdQr = await (await app.request('https://accounts.test/api/accounts/external/wechat?format=json')).json();
+	const thirdState = new URL(thirdQr.authorizationUrl).searchParams.get('state');
+	await app.request(`https://accounts.test/api/accounts/external/wechat?code=wechat-code&state=${encodeURIComponent(thirdState)}&consume=1`);
+	assert.deepEqual(await (await app.request(`https://accounts.test${thirdQr.pollUrl}`)).json(), { status: 'authenticated', redirectTo: '/' });
 
 	// 同一个二维码不能重复换会话。
 	assert.deepEqual(await (await app.request(`https://accounts.test${qr.pollUrl}`)).json(), { status: 'consumed' });
