@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import type { AppEnv } from './types.mjs';
 import type { AuthPage, AuthState, PageStatus } from '@shared/types/initial-data.mjs';
-import { stripPageSuffix } from '@shared/navigation-tree.mjs';
+import { findNavigationItem, stripPageSuffix } from '@shared/navigation-tree.mjs';
 import { getFullSiteNavigation, getPageDefinitions, getSiteNavigation } from './navigation.mjs';
 
 // 前端固定注册的第三方登录回调页面，不属于导航树。
@@ -86,13 +86,21 @@ export const resolvePageStatus = (
 			actions: [home],
 		};
 	}
-	if (!c.get('currentUser')) {
-		const signPath = auth.pages.find((page) => page.mode === 'sign')?.path ?? `/sign${pageSuffix}`;
+	// 页面要求 Accounts 角色时，指向 Accounts 登录页，而不是站点本地登录页。
+	const item = findNavigationItem(getFullSiteNavigation(c.get('site').codeSiteChain), logicalPath);
+	const requiredRoles = Array.isArray(item?.roles) ? item.roles : [];
+	const needsAccounts = requiredRoles.includes('accounts') && !c.get('passportUser');
+	const signIn = auth.pages.filter((page) => page.mode === 'sign');
+	const signPath = (needsAccounts ? signIn.find((page) => page.apiPath.startsWith('/api/accounts/')) : undefined)?.path
+		?? signIn[0]?.path ?? `/sign${pageSuffix}`;
+	if (!c.get('currentUser') || needsAccounts) {
 		return {
 			path: requestPath,
 			status: 401,
 			title: '请先登录',
-			description: `访问 ${requestPath} 需要先登录，登录后才能查看该页面。`,
+			description: needsAccounts
+				? `访问 ${requestPath} 需要先登录 Accounts 账号。`
+				: `访问 ${requestPath} 需要先登录，登录后才能查看该页面。`,
 			actions: [{ key: stripPageSuffix(signPath, pageSuffix), label: '去登录', action: 'navigate', icon: 'login' }, home],
 		};
 	}
@@ -100,7 +108,7 @@ export const resolvePageStatus = (
 		path: requestPath,
 		status: 403,
 		title: '无权访问',
-		description: `当前账号 ${c.get('currentUser')?.username ?? ''} 没有访问 ${requestPath} 的权限，请联系管理员分配对应角色。`,
+		description: `当前账号 ${c.get('currentUser')?.username ?? c.get('passportUser')?.username ?? ''} 没有访问 ${requestPath} 的权限，请联系管理员分配对应角色。`,
 		actions: [{ key: '/panel/me', label: '个人中心', action: 'navigate', icon: 'user' }, home],
 	};
 };

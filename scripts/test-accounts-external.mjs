@@ -61,7 +61,7 @@ try {
 	// 登录页是邮箱输入框 + 第三方按钮；未注册的邮箱先让用户确认。
 	const sign = await (await app.request('http://accounts.test/api/accounts/sign.php')).json();
 	assert.equal(sign.formPage.initialValues.step, 'email');
-	assert.deepEqual(sign.formPage.actions.map((item) => item.key), ['provider:google', 'provider:wechat']);
+	assert.deepEqual(sign.formPage.externalLogins.map((item) => item.key), ['google', 'wechat']);
 	const unknownEmail = await jsonRequest(app, '/api/accounts/sign.php', { step: 'email', email: 'wechat@example.com' });
 	const unknownEmailResult = await unknownEmail.json();
 	assert.equal(unknownEmail.status, 200);

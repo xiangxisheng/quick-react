@@ -14,11 +14,15 @@ export type FormPageField = {
 	rules?: { required?: boolean; message?: string }[];
 };
 
+/** 第三方登录入口：前端按 key 渲染图标链接，点击后走 `?action=provider:<key>`。 */
+export type FormPageExternalLogin = { key: string; label: string };
+
 export type FormPageConfig = {
 	passportLogin?: { enabled: boolean; mode?: 'popup' | 'redirect'; autoStart?: boolean };
 	description?: string;
 	submitLabel?: string;
 	actions?: Array<{ key: string; label: string }>;
+	externalLogins?: FormPageExternalLogin[];
 	confirmOnUnchangedSubmit?: string;
 	submitHint?: string;
 	initialValues: Record<string, unknown>;

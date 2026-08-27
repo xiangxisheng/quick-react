@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Form, Input, message, Modal, Select, Space, Switch, Typography } from 'antd';
-import { ClearOutlined, RollbackOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Divider, Form, Input, message, Modal, Select, Space, Switch, Typography } from 'antd';
+import { ClearOutlined, GoogleCircleFilled, RollbackOutlined, SendOutlined, UserOutlined, WechatFilled } from '@ant-design/icons';
 import type { CommonApi } from '@/utils/common/api.js';
 import type { FormPageField, FormPageResponse } from '@shared/types/form-page.mjs';
 import { isFieldReadOnly, type FieldLinkOption } from '@shared/field-linkage.mjs';
@@ -24,6 +24,22 @@ type FormProps = {
 	submitMethod?: 'POST' | 'PUT';
 	redirectOnFeedback?: boolean;
 	onSaved?: (values: Record<string, unknown>) => string | undefined | Promise<string | undefined>;
+};
+
+/** 第三方登录图标按 key 渲染，未登记的身份源用通用图标兜底。 */
+const externalLoginIcons: Record<string, { icon: React.ReactNode; color: string }> = {
+	wechat: { icon: <WechatFilled />, color: '#07C160' },
+	google: { icon: <GoogleCircleFilled />, color: '#4285F4' },
+	telegram: { icon: <SendOutlined />, color: '#229ED9' },
+};
+
+const hasInitialValue = (value: unknown) => value !== undefined && value !== null && value !== '' && value !== false;
+
+/** apiPath 可能已经带查询串（例如登录页的 ?mode=sign），必须按 URL 规则追加 action。 */
+const actionPath = (apiPath: string, action: string) => {
+	const url = new URL(apiPath, window.location.origin);
+	url.searchParams.set('action', action);
+	return `${url.pathname}${url.search}`;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
@@ -162,7 +178,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 		setRunningAction(key);
 		const values = form.getFieldsValue(true) as Record<string, unknown>;
 		try {
-			const response = await commonApi.apiFetch(`${apiPath}?action=${encodeURIComponent(key)}`, {
+			const response = await commonApi.apiFetch(actionPath(apiPath, key), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ ...values, [changedFieldsKey]: [...changedFields.current] } satisfies ChangedFieldsPayload & Record<string, unknown>),
@@ -242,30 +258,33 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 					label={(
 						<Space size={2}>
 							<span>{field.label}</span>
-							<Button
-								type="text"
-								size="small"
-								title="清空"
-								icon={<ClearOutlined />}
-								onClick={() => {
-									form.setFields([{ name: field.name, value: field.type === 'switch' ? false : null, touched: true }]);
-									setLiveValues((previous) => ({ ...previous, [field.name]: field.type === 'switch' ? false : null }));
-									changedFields.current.add(field.name);
-									setDirty(true);
-								}}
-							/>
-							<Button
-								type="text"
-								size="small"
-								title="还原"
-								icon={<RollbackOutlined />}
-								onClick={() => {
-									form.setFields([{ name: field.name, value: initialValues[field.name], touched: false, errors: [] }]);
-									setLiveValues((previous) => ({ ...previous, [field.name]: initialValues[field.name] }));
-									changedFields.current.delete(field.name);
-									setDirty(changedFields.current.size > 0);
-								}}
-							/>
+							{/* 登录、注册这类空表单没有可清空或可还原的内容，不显示这两个按钮。 */}
+							{hasInitialValue(initialValues[field.name]) ? <>
+								<Button
+									type="text"
+									size="small"
+									title="清空"
+									icon={<ClearOutlined />}
+									onClick={() => {
+										form.setFields([{ name: field.name, value: field.type === 'switch' ? false : null, touched: true }]);
+										setLiveValues((previous) => ({ ...previous, [field.name]: field.type === 'switch' ? false : null }));
+										changedFields.current.add(field.name);
+										setDirty(true);
+									}}
+								/>
+								<Button
+									type="text"
+									size="small"
+									title="还原"
+									icon={<RollbackOutlined />}
+									onClick={() => {
+										form.setFields([{ name: field.name, value: initialValues[field.name], touched: false, errors: [] }]);
+										setLiveValues((previous) => ({ ...previous, [field.name]: initialValues[field.name] }));
+										changedFields.current.delete(field.name);
+										setDirty(changedFields.current.size > 0);
+									}}
+								/>
+							</> : null}
 						</Space>
 					)}
 					name={field.name}
@@ -283,5 +302,23 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 				{formConfig?.submitHint ? <Typography.Text type="secondary">{formConfig.submitHint}</Typography.Text> : null}
 			</Space>
 		</Form>
+		{formConfig?.externalLogins?.length ? <>
+			<Divider plain style={{ marginTop: 8, color: '#8c8c8c' }}>或使用以下方式登录</Divider>
+			<Space size={28} wrap style={{ width: '100%', justifyContent: 'center' }}>
+				{formConfig.externalLogins.map((item) => {
+					const brand = externalLoginIcons[item.key];
+					return <Typography.Link
+						key={item.key}
+						title={item.label}
+						disabled={saving || Boolean(runningAction)}
+						onClick={() => runAction(`provider:${item.key}`)}
+						style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 6, color: 'inherit' }}
+					>
+						<span style={{ fontSize: 34, lineHeight: 1, color: brand?.color ?? '#8c8c8c' }}>{brand?.icon ?? <UserOutlined />}</span>
+						<Typography.Text type="secondary" style={{ fontSize: 12 }}>{item.label}</Typography.Text>
+					</Typography.Link>;
+				})}
+			</Space>
+		</> : null}
 	</Card>;
 }

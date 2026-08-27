@@ -31,6 +31,7 @@
 		"test:page-status": "node scripts/test-page-status.mjs",
 		"test:page-status-browser": "node scripts/test-page-status-browser.mjs",
 		"test:form-linkage-browser": "node scripts/test-form-linkage-browser.mjs",
+		"test:sign-form-browser": "node scripts/test-sign-form-browser.mjs",
 		"import:legacy-passport": "node scripts/import-legacy-passport.mjs",
 		"migrate:sqlite": "node scripts/migrate-sqlite.mjs",
 		"schema:check": "node scripts/schema-repair.mjs --check",

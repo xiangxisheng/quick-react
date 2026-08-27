@@ -12,7 +12,7 @@ import { isSecureRequest } from '@server/request-origin.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
 import { sendDefaultCloudEmail } from '@server/cloud/email.mjs';
 import { sendTelegramMessage, type TelegramInlineKeyboard } from '@server/telegram/api.mjs';
-import type { FormPageConfig } from '@shared/types/form-page.mjs';
+import type { FormPageConfig, FormPageExternalLogin } from '@shared/types/form-page.mjs';
 
 type TelegramOption = {
 	account_id: string;
@@ -24,11 +24,11 @@ type TelegramOption = {
 type Bot = { id: string; name: string; bot_username: string; bot_token: string };
 type SelectOption = { value: string; text: string };
 
-/** 登录页：邮箱输入框和第三方登录按钮并排展示，第三方按钮走 action。 */
-const signInForm = (email: string, actions: Array<{ key: string; label: string }>): FormPageConfig => ({
-	description: '输入邮箱后点下一步；也可以直接用下面的第三方账号登录。',
+/** 登录页：邮箱输入框在上，第三方登录以图标链接的形式排在下方。 */
+const signInForm = (email: string, externalLogins: FormPageExternalLogin[]): FormPageConfig => ({
+	description: '输入邮箱后点下一步，没有注册过也从这里开始；也可以直接用下面的第三方账号登录。',
 	submitLabel: '下一步',
-	actions,
+	externalLogins,
 	initialValues: { step: 'email', email },
 	fields: [
 		{ name: 'step', label: '', type: 'hidden' },
@@ -48,15 +48,27 @@ const methodForm = (options: SelectOption[], mode: 'signup' | 'reset' | 'link', 
 		{ name: 'method', label: mode === 'link' ? '身份源' : '认证方式', type: 'select', options, rules: [{ required: true, message: '请选择一种方式' }] },
 	],
 });
-const passwordLoginForm = (email: string): FormPageConfig => ({
-	description: `${email} 已注册，请输入密码登录。`,
+const passwordLoginForm = (email: string, externalLogins: FormPageExternalLogin[] = []): FormPageConfig => ({
+	description: `${email} 已注册，请输入密码登录，或用下面的第三方账号登录。`,
 	submitLabel: '登录',
 	actions: [{ key: 'forgot_password', label: '忘记密码' }, { key: 'change_email', label: '换个邮箱' }],
+	externalLogins,
 	initialValues: { step: 'password', email, password: '' },
 	fields: [
 		{ name: 'step', label: '', type: 'hidden' },
 		{ name: 'email', label: '', type: 'hidden' },
 		{ name: 'password', label: '密码', type: 'password', rules: [{ required: true, message: '请输入密码' }] },
+	],
+});
+/** 已注册但没有设置过密码：只能用第三方登录，不给密码输入框。 */
+const externalOnlyForm = (email: string, externalLogins: FormPageExternalLogin[]): FormPageConfig => ({
+	description: `${email} 还没有设置过密码，请用下面的第三方账号登录；登录后可以在账户中心设置密码。`,
+	submitLabel: '换个邮箱',
+	externalLogins,
+	initialValues: { step: 'restart', email },
+	fields: [
+		{ name: 'step', label: '', type: 'hidden' },
+		{ name: 'email', label: '邮箱', maxLength: 254, readOnlyWhen: { field: 'step', values: ['restart'] } },
 	],
 });
 const telegramEmailForm = (email = ''): FormPageConfig => ({
@@ -172,15 +184,15 @@ const handler: ApiHandler = async (c, next) => {
 		c.header('Set-Cookie', clearSignupEmailCookie(secure), { append: true });
 	};
 
-	/** 登录页上与邮箱并排展示的第三方按钮。 */
-	const signInActions = async () => {
+	/** 登录页下方的第三方登录图标。 */
+	const signInExternalLogins = async (): Promise<FormPageExternalLogin[]> => {
 		const [providers, bot] = await Promise.all([
 			externalProviders(database, true),
 			firstSql(globalDatabase, sql(globalDatabase).select({ table: 'global_telegram_bots', columns: { id: 'id' }, where: [{ column: 'status', value: 'enabled' }], limit: 1 })),
 		]);
 		return [
-			...providers.map((provider) => ({ key: `provider:${provider.id}`, label: `使用${provider.display_name}登录` })),
-			...(bot ? [{ key: 'provider:telegram', label: 'Telegram 消息批准' }] : []),
+			...providers.map((provider) => ({ key: provider.id, label: provider.display_name })),
+			...(bot ? [{ key: 'telegram', label: 'Telegram' }] : []),
 		];
 	};
 	const providerOptions = async (includeTelegram = false) => {
@@ -236,7 +248,7 @@ const handler: ApiHandler = async (c, next) => {
 			const formPage = otp ? externalCodeForm(otp.email) : externalEmailForm(pending.provider === 'wechat' ? '微信' : '外部身份源', signupEmail);
 			return apiResponse(c, 200, { user: null, registrationAvailable: true, formPage, currentValues: formPage.initialValues });
 		}
-		const formPage = signInForm(signupEmail, await signInActions());
+		const formPage = signInForm(signupEmail, await signInExternalLogins());
 		return apiResponse(c, 200, { user: null, registrationAvailable: providers.length > 0, formPage, currentValues: formPage.initialValues });
 	}
 	if (c.req.method === 'DELETE') {
@@ -260,7 +272,7 @@ const handler: ApiHandler = async (c, next) => {
 		return apiResponse(c, 200, { redirectTo: `/api/accounts/external/${provider.id}`, feedback: { component: 'message' as const, type: 'success' as const, message: `正在前往${provider.display_name}`, redirectAfter: 0 } });
 	}
 	if (action === 'change_email' || action === 'back_to_sign') {
-		const formPage = signInForm(text(body.email), await signInActions());
+		const formPage = signInForm(text(body.email), await signInExternalLogins());
 		return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues });
 	}
 	if (action === 'forgot_password') {
@@ -334,11 +346,20 @@ const handler: ApiHandler = async (c, next) => {
 		catch { return apiMessage(c, 400, '邮箱格式不正确'); }
 		const userId = await emailOwnerId(database, email);
 		if (userId) {
-			const formPage = passwordLoginForm(email);
+			// 没设置过密码的账号不能走密码登录，直接引导到第三方登录。
+			const externalLogins = await signInExternalLogins();
+			const formPage = await hasAccountPassword(database, userId)
+				? passwordLoginForm(email, externalLogins)
+				: externalOnlyForm(email, externalLogins);
 			return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues });
 		}
 		const formPage = confirmEmailForm(email);
 		return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues, feedback: { component: 'inline' as const, type: 'warning' as const, message: '该邮箱还没有注册' } });
+	}
+
+	if (step === 'restart') {
+		const formPage = signInForm(text(body.email), await signInExternalLogins());
+		return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues });
 	}
 
 	if (step === 'reset_password') {
@@ -357,9 +378,13 @@ const handler: ApiHandler = async (c, next) => {
 		let email: string;
 		try { email = normalizePassportEmail(text(body.email)); }
 		catch { return apiMessage(c, 400, '邮箱格式不正确'); }
-		if (await emailOwnerId(database, email)) {
-			const formPage = passwordLoginForm(email);
-			return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues, feedback: { component: 'inline' as const, type: 'info' as const, message: '该邮箱已经注册，请直接用密码登录' } });
+		const owner = await emailOwnerId(database, email);
+		if (owner) {
+			const externalLogins = await signInExternalLogins();
+			const formPage = await hasAccountPassword(database, owner)
+				? passwordLoginForm(email, externalLogins)
+				: externalOnlyForm(email, externalLogins);
+			return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues, feedback: { component: 'inline' as const, type: 'info' as const, message: '该邮箱已经注册，请直接登录' } });
 		}
 		const providers = await externalProviders(database, true);
 		if (!providers.length) return apiMessage(c, 409, '当前还没有启用可用于注册的外部身份源，请联系管理员');

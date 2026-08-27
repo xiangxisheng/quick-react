@@ -65,10 +65,15 @@ try {
 		body: options.body === undefined ? undefined : JSON.stringify(options.body),
 	});
 
-	// 登录页读的是 passport 库里的邮箱：已注册但没设置密码时给出明确指引，未注册则先确认邮箱。
-	const known = await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'password', email: 'split@example.com', password: 'whatever' } });
-	assert.equal(known.status, 409);
-	assert.match((await known.json()).feedback.message, /还没有设置密码/);
+	// 登录页读的是 passport 库里的邮箱：已注册但没设置过密码时不给密码框，直接引导第三方登录。
+	const known = await (await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'email', email: 'split@example.com' } })).json();
+	assert.equal(known.formPage.initialValues.step, 'restart');
+	assert.match(known.formPage.description, /还没有设置过密码/);
+	assert.equal(known.formPage.fields.some((field) => field.name === 'password'), false);
+	// 直接调用密码登录接口仍然会被挡住。
+	const forced = await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'password', email: 'split@example.com', password: 'whatever' } });
+	assert.equal(forced.status, 409);
+	assert.match((await forced.json()).feedback.message, /还没有设置密码/);
 	const unknown = await (await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'password', email: 'nobody@example.com', password: 'whatever' } })).json();
 	assert.equal(unknown.formPage.initialValues.step, 'email_confirm');
 
@@ -107,6 +112,9 @@ try {
 
 	// 设置密码后可以直接用邮箱密码登录。
 	assert.equal((await request('/api/panel/accounts/security.php', { method: 'PUT', cookie, body: { password: 'split-password-1', password_confirm: 'split-password-1' } })).status, 200);
+	// 设置密码后，同一个邮箱走到的就是密码登录表单了。
+	const withPassword = await (await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'email', email: 'split@example.com' } })).json();
+	assert.equal(withPassword.formPage.initialValues.step, 'password');
 	const passwordLogin = await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'password', email: 'split@example.com', password: 'split-password-1' } });
 	assert.equal(passwordLogin.status, 200);
 	assert.equal((await passwordLogin.json()).redirectTo, '/');

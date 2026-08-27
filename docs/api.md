@@ -107,7 +107,7 @@ Accounts 账号中心（仅 `passport` 站点，需要 Accounts 会话；`bind-e
 /api/panel/accounts/security
 ```
 
-`/api/accounts/sign` 是分步表单：第一步是邮箱输入框，第三方登录作为 `actions` 并排展示（`?action=provider:<id>`）。已注册邮箱进入密码登录，未注册邮箱进入确认步骤并要求先完成第三方认证才能发送验证码。忘记密码用 `?action=forgot_password`，第三方认证通过后进入 `reset_password` 步骤。登录成功后如果还没有用户名或密码，会继续返回补全步骤的 `formPage`，全部完成才返回 `redirectTo`；密码步骤支持 `?action=skip_password` 跳过，跳过只对本次登录生效。
+`/api/accounts/sign` 是分步表单：第一步是邮箱输入框，第三方登录通过 `formPage.externalLogins` 下发，前端渲染成图标链接，点击后请求 `?action=provider:<id>`。已注册且设置过密码的邮箱进入密码登录，没有密码的只给第三方入口，未注册邮箱进入确认步骤并要求先完成第三方认证才能发送验证码。忘记密码用 `?action=forgot_password`，第三方认证通过后进入 `reset_password` 步骤。登录成功后如果还没有用户名或密码，会继续返回补全步骤的 `formPage`，全部完成才返回 `redirectTo`；密码步骤支持 `?action=skip_password` 跳过，跳过只对本次登录生效。
 
 `GET /api/page-status?path=<页面路径>` 返回该路径的访问状态，供前端路由兜底页面展示提示；路径不存在返回 `404`、未登录返回 `401`、角色不足返回 `403`，路径可访问但前端没有对应渲染组件时返回 `500`。接口本身始终以 `200` 返回 `pageStatus`，不触发全局错误弹窗。
 

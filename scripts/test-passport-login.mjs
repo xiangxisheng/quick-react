@@ -54,7 +54,7 @@ try {
 	// 登录页是邮箱输入框 + 第三方按钮，Telegram 按钮进入邮箱 + 消息批准。
 	const initial = await (await request('/api/accounts/sign.php')).json();
 	assert.equal(initial.formPage.initialValues.step, 'email');
-	assert.deepEqual(initial.formPage.actions.map((action) => action.key), ['provider:telegram']);
+	assert.deepEqual(initial.formPage.externalLogins.map((item) => item.key), ['telegram']);
 	const emailStep = await (await request('/api/accounts/sign.php?action=provider:telegram', { method: 'POST', body: { step: 'email', email: '' } })).json();
 	assert.equal(emailStep.formPage.initialValues.step, 'telegram_email');
 	const telegramSelection = await (await request('/api/accounts/sign.php', {

@@ -11,6 +11,9 @@ const verifiedOptions = [
 	{ value: '0', text: '待验证', color: 'orange' },
 ];
 
+/** 待验证邮箱在列表里只是提示行，用固定 key 区分。 */
+const PENDING_ROW_KEY = 'pending';
+
 const columns = [
 	{ dataIndex: 'email', title: '邮箱' },
 	{ dataIndex: 'is_primary', title: '主邮箱', component: 'select' as const, options: primaryOptions, form: { create: false as const, edit: false as const } },
@@ -28,7 +31,7 @@ const handler: ApiHandler = async (c, _next, params) => {
 		const [emails, pending] = await Promise.all([listAccountEmails(database, userId), pendingAccountEmailOtp(database, userId)]);
 		const dataSource = [
 			...emails.map((item) => ({ email_id: item.email_id, email: item.email, is_primary: String(item.is_primary), verified: String(item.verified), created_at: item.created_at })),
-			...(pending ? [{ email_id: 'pending', email: pending.email, is_primary: '0', verified: '0', created_at: pending.created_at }] : []),
+			...(pending ? [{ email_id: PENDING_ROW_KEY, email: pending.email, is_primary: '0', verified: '0', created_at: pending.created_at }] : []),
 		];
 		return apiResponse(c, 200, {
 			table: {
@@ -48,6 +51,9 @@ const handler: ApiHandler = async (c, _next, params) => {
 		});
 	}
 
+	// 待验证邮箱只是列表里的提示行，不能设主邮箱也不能解绑。
+	if (params.id === PENDING_ROW_KEY) return apiMessage(c, 409, '该邮箱还在验证中，请到“绑定邮箱”页面输入验证码完成绑定');
+
 	if (c.req.method === 'POST' && params.id && action === 'primary') {
 		try { return apiMessage(c, 200, `${await setPrimaryAccountEmail(database, userId, params.id)} 已设为主邮箱`); }
 		catch (error) { return apiMessage(c, 409, error instanceof Error ? error.message : '设置主邮箱失败'); }
@@ -57,6 +63,7 @@ const handler: ApiHandler = async (c, _next, params) => {
 		const ids = await c.req.json<unknown>().catch(() => []);
 		const targets = Array.isArray(ids) ? ids.map((value) => String(value)) : [];
 		if (!targets.length) return apiMessage(c, 400, '请选择要解绑的邮箱');
+		if (targets.includes(PENDING_ROW_KEY)) return apiMessage(c, 409, '该邮箱还在验证中，请到“绑定邮箱”页面输入验证码完成绑定');
 		const removed: string[] = [];
 		for (const target of targets) {
 			try { removed.push(await unbindAccountEmail(database, userId, target)); }

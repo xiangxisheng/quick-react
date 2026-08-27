@@ -66,6 +66,16 @@ export const filterNavigationByRoles = (items: NavigationItem[], roles: Set<stri
 	return [{ ...item, children: item.children ? filterNavigationByRoles(item.children, roles) : undefined }];
 });
 
+/** 按 key 精确查找导航节点，用于读取页面所需角色等元信息。 */
+export const findNavigationItem = (items: NavigationItem[], key: string): NavigationItem | undefined => {
+	for (const item of items) {
+		if (String(item.key) === key) return item;
+		const child = item.children ? findNavigationItem(item.children, key) : undefined;
+		if (child) return child;
+	}
+	return undefined;
+};
+
 export const collectPageDefinitions = (
 	items: NavigationItem[],
 	navigation: NavigationItem[] = items,
