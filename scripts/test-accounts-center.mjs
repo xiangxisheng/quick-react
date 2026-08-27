@@ -53,7 +53,7 @@ try {
 	});
 
 	// 没有 Accounts 会话时账户中心接口和导航都不可用。
-	assert.equal((await request('/api/accounts/center/profile.php')).status, 401);
+	assert.equal((await request('/api/panel/accounts/profile.php')).status, 401);
 	const anonymousDocument = await (await request('/', { headers: { accept: 'text/html' } })).text();
 	assert.equal(anonymousDocument.includes('账户中心'), false);
 	const signedDocument = await (await request('/', { cookie, headers: { accept: 'text/html' } })).text();
@@ -61,33 +61,33 @@ try {
 	const initialData = JSON.parse(signedDocument.match(/__INITIAL_DATA__=(\{.*?\});<\/script>/s)[1]);
 	assert.equal(initialData.auth.component, 'dropdown');
 	assert.equal(initialData.auth.currentUser.username, '账户中心用户');
-	assert.deepEqual(initialData.auth.actions.map((action) => action.key), ['/accounts/center', '/accounts/sign']);
+	assert.deepEqual(initialData.auth.actions.map((action) => action.key), ['/panel/accounts', '/accounts/sign']);
 
 	// 概览。
-	const overview = await (await request('/api/accounts/center/overview.php', { cookie })).json();
+	const overview = await (await request('/api/panel/accounts/overview.php', { cookie })).json();
 	assert.deepEqual(overview.dashboard.statistics.map((item) => [item.key, item.value]), [['emails', 1], ['providers', 0], ['telegram', 0]]);
 	assert.equal(overview.dashboard.recentRows.find((row) => row.key === 'username').value, 'center2026');
 	assert.equal(overview.dashboard.recentRows.find((row) => row.key === 'password').value, '未设置');
 
 	// 个人资料：用户名只读，昵称可改。
-	const profile = await (await request('/api/accounts/center/profile.php', { cookie })).json();
+	const profile = await (await request('/api/panel/accounts/profile.php', { cookie })).json();
 	assert.equal(profile.currentValues.username, 'center2026');
 	assert.equal(profile.currentValues.primary_email, 'center@example.com');
 	assert.ok(profile.formPage.fields.find((field) => field.name === 'username').readOnlyWhen);
-	assert.equal((await request('/api/accounts/center/profile.php', { method: 'PUT', cookie, body: { nickname: '  ' } })).status, 400);
-	const savedProfile = await request('/api/accounts/center/profile.php', { method: 'PUT', cookie, body: { nickname: '新昵称' } });
+	assert.equal((await request('/api/panel/accounts/profile.php', { method: 'PUT', cookie, body: { nickname: '  ' } })).status, 400);
+	const savedProfile = await request('/api/panel/accounts/profile.php', { method: 'PUT', cookie, body: { nickname: '新昵称' } });
 	assert.equal(savedProfile.status, 200);
 	assert.equal((await savedProfile.json()).currentValues.nickname, '新昵称');
 
 	// 邮箱管理只做展示、设为主邮箱和解绑。
-	const emailsPath = '/api/accounts/center/emails.php';
+	const emailsPath = '/api/panel/accounts/emails.php';
 	const initialEmails = await (await request(emailsPath, { cookie })).json();
 	assert.deepEqual(initialEmails.table.dataSource.map((row) => [row.email, row.is_primary, row.verified]), [['center@example.com', '1', '1']]);
 	assert.equal(initialEmails.table.option.actions.toolbar, undefined);
 	assert.deepEqual(initialEmails.table.option.actions.row.map((action) => action.key), ['primary', 'delete']);
 
 	// 绑定邮箱：没有第三方认证凭证时不允许发送验证码。
-	const bindPath = '/api/accounts/center/bind-email.php';
+	const bindPath = '/api/panel/accounts/bind-email.php';
 	const needVerify = await (await request(bindPath, { cookie })).json();
 	assert.equal(needVerify.formPage.initialValues.step, 'check');
 	assert.match(needVerify.formPage.description, /必须先完成一次第三方认证/);
@@ -121,14 +121,14 @@ try {
 	assert.equal((await request(emailsPath, { method: 'DELETE', cookie, body: [secondEmailId] })).status, 409);
 
 	// 安全设置：首次设置密码，然后需要当前密码才能修改。
-	const security = await (await request('/api/accounts/center/security.php', { cookie })).json();
+	const security = await (await request('/api/panel/accounts/security.php', { cookie })).json();
 	assert.deepEqual(security.formPage.fields.map((field) => field.name), ['password', 'password_confirm']);
-	assert.equal((await request('/api/accounts/center/security.php', { method: 'PUT', cookie, body: { password: 'center-password-1', password_confirm: 'other' } })).status, 400);
-	assert.equal((await request('/api/accounts/center/security.php', { method: 'PUT', cookie, body: { password: 'center-password-1', password_confirm: 'center-password-1' } })).status, 200);
-	const secured = await (await request('/api/accounts/center/security.php', { cookie })).json();
+	assert.equal((await request('/api/panel/accounts/security.php', { method: 'PUT', cookie, body: { password: 'center-password-1', password_confirm: 'other' } })).status, 400);
+	assert.equal((await request('/api/panel/accounts/security.php', { method: 'PUT', cookie, body: { password: 'center-password-1', password_confirm: 'center-password-1' } })).status, 200);
+	const secured = await (await request('/api/panel/accounts/security.php', { cookie })).json();
 	assert.deepEqual(secured.formPage.fields.map((field) => field.name), ['current_password', 'password', 'password_confirm']);
-	assert.equal((await request('/api/accounts/center/security.php', { method: 'PUT', cookie, body: { current_password: 'wrong', password: 'center-password-2', password_confirm: 'center-password-2' } })).status, 401);
-	assert.equal((await request('/api/accounts/center/security.php', { method: 'PUT', cookie, body: { current_password: 'center-password-1', password: 'center-password-2', password_confirm: 'center-password-2' } })).status, 200);
+	assert.equal((await request('/api/panel/accounts/security.php', { method: 'PUT', cookie, body: { current_password: 'wrong', password: 'center-password-2', password_confirm: 'center-password-2' } })).status, 401);
+	assert.equal((await request('/api/panel/accounts/security.php', { method: 'PUT', cookie, body: { current_password: 'center-password-1', password: 'center-password-2', password_confirm: 'center-password-2' } })).status, 200);
 	// 旧密码登录会被拒绝并提示新密码的修改时间。
 	const oldPasswordLogin = await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'password', email: 'second@example.com', password: 'center-password-1' } });
 	assert.equal(oldPasswordLogin.status, 401);

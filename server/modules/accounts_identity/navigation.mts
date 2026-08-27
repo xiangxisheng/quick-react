@@ -2,7 +2,7 @@ import type { MenuNode } from '@server/sites/base/navigation.mjs';
 
 /** 账户中心只对持有 Accounts 会话的访问者可见，权限由 accounts 角色控制。 */
 const navigation: MenuNode[] = [{
-	label: '账户中心', key: 'accounts/center', icon: 'appstore', navigationGroup: 'accounts', dropdown: false,
+	label: '账户中心', key: 'panel/accounts', icon: 'appstore', navigationGroup: 'accounts', dropdown: false,
 	component: 'panel', title: '账户中心', description: '管理 Accounts 账号的资料、邮箱和密码', roles: ['accounts'],
 	children: [
 		{ label: '概览', key: 'overview', icon: 'mail', component: 'dashboard', title: '账户概览', description: '查看 Accounts 账号的基本信息' },

@@ -17,6 +17,14 @@ export const stripPageSuffix = (path: string, pageSuffix: string) => (
 	pageSuffix && path.endsWith(pageSuffix) ? path.slice(0, -pageSuffix.length) : path
 );
 
+/**
+ * 顶层菜单高亮：取与当前路径匹配的最长 key，`/` 只匹配自身；
+ * 没有任何菜单匹配时返回空串，调用方据此清空高亮。
+ */
+export const matchNavigationKey = (keys: string[], logicalPath: string) => keys
+	.filter((key) => key && (key === '/' ? logicalPath === '/' : `${logicalPath}/`.startsWith(`${key}/`)))
+	.sort((left, right) => right.length - left.length)[0] ?? '';
+
 const resolveNodeKey = (key: string, parentPath: string) => {
 	if (key === '/') return '/';
 	if (key.startsWith('/')) return key;

@@ -87,8 +87,8 @@ try {
 	splitGlobal.close();
 
 	// 账户中心：邮件模板和云凭据来自 global 库，验证码和绑定写在 passport 库。
-	const emailsPath = '/api/accounts/center/emails.php';
-	const bindPath = '/api/accounts/center/bind-email.php';
+	const emailsPath = '/api/panel/accounts/emails.php';
+	const bindPath = '/api/panel/accounts/bind-email.php';
 	const verifiedCookie = `${cookie}; accounts_external_verified=1`;
 	assert.equal((await request(bindPath, { method: 'POST', cookie, body: { step: 'send', email: 'split-second@example.com' } })).status, 403);
 	assert.equal((await request(bindPath, { method: 'POST', cookie: verifiedCookie, body: { step: 'send', email: 'split-second@example.com' } })).status, 200);
@@ -101,12 +101,12 @@ try {
 	assert.deepEqual(boundEmails.table.dataSource.map((row) => row.email), ['split@example.com', 'split-second@example.com']);
 
 	// 概览与个人资料同样只读 passport 库。
-	const overview = await (await request('/api/accounts/center/overview.php', { cookie })).json();
+	const overview = await (await request('/api/panel/accounts/overview.php', { cookie })).json();
 	assert.equal(overview.dashboard.recentRows.find((row) => row.key === 'username').value, 'split2026');
 	assert.equal(overview.dashboard.statistics.find((item) => item.key === 'emails').value, 2);
 
 	// 设置密码后可以直接用邮箱密码登录。
-	assert.equal((await request('/api/accounts/center/security.php', { method: 'PUT', cookie, body: { password: 'split-password-1', password_confirm: 'split-password-1' } })).status, 200);
+	assert.equal((await request('/api/panel/accounts/security.php', { method: 'PUT', cookie, body: { password: 'split-password-1', password_confirm: 'split-password-1' } })).status, 200);
 	const passwordLogin = await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'password', email: 'split@example.com', password: 'split-password-1' } });
 	assert.equal(passwordLogin.status, 200);
 	assert.equal((await passwordLogin.json()).redirectTo, '/');

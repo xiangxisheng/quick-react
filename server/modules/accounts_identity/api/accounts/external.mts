@@ -110,7 +110,7 @@ const handler: ApiHandler = async (c, _next, params) => {
 			// 已登录用户完成一次第三方认证，用于随后的邮箱绑定或密码重设。
 			c.header('Set-Cookie', clearExternalStateCookie(secure));
 			c.header('Set-Cookie', externalVerifiedCookie(secure), { append: true });
-			return c.redirect(`/accounts/center/bind-email${c.get('techStackConfig').pageSuffix}`, 302);
+			return c.redirect(`/panel/accounts/bind-email${c.get('techStackConfig').pageSuffix}`, 302);
 		}
 		const sessionId = crypto.randomUUID(), now = Date.now(), maxAge = 24 * 60 * 60;
 		await runSql(database, sql(database).insert('passport_sessions', { id: sessionId, user_id: userId, expires_at: now + maxAge * 1000, created_at: now }));

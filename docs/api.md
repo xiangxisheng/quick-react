@@ -100,11 +100,11 @@ GET /api/panel/admin/dashboard
 Accounts 账号中心（仅 `passport` 站点，需要 Accounts 会话；`bind-email` 还要求 30 分钟内完成过第三方认证）：
 
 ```text
-/api/accounts/center/overview
-/api/accounts/center/profile
-/api/accounts/center/emails
-/api/accounts/center/bind-email
-/api/accounts/center/security
+/api/panel/accounts/overview
+/api/panel/accounts/profile
+/api/panel/accounts/emails
+/api/panel/accounts/bind-email
+/api/panel/accounts/security
 ```
 
 `/api/accounts/sign` 是分步表单：第一步是邮箱输入框，第三方登录作为 `actions` 并排展示（`?action=provider:<id>`）。已注册邮箱进入密码登录，未注册邮箱进入确认步骤并要求先完成第三方认证才能发送验证码。忘记密码用 `?action=forgot_password`，第三方认证通过后进入 `reset_password` 步骤。登录成功后如果还没有用户名或密码，会继续返回补全步骤的 `formPage`，全部完成才返回 `redirectTo`；密码步骤支持 `?action=skip_password` 跳过，跳过只对本次登录生效。
@@ -134,4 +134,4 @@ Accounts 账号中心（仅 `passport` 站点，需要 Accounts 会话；`bind-e
 
 Node 控制面创建站点后会立即尝试 migration，也可向 `POST /api/panel/admin/global/site/sites/<site_key>` 重试；成功后再通过站点更新接口启用。Worker 的 D1 migration 必须由部署流程执行，该操作会返回 `501`。
 
-`/api/panel/*` 需要登录，`/api/panel/admin/*` 还需要 `admin` 角色。空数据库首次初始化后，可通过 `PUT /api/sign` 创建唯一的初始管理员，之后使用 `POST /api/sign` 登录。
+需要登录的页面和接口统一放在 `/panel` 下：`/api/panel/*` 需要登录，`/api/panel/admin/*` 还需要 `admin` 角色。Accounts 站点上 `/api/panel/*` 同时接受站点本地会话（`user`）和 Accounts 会话（`accounts`），`/api/panel/accounts/*` 只接受 Accounts 会话。空数据库首次初始化后，可通过 `PUT /api/sign` 创建唯一的初始管理员，之后使用 `POST /api/sign` 登录。

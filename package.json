@@ -26,6 +26,7 @@
 		"test:database-migrations": "node scripts/test-database-migrations.mjs",
 		"test:database-transfer": "node scripts/test-database-transfer.mjs",
 		"test:table-form": "node scripts/test-table-form.mjs",
+		"test:navigation-menu": "node scripts/test-navigation-menu.mjs",
 		"test:user-roles": "node scripts/test-user-roles.mjs",
 		"test:page-status": "node scripts/test-page-status.mjs",
 		"test:page-status-browser": "node scripts/test-page-status-browser.mjs",

@@ -125,7 +125,9 @@ passport_usernames                      -- 用户设置用户名后才创建
 
 ### Accounts 站点（passport）
 
-- 存在 Accounts 会话的请求追加 `accounts` 角色，新增导航"账户中心"用 `roles: ['accounts']` 控制可见性；头部身份区显示昵称，并提供"账户中心"和"退出 Accounts"。
+- 需要登录的页面统一放在 `/panel` 下，账户中心的路径是 `/panel/accounts`（对应 `/api/panel/accounts/*`）。
+- 存在 Accounts 会话的请求追加 `accounts` 角色，导航"账户中心"用 `roles: ['accounts']` 控制可见性；头部身份区显示昵称，并提供"账户中心"和"退出 Accounts"。
+- Accounts 站点覆盖 `/api/panel` 守卫，让 `user` 或 `accounts` 任一会话都能进入 `/panel`，`/api/panel/accounts/*` 再单独要求 Accounts 会话。
 - 页面：
   - **概览**：用户名、昵称、主邮箱、已绑定身份数、密码状态。
   - **个人资料**：修改昵称（最多 12 个 Unicode 字符，去掉首尾空白，不允许为空）。
@@ -184,7 +186,7 @@ passport_user_email_otps                -- 已登录用户添加邮箱时的验�
 - 通用 `FormPage` 的自定义 action 现在也会应用响应里的 `formPage`/`currentValues`/`redirectTo`；只要响应里带 `formPage` 就不再安排跳转，修掉了多步表单被反馈倒计时带走的问题。
 - 账户中心概览用 `dashboard` 组件（统计 + 账户信息表），邮箱管理用 `table` 组件：工具栏"添加邮箱"发送验证码，工具栏"输入验证码"完成绑定（通用抽屉的新增表单只有一步，验证码必须作为独立动作）。
 - 待验证邮箱以只读行的形式出现在邮箱列表里，数据来自 `passport_user_email_otps`，不写入 `passport_emails`。
-- 业务站点的个人中心由 `accounts_oidc_client` 模块覆盖 `/api/panel/me`，启用 Accounts 登录时下发"前往账号中心"的链接（不带页面后缀，由 Accounts 站点跳转到规范地址）。
+- 业务站点的个人中心由 `accounts_oidc_client` 模块覆盖 `/api/panel/me`，启用 Accounts 登录时下发指向 `<issuer>/panel/accounts` 的链接（不带页面后缀，由 Accounts 站点跳转到规范地址），页面上不再重复本站的占位说明。
 - 覆盖测试：`npm run test:user-roles`、`npm run test:accounts-center`，以及扩展后的 `npm run test:accounts-external`、`npm run test:passport-login`。
 
 ## 分离部署约束（2026-08-27 补充）

@@ -32,7 +32,7 @@ export const buildAuthState = (c: Context<AppEnv>): AuthState => {
 		return {
 			component: 'dropdown',
 			actions: [
-				{ key: '/accounts/center', label: '账户中心', action: 'navigate', icon: 'user' },
+				{ key: '/panel/accounts', label: '账户中心', action: 'navigate', icon: 'user' },
 				{ key: '/accounts/sign', label: '退出 Accounts', action: 'logout', icon: 'logout' },
 			],
 			pages: signPages,

@@ -3,7 +3,7 @@ import type { MenuProps } from 'antd';
 import type { CommonApi } from '@/utils/common/api.js';
 import type { InitialData } from '@shared/types/initial-data.mjs';
 import type { NavigationItem } from '@shared/types/navigation.mjs';
-import { collectPageDefinitions, type NavigationPageDefinition } from '@shared/navigation-tree.mjs';
+import { collectPageDefinitions, matchNavigationKey, stripPageSuffix, type NavigationPageDefinition } from '@shared/navigation-tree.mjs';
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
@@ -106,7 +106,7 @@ const App = ({ commonApi }: AppType) => {
 	routes.push({ path: '*', element: <StatusPage commonApi={commonApi} apiSuffix={initialData.apiSuffix} pageSuffix={initialData.pageSuffix} pageStatus={initialData.pageStatus} /> });
 
 	const location = useLocation(); // 获取当前 URL 路径
-	const [current, setCurrent] = useState(location.pathname); // 同步选中状态
+	const [current, setCurrent] = useState(''); // 当前高亮的顶层菜单，无匹配时为空
 	const navigate = useNavigate();
 	const items: MenuItem[] = toMenuItems(siteNavigation, (key) => navigate(pageUrl(key)));
 
@@ -115,23 +115,9 @@ const App = ({ commonApi }: AppType) => {
 		document.body.style.margin = '0';
 		document.body.style.height = '100%';
 		document.documentElement.style.height = '100%';
-		const a = location.pathname.split('/');
-		for (const item of items) {
-			if ((location.pathname + '/').indexOf((item?.key ?? '').toString() + '/') === 0) {
-				// URL 变化时同步菜单高亮
-				setCurrent((item?.key ?? '').toString());
-				continue;
-			}
-		}
-		const logicalPath = initialData.pageSuffix && location.pathname.endsWith(initialData.pageSuffix)
-			? location.pathname.slice(0, -initialData.pageSuffix.length)
-			: location.pathname;
-		for (const item of items) {
-			if (!item || typeof item.key !== 'string') continue;
-			if ((logicalPath + '/').indexOf(`${item.key}/`) === 0) {
-				setCurrent(item.key);
-			}
-		}
+		const logicalPath = stripPageSuffix(location.pathname, initialData.pageSuffix);
+		// 只高亮真正匹配当前路径的顶层菜单；没有匹配项时不高亮。
+		setCurrent(matchNavigationKey(items.map((item) => item && typeof item.key === 'string' ? item.key : ''), logicalPath));
 		const page = [...pages, ...authPages].find((item) => item.path === logicalPath);
 		const statusTitle = initialData.pageStatus?.path === location.pathname ? initialData.pageStatus.title : undefined;
 		const pageTitle = page?.title ?? statusTitle;
