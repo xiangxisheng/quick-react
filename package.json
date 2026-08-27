@@ -32,6 +32,7 @@
 		"test:navigation-menu": "node scripts/test-navigation-menu.mjs",
 		"test:user-roles": "node scripts/test-user-roles.mjs",
 		"test:home-page": "node scripts/test-home-page.mjs",
+		"test:personal-center": "node scripts/test-personal-center.mjs",
 		"test:page-status": "node scripts/test-page-status.mjs",
 		"test:page-status-browser": "node scripts/test-page-status-browser.mjs",
 		"test:form-linkage-browser": "node scripts/test-form-linkage-browser.mjs",

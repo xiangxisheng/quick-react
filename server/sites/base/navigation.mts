@@ -41,15 +41,8 @@ const rawSiteNavigation = (): MenuNode[] => [
 		],
 	},
 	{ label: '关于', key: 'about', icon: 'appstore', component: 'about', title: '关于', description: '关于 Quick React 项目' },
-	{
-		label: '个人中心', key: 'panel/me', icon: 'appstore', hidden: true, component: 'personalCenter', navigationGroup: 'me', dashboardPath: '/panel/me/overview', title: '个人中心', description: '管理当前登录用户的账户信息', roles: ['user'],
-		children: [
-			{ label: '账户概览', key: 'overview', icon: 'appstore', component: 'personalCenter', title: '账户概览', description: '查看当前账户基本信息' },
-			{ label: '个人资料', key: 'profile', icon: 'appstore', component: 'personalCenter', title: '个人资料', description: '查看和管理个人资料' },
-			{ label: '安全设置', key: 'security', icon: 'appstore', component: 'personalCenter', title: '安全设置', description: '管理账户密码和安全设置' },
-			{ label: '登录设备', key: 'sessions', icon: 'appstore', component: 'personalCenter', title: '登录设备', description: '查看账户登录设备和会话' },
-		],
-	},
+	// 个人中心只做当前登录身份的只读展示，账号资料由 Accounts 维护，不设子页面。
+	{ label: '个人中心', key: 'panel/me', icon: 'appstore', hidden: true, component: 'personalCenter', title: '个人中心', description: '查看当前登录账号的身份信息', roles: ['user'] },
 ];
 
 export const menuItems = resolveNavigationPaths(rawSiteNavigation());

@@ -238,4 +238,17 @@ Accounts 站点上可能同时存在两种会话：站点本地账号（`base_sy
 
 - 头部展示的身份**以 Accounts 昵称为准**；两个会话同时存在时也显示昵称，并同时给出「账户中心 / 退出 Accounts」和「个人中心 / 退出登录」两套入口。
 - `/panel/accounts`（账户中心）属于 Accounts 身份，`/panel/me`（个人中心）属于站点本地账号，两者并存，都没有废弃：业务站点和控制面的本地账号仍然使用 `/panel/me`。
+- `/panel/me` 精简为**单页只读**：不再有账户概览、个人资料、安全设置、登录设备等子页面，也不套后台侧边栏，只展示当前登录身份的用户名和角色。
+- 启用 Accounts 登录的站点，个人中心给出一句说明和「在新页面打开账号中心」按钮。**业务站点不会把当前页面带去其它域名**，入口一律 `target="_blank"`；用户主动点开新窗口是允许的。
 - Accounts 站点的登录入口指向 `/accounts/sign`（第三方与邮箱登录都在那里），`/sign` 只留给站点本地账号。
+
+## 两套身份的关系（2026-08-27 补充）
+
+容易混淆的地方：Accounts 登录**在业务站点上确实绑定到 base 系统用户**，但在 Accounts 站点自身不绑定。
+
+| 站点 | Accounts 登录后建立的会话 | 是否创建 `base_system_users` |
+| --- | --- | --- |
+| 业务站点（OIDC 客户端） | `base_system_sessions`（本站会话） | 是。回调时按 `base_oidc_accounts(issuer, subject)` 映射或创建本地账号 |
+| Accounts 站点（passport） | `passport_sessions` | 否。`base_system_users` 在这里只是站点管理员账号 |
+
+因此 Accounts 站点上可能同时存在两种会话，头部以 Accounts 昵称为准。共库部署时三个站点看到同一张 `base_system_users` 表，但会话 Cookie 是 host-only 的，不会跨域名带过去。
