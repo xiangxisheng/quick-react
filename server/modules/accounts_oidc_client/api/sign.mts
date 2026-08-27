@@ -19,7 +19,8 @@ const handler: ApiHandler = async (c, next) => {
 			const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
 			const discovery = await loadDiscovery(c, config.issuer), id = crypto.randomUUID(), state = randomToken(), nonce = randomToken(), verifier = randomToken(48), now = Date.now();
 			const database = c.get('database');
-			await runSql(database, sql(database).insert('base_oidc_login_requests', { id, issuer: config.issuer, state, nonce, code_verifier: verifier, return_path: (body as Record<string, unknown>).popup === true ? '/accounts/oidc/popup' : '/', expires_at: now + 600_000, created_at: now }));
+			const popupReturnPath = `/accounts/oidc/popup${c.get('techStackConfig').pageSuffix || ''}`;
+			await runSql(database, sql(database).insert('base_oidc_login_requests', { id, issuer: config.issuer, state, nonce, code_verifier: verifier, return_path: (body as Record<string, unknown>).popup === true ? popupReturnPath : '/', expires_at: now + 600_000, created_at: now }));
 			const callback = `${requestOrigin(c)}/api/accounts/oidc/callback`;
 			const authorize = new URL(discovery.authorization_endpoint); authorize.search = new URLSearchParams({ response_type: 'code', client_id: config.clientId, redirect_uri: callback, scope: 'openid profile email', state, nonce, code_challenge: await sha256Base64Url(verifier), code_challenge_method: 'S256' }).toString();
 			c.header('Set-Cookie', accountsLoginCookie(id, isSecureRequest(c)));
