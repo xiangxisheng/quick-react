@@ -46,10 +46,12 @@ export const buildAuthState = async (c: Context<AppEnv>): Promise<AuthState> => 
 			pages: signPages,
 		};
 	}
+	// Accounts 站点的登录入口指向账号登录页（第三方与邮箱登录都在那里），本地账号密码页只给站点管理员使用。
+	const signInKey = site.codeSiteChain.includes('accounts_identity') ? '/accounts/sign' : '/sign';
 	return {
 		component: 'buttons',
 		actions: [
-			{ key: '/sign', label: '登录', action: accountsLogin ? 'accounts-login' : 'navigate', icon: 'login' },
+			{ key: signInKey, label: '登录', action: accountsLogin ? 'accounts-login' : 'navigate', icon: 'login' },
 			// 启用 Accounts 登录后不能再创建本地账号，注册入口一并隐藏。
 			...(site.siteKey === 'global' && !accountsLogin ? [{ key: '/sign-up', label: '注册', action: 'navigate' as const, icon: 'register' as const }] : []),
 		],

@@ -30,9 +30,10 @@ export default function HomePage({ commonApi, apiSuffix }: HomePageProps) {
 			</Space>
 			{home.links.length ? (
 				<Space size={16} style={{ marginTop: 24 }} wrap>
-					{home.links.map((link) => (
-						<Typography.Link key={link.key} href={link.url} target="_blank" rel="noopener noreferrer">{link.label}</Typography.Link>
-					))}
+					{home.links.map((link) => {
+						const external = /^https?:\/\//.test(link.url);
+						return <Typography.Link key={link.key} href={link.url} {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>{link.label}</Typography.Link>;
+					})}
 				</Space>
 			) : null}
 		</div>

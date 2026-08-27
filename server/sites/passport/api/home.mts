@@ -20,6 +20,7 @@ const handler: ApiHandler = (c, next) => {
 			{ key: 'contact', title: '联系我们', body: '如需注销账号、行使查询与删除权利，或对本服务有任何疑问，请联系 xiangxisheng@gmail.com。' },
 		],
 		links: [
+			{ key: 'sign-in', label: '登录 / 创建账号', url: `/accounts/sign${c.get('techStackConfig').pageSuffix}` },
 			{ key: 'privacy', label: '隐私权政策', url: '/page/privacy.html' },
 			{ key: 'terms', label: '服务条款', url: '/page/terms.html' },
 		],
