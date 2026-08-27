@@ -19,10 +19,10 @@ import PersonalCenter from './components/panel/PersonalCenter.js';
 import ExternalCallback from './components/accounts/ExternalCallback.js';
 import WechatQrLogin from './components/accounts/WechatQrLogin.js';
 import StatusPage from './components/common/StatusPage.js';
+import HomePage from './components/common/HomePage.js';
 const { Content } = Layout;
 
 // 定义路由对应的页面组件
-const Home = () => <h1 style={{ padding: 10, margin: 0, height: '100%' }}>Home Page</h1>;
 const About = () => <h1 style={{ padding: 10, margin: 0, height: '100%' }}>About Page</h1>;
 
 type MenuItem = Required<MenuProps>['items'][number];
@@ -65,7 +65,7 @@ type AppType = {
 
 const App = ({ commonApi }: AppType) => {
 	const pageRenderers: Record<string, (page: PageDefinition) => React.ReactNode> = {
-		home: () => <Home />,
+		home: () => <HomePage commonApi={commonApi} apiSuffix={initialData.apiSuffix} />,
 		about: () => <About />,
 		personalCenter: (page) => <Panel commonApi={commonApi} navigation={page.navigation} dashboardPath={page.dashboardPath} title={page.title}><PersonalCenter commonApi={commonApi} user={initialData.auth?.currentUser} title={page.title} path={page.path} /></Panel>,
 		sign: (page) => {

@@ -1,0 +1,44 @@
+import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { DatabaseSync } from 'node:sqlite';
+
+// 首页必须公开说明应用用途：外部身份源（Google 等）在应用验证时会检查这一点。
+const temporaryDirectory = await mkdtemp(join(tmpdir(), 'quick-react-home-page-'));
+process.env.DEFAULT_DATABASE_FILE = join(temporaryDirectory, 'default.sqlite');
+process.env.SKIP_SERVER_LISTEN = '1';
+
+try {
+	const { app } = await import(`../dist/server.mjs?home-page=${Date.now()}`);
+	const database = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
+	database.prepare("INSERT INTO global_site_hosts (hostname, site_key, status, created_at) VALUES ('accounts.test','passport','enabled',?)").run(Date.now());
+	database.close();
+
+	// 站点首页说明由后端下发，未登录也能读取。
+	const base = await (await app.request('http://localhost/api/home.php')).json();
+	assert.ok(base.home.summary.length > 10);
+	assert.deepEqual(base.home.links.map((link) => link.url), ['/page/privacy.html', '/page/terms.html']);
+
+	// Accounts 站点覆盖成账号服务的用途说明，覆盖登录方式、账号管理、统一登录和数据使用。
+	const accounts = await (await app.request('http://accounts.test/api/home.php')).json();
+	assert.match(accounts.home.title, /Accounts 账号中心/);
+	assert.match(accounts.home.summary, /统一账号服务/);
+	assert.deepEqual(accounts.home.sections.map((section) => section.key), ['sign-in', 'account', 'sso', 'privacy', 'contact']);
+	assert.match(accounts.home.sections.find((section) => section.key === 'privacy').body, /Google API 服务用户数据政策/);
+	assert.match(accounts.home.sections.find((section) => section.key === 'contact').body, /xiangxisheng@gmail\.com/);
+
+	// 不执行脚本时也能读到用途说明和隐私政策链接。
+	const html = await (await app.request('http://accounts.test/', { headers: { accept: 'text/html' } })).text();
+	assert.match(html, /<meta name="description" content="统一账号服务：/);
+	assert.match(html, /<noscript>[\s\S]*统一账号服务[\s\S]*<\/noscript>/);
+	assert.match(html, /<noscript>[\s\S]*\/page\/privacy\.html[\s\S]*<\/noscript>/);
+
+	// 首页不需要登录即可访问。
+	const anonymous = await app.request('http://accounts.test/', { headers: { accept: 'text/html' } });
+	assert.equal(anonymous.status, 200);
+
+	console.log('home page test passed');
+} finally {
+	await rm(temporaryDirectory, { recursive: true, force: true });
+}

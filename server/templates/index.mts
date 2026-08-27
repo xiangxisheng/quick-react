@@ -24,6 +24,11 @@ export const renderIndexHtml = (data: IndexData) => {
 </head>
 <body>
   <div id="root"></div>
+  <noscript>
+    <h1>${data.title}</h1>
+    <p>${data.description}</p>
+    <p><a href="/page/privacy.html">隐私权政策</a> · <a href="/page/terms.html">服务条款</a></p>
+  </noscript>
   <script>window.__INITIAL_DATA__=${raw(initialDataJson)};</script>
   <script src="/bundle.js"></script>
 </body>
