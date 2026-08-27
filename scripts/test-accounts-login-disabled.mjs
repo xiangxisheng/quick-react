@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-// 未启用 Accounts 登录的站点，任何入口都不得走 Accounts 验证。
+// 未启用 Accounts 登录的站点（这里用默认的控制面站点），任何入口都不得走 Accounts 验证。
 const temporaryDirectory = await mkdtemp(join(tmpdir(), 'quick-react-login-disabled-'));
 process.env.DEFAULT_DATABASE_FILE = join(temporaryDirectory, 'default.sqlite');
 process.env.SKIP_SERVER_LISTEN = '1';
@@ -37,7 +37,7 @@ try {
 	// 误触发的 SDK 登录请求要给出明确提示，不能落到本地密码登录报"用户名或密码错误"。
 	const sdkLogin = await request('/api/sign.php', { method: 'POST', body: { action: 'login' } });
 	assert.equal(sdkLogin.status, 409);
-	assert.match((await sdkLogin.json()).feedback.message, /未启用 Accounts 登录/);
+	assert.match((await sdkLogin.json()).feedback.message, /本站账号密码登录/);
 
 	// 本站账号密码登录不受影响。
 	assert.equal((await request('/api/sign.php', { method: 'PUT', body: { username: 'local_admin', password: 'test-password-123' } })).status, 201);

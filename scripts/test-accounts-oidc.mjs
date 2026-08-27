@@ -75,6 +75,19 @@ try {
 	assert.equal(userinfo.sub, String(userId)); assert.equal(userinfo.name, 'AccountsUser');
 	assert.equal((await request('/api/oidc/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: tokenBody.toString() })).status, 400);
 	const jwks = await (await request('/api/oidc/jwks')).json(); assert.equal(jwks.keys[0].alg, 'RS256'); assert.ok(jwks.keys[0].n);
+	// 控制面站点与 Accounts 用户完全分离：即使共库启用了 Accounts 登录，也始终是本站账号密码登录。
+	const controlPanelSign = await (await app.request('http://localhost/api/sign.php')).json();
+	assert.equal(controlPanelSign.formPage.passportLogin, undefined);
+	assert.deepEqual(controlPanelSign.formPage.fields.map((field) => field.name), ['username', 'password', 'remember']);
+	const controlPanelDocument = await (await app.request('http://localhost/', { headers: { accept: 'text/html' } })).text();
+	const controlPanelData = JSON.parse(controlPanelDocument.match(/__INITIAL_DATA__=(\{.*?\});<\/script>/s)[1]);
+	assert.deepEqual(controlPanelData.auth.actions.map((action) => [action.key, action.action]), [['/sign', 'navigate'], ['/sign-up', 'navigate']]);
+	const controlPanelSdk = await app.request('http://localhost/api/sign.php', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'login' }) });
+	assert.equal(controlPanelSdk.status, 409);
+	assert.match((await controlPanelSdk.json()).feedback.message, /控制面站点使用本站账号密码登录/);
+	// 控制面的本地账号仍然可以注册和登录。
+	assert.equal((await app.request('http://localhost/api/sign.php', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'panel_admin', password: 'test-password-123' }) })).status, 401);
+
 	// 启用 Accounts 登录的业务站点：需要登录的页面直接弹窗，不再跳登录页，也不给本地注册入口。
 	const businessDocument = await (await app.request('https://site1.test/panel/admin.html', { headers: { accept: 'text/html' } })).text();
 	const businessInitial = JSON.parse(businessDocument.match(/__INITIAL_DATA__=(\{.*?\});<\/script>/s)[1]);

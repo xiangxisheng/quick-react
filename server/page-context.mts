@@ -8,9 +8,14 @@ import { loadAccountsOidcConfig } from './accounts/client.mjs';
 // 前端固定注册的第三方登录回调页面，不属于导航树。
 const callbackPagePaths = ['/accounts/external/callback', '/accounts/external/wechat'];
 
-/** 站点是否用 Accounts 作为登录入口：只有 OIDC 客户端站点算，Accounts 自己不算。 */
+/**
+ * 站点是否用 Accounts 作为登录入口：只有 OIDC 客户端站点算。
+ * Accounts 自己不算；控制面站点的管理员账号体系独立，也不算。
+ */
 export const usesAccountsLogin = async (c: Context<AppEnv>) => (
-	c.get('site').codeSiteChain.includes('accounts_oidc_client') && (await loadAccountsOidcConfig(c)).enabled
+	c.get('site').siteKey !== 'global'
+	&& c.get('site').codeSiteChain.includes('accounts_oidc_client')
+	&& (await loadAccountsOidcConfig(c)).enabled
 );
 
 export const buildAuthState = async (c: Context<AppEnv>): Promise<AuthState> => {
