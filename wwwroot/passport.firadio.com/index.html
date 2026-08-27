@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Firadio 账户中心</title>
+<meta name="description" content="Firadio 账户中心是统一账号服务：使用微信、Google 或 Telegram 完成身份认证并绑定邮箱，用同一个账号登录接入本服务的业务站点。">
+<meta property="og:title" content="Firadio 账户中心">
+<meta property="og:description" content="统一账号服务：使用微信、Google 或 Telegram 完成身份认证并绑定邮箱，用同一个账号登录接入本服务的业务站点。">
+<meta property="og:type" content="website">
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 0 20px 64px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; line-height: 1.8; color: #1f1f1f; background: #fff; }
+main { max-width: 820px; margin: 0 auto; }
+header { display: flex; align-items: center; gap: 16px; padding: 48px 0 24px; border-bottom: 1px solid #f0f0f0; }
+header img { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; }
+h1 { font-size: 30px; margin: 0; }
+.tagline { margin: 6px 0 0; color: #595959; font-size: 15px; }
+.summary { font-size: 17px; margin: 28px 0; }
+h2 { font-size: 18px; margin: 28px 0 6px; }
+p, li { font-size: 15px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.card { border: 1px solid #f0f0f0; border-radius: 10px; padding: 16px 18px; }
+.card h3 { margin: 0 0 6px; font-size: 16px; }
+.card p { margin: 0; color: #434343; }
+.actions { margin: 32px 0 8px; }
+.button { display: inline-block; padding: 10px 22px; border-radius: 8px; background: #1677ff; color: #fff; text-decoration: none; font-size: 15px; }
+.button:hover { background: #4096ff; }
+footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #f0f0f0; color: #8c8c8c; font-size: 14px; }
+footer a { color: #1677ff; text-decoration: none; }
+@media (prefers-color-scheme: dark) {
+	body { background: #141414; color: #e6e6e6; }
+	header, .card, footer { border-color: #303030; }
+	.tagline { color: #a6a6a6; }
+	.card p { color: #bfbfbf; }
+}
+</style>
+</head>
+<body>
+<main>
+	<header>
+		<img src="https://lh3.googleusercontent.com/p0VW78VBX1RWkSdjtCi8QUCy2-qOrnjAuP77h3AxJMntN0tDm_B8mVJ3aWurVyqO4c4" alt="Firadio 账户中心">
+		<div>
+			<h1>Firadio 账户中心</h1>
+			<p class="tagline">passport.firadio.com · 统一账号与登录服务</p>
+		</div>
+	</header>
+
+	<p class="summary">Firadio 账户中心是一项统一账号服务。你可以使用微信、Google 或 Telegram 完成身份认证，绑定并验证邮箱，设置用户名和密码，然后用同一个账号登录接入本服务的业务站点，无需在每个站点重复注册。</p>
+
+	<h2>应用功能</h2>
+	<div class="grid">
+		<div class="card">
+			<h3>登录方式</h3>
+			<p>支持微信扫码登录、Google 账号登录、Telegram 消息批准登录；设置密码后也可以直接使用邮箱和密码登录。首次创建账号需要先完成一次第三方身份认证，并验证一个邮箱。</p>
+		</div>
+		<div class="card">
+			<h3>账号管理</h3>
+			<p>登录后可以修改昵称、添加并验证邮箱、切换主邮箱、解绑不再使用的邮箱，以及设置或修改登录密码。</p>
+		</div>
+		<div class="card">
+			<h3>为业务站点提供统一登录</h3>
+			<p>业务站点通过标准 OpenID Connect 协议接入。授权成功后，该站点只获得你的账号编号、用户名、昵称和主邮箱，用于在该站点识别你的身份。</p>
+		</div>
+		<div class="card">
+			<h3>数据与隐私</h3>
+			<p>只收集完成账号功能所必需的信息，不用于广告投放，也不出售给第三方。通过 Google 账号登录获取的信息仅用于创建和识别本站账号，遵守 Google API 服务用户数据政策，包括其中的有限使用要求。</p>
+		</div>
+	</div>
+
+	<div class="actions"><a class="button" href="/accounts/sign.html">登录 / 创建账号</a></div>
+
+	<footer>
+		<p><a href="/page/privacy.html">隐私权政策</a> · <a href="/page/terms.html">服务条款</a></p>
+		<p>联系方式：xiangxisheng@gmail.com</p>
+	</footer>
+</main>
+</body>
+</html>

@@ -1,6 +1,6 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { extname, join } from 'node:path';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createSecureServer } from 'node:http2';
@@ -127,6 +127,42 @@ nodeApp.use('/bundle.js.map', async (c, next) => {
 });
 nodeApp.use('*', compress());
 nodeApp.use('*', etag());
+
+/**
+ * 按域名覆盖静态站点：`wwwroot/<hostname>/` 下的文件优先于应用页面，
+ * 用于给某个域名单独提供静态首页等内容；目录不存在时什么都不做。
+ * 这是 Node 运行时特有的虚拟主机能力：Worker 的静态资源（ASSETS）只按路径匹配、不区分 Host，
+ * 因此 Worker 部署下该域名仍然使用应用自身的首页。
+ */
+const wwwrootDirectory = fileURLToPath(new URL('../wwwroot/', import.meta.url));
+const hostnamePattern = /^[a-z0-9][a-z0-9.-]{0,252}$/;
+const staticContentTypes: Record<string, string> = {
+	'.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+	'.json': 'application/json; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml; charset=utf-8',
+	'.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
+	'.webp': 'image/webp', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json',
+};
+nodeApp.use('*', async (c, next) => {
+	if (c.req.method !== 'GET' && c.req.method !== 'HEAD') return next();
+	const url = new URL(c.req.url);
+	const hostname = url.hostname.toLowerCase();
+	if (!hostnamePattern.test(hostname) || hostname.includes('..')) return next();
+	let requestPath: string;
+	try { requestPath = decodeURIComponent(url.pathname); }
+	catch { return next(); }
+	if (requestPath.includes('..') || requestPath.includes('\0')) return next();
+	const siteRoot = join(wwwrootDirectory, hostname);
+	const candidate = join(siteRoot, requestPath.endsWith('/') ? `${requestPath}index.html` : requestPath);
+	if (candidate !== siteRoot && !candidate.startsWith(`${siteRoot}/`)) return next();
+	const info = await stat(candidate).catch(() => undefined);
+	const file = info?.isDirectory() ? join(candidate, 'index.html') : candidate;
+	const fileInfo = info?.isDirectory() ? await stat(file).catch(() => undefined) : info;
+	if (!fileInfo?.isFile()) return next();
+	c.header('Content-Type', staticContentTypes[extname(file).toLowerCase()] ?? 'application/octet-stream');
+	c.header('Cache-Control', 'no-cache');
+	return c.body(await readFile(file));
+});
+
 nodeApp.use('*', serveStatic({ root: publicDir }));
 nodeApp.all('*', (c) => worker.fetch(c.req.raw, {
 	DEFAULT_DB: defaultDatabase,
