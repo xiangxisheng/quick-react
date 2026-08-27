@@ -131,11 +131,6 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 		? { title: pageStatus.title, description: pageStatus.description }
 		: getPageMetadata(requestPath, menuItems, siteConfig.pageSuffix);
 	const title = metadata.title === 'Quick React' ? site.name : `${metadata.title} | ${site.name}`;
-	// Google 等身份源要求向用户提供公共隐私权政策和服务条款链接，配置后全站可见。
-	const legalLinks = [
-		...(systemConfig.privacyPolicyUrl ? [{ key: 'privacy', label: '隐私权政策', url: systemConfig.privacyPolicyUrl }] : []),
-		...(systemConfig.termsOfServiceUrl ? [{ key: 'terms', label: '服务条款', url: systemConfig.termsOfServiceUrl }] : []),
-	];
 	const publicOrigin = systemConfig.publicOrigin || undefined;
 	const canonical = publicOrigin && !pageStatus ? new URL(requestPath, publicOrigin).toString() : undefined;
 	c.header('Cache-Control', 'no-cache');
@@ -151,7 +146,6 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 			auth: { ...auth, currentUser: c.get('currentUser') ?? c.get('passportUser') },
 			footer: `Ant Design ©${new Date().getFullYear()} Created by Ant UED`,
 			pageStatus,
-			...(legalLinks.length ? { legalLinks } : {}),
 		},
 	}), (pageStatus?.status ?? 200) as ContentfulStatusCode);
 };

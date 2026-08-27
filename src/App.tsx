@@ -7,7 +7,7 @@ import { collectPageDefinitions, matchNavigationKey, stripPageSuffix, type Navig
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Layout, Menu, Space, Typography } from 'antd';
+import { Layout, Menu, Space } from 'antd';
 import { AppstoreOutlined, MailOutlined } from '@ant-design/icons';
 import DescribeInstances from './components/aliyun/DescribeInstances.js';
 import Panel from './components/panel/PanelLayout.js';
@@ -31,7 +31,6 @@ const serverData = (window as Window & { __INITIAL_DATA__?: InitialData }).__INI
 const initialData = serverData ?? { apiSuffix: '', pageSuffix: '', siteName: 'Quick React', siteNavigation: [] };
 const siteNavigation = initialData.siteNavigation;
 const pageUrl = (path: string) => path === '/' ? path : `${path}${initialData.pageSuffix}`;
-const legalLinks = initialData.legalLinks ?? [];
 
 type PageDefinition = NavigationPageDefinition;
 
@@ -152,16 +151,6 @@ const App = ({ commonApi }: AppType) => {
 					))}
 				</Routes>
 			</Content>
-			{/* 身份源合规要求：隐私权政策和服务条款链接必须对用户可见。 */}
-			{legalLinks.length ? (
-				<Layout.Footer style={{ height: 32, minHeight: 32, lineHeight: '32px', padding: '0 24px', textAlign: 'center', background: '#fff', borderTop: '1px solid #f0f0f0' }}>
-					<Space size={16}>
-						{legalLinks.map((link) => (
-							<Typography.Link key={link.key} href={link.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>{link.label}</Typography.Link>
-						))}
-					</Space>
-				</Layout.Footer>
-			) : null}
 		</Layout>
 	);
 };

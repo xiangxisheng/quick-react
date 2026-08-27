@@ -26,9 +26,6 @@ export type AuthState = {
 	pages: AuthPage[];
 };
 
-/** 身份源合规要求向用户展示的公共链接（隐私权政策、服务条款）。 */
-export type LegalLink = { key: string; label: string; url: string };
-
 export type PageStatus = {
 	path: string;
 	status: number;
@@ -45,5 +42,4 @@ export type InitialData = {
 	footer?: string;
 	auth?: AuthState;
 	pageStatus?: PageStatus;
-	legalLinks?: LegalLink[];
 };
