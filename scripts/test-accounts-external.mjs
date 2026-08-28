@@ -18,7 +18,10 @@ globalThis.fetch = async (input, init) => {
 		return Response.json({ access_token: `google-token-${body.get('code')}` });
 	}
 	if (url.href === 'https://openidconnect.googleapis.com/v1/userinfo') {
-		const conflict = new Headers(init?.headers).get('authorization')?.includes('google-conflict');
+		const authorization = new Headers(init?.headers).get('authorization') ?? '';
+		// google-conflict：同一个邮箱的另一个 Google 账号；google-bind：完全独立的 Google 账号。
+		if (authorization.includes('google-bind')) return Response.json({ sub: 'google-subject-3', name: 'Google Bind', email: 'google-bind@example.com', email_verified: true });
+		const conflict = authorization.includes('google-conflict');
 		return Response.json({ sub: conflict ? 'google-subject-2' : 'google-subject-1', name: 'Google Account', email: 'google@example.com', email_verified: true });
 	}
 	if (url.origin === 'https://api.weixin.qq.com' && url.pathname.endsWith('/access_token')) return Response.json({ access_token: 'wechat-access', openid: 'wechat-openid-1' });
@@ -102,12 +105,14 @@ try {
 	const googleConflictStart = await app.request('http://accounts.test/api/accounts/external/google');
 	const googleConflictAuthorization = new URL(googleConflictStart.headers.get('location'));
 	const googleConflictState = googleConflictAuthorization.searchParams.get('state');
-	const googleConflict = await app.request(`http://accounts.test/api/accounts/external/google?code=google-conflict&state=${encodeURIComponent(googleConflictState)}`, { headers: { cookie: cookie(googleConflictStart, 'accounts_external_state') } });
-	assert.equal(googleConflict.status, 400);
-	assert.match((await googleConflict.json()).feedback.message, /先登录原账户/);
+	// 另一个 Google 账号带着同一个已验证邮箱：身份源已经证明邮箱归属，直接绑定到已有账号并登录，不建新用户。
+	const googleSameEmail = await app.request(`http://accounts.test/api/accounts/external/google?code=google-conflict&state=${encodeURIComponent(googleConflictState)}`, { headers: { cookie: cookie(googleConflictStart, 'accounts_external_state') } });
+	assert.equal(googleSameEmail.status, 302);
+	assert.ok(cookie(googleSameEmail, 'passport_session'), '同邮箱的第三方身份应该直接登录');
 	const afterConflict = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
-	assert.equal(afterConflict.prepare('SELECT COUNT(*) AS count FROM passport_users').get().count, 1);
-	assert.equal(afterConflict.prepare("SELECT COUNT(*) AS count FROM passport_external_identities WHERE provider = 'google'").get().count, 1);
+	assert.equal(afterConflict.prepare('SELECT COUNT(*) AS count FROM passport_users').get().count, 1, '不应该创建新用户');
+	assert.equal(afterConflict.prepare("SELECT COUNT(*) AS count FROM passport_external_identities WHERE provider = 'google'").get().count, 2, '新身份应该绑定到同一个账号');
+	assert.equal(afterConflict.prepare("SELECT COUNT(DISTINCT user_id) AS count FROM passport_external_identities WHERE provider = 'google'").get().count, 1);
 	afterConflict.close();
 
 	const forwardedHeaders = { 'x-forwarded-proto': 'https', 'x-forwarded-host': 'passport.example.test' };
@@ -192,10 +197,10 @@ try {
 	// 已登录后再绑定一个新的第三方身份：user_id 是雪花 ID，查询必须按文本读取，否则会报数值溢出。
 	const bindStart = await app.request('http://accounts.test/api/accounts/external/google');
 	const bindState = new URL(bindStart.headers.get('location')).searchParams.get('state');
-	const bindCallback = await app.request(`http://accounts.test/api/accounts/external/google?code=google-conflict&state=${encodeURIComponent(bindState)}`, { headers: { cookie: `${cookie(bindStart, 'accounts_external_state')}; ${wechatSession}` } });
+	const bindCallback = await app.request(`http://accounts.test/api/accounts/external/google?code=google-bind&state=${encodeURIComponent(bindState)}`, { headers: { cookie: `${cookie(bindStart, 'accounts_external_state')}; ${wechatSession}` } });
 	assert.equal(bindCallback.status, 302, '绑定新身份应该成功');
 	const boundIdentities = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
-	assert.equal(boundIdentities.prepare("SELECT COUNT(*) AS count FROM passport_external_identities WHERE provider = 'google'").get().count, 2);
+	assert.equal(boundIdentities.prepare("SELECT COUNT(*) AS count FROM passport_external_identities WHERE provider = 'google'").get().count, 3);
 	boundIdentities.close();
 
 	// 用户名被占用时也要给出明确提示，而不是数值溢出错误。

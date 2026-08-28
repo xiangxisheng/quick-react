@@ -124,7 +124,16 @@ export const resolveExternalUser = async (database: DatabaseAdapter, workerId: u
 	if (!profile.email) throw new Error('该外部身份没有已验证邮箱，不能创建 Accounts 用户');
 	const normalizedEmail = normalizePassportEmail(profile.email);
 	const ownedEmail = await firstSql<{ user_id: string; status: string }>(database, sql(database).select({ table: 'passport_emails', alias: 'e', columns: { user_id: { column: 'ue.user_id', cast: 'text' }, status: 'u.status' }, joins: [{ table: 'passport_user_emails', alias: 'ue', left: 'ue.email_id', right: 'e.id' }, { table: 'passport_users', alias: 'u', left: 'u.user_id', right: 'ue.user_id' }], where: [{ column: 'e.email', value: normalizedEmail }, { column: 'e.verified', value: 1 }], limit: 1 }));
-	if (ownedEmail) throw new Error(ownedEmail.status === 'enabled' ? '该邮箱已属于现有 Accounts 用户，请先登录原账户，再绑定此外部身份' : '该邮箱所属的 Accounts 用户已停用');
+	if (ownedEmail) {
+		if (ownedEmail.status !== 'enabled') throw new Error('该邮箱所属的 Accounts 用户已停用');
+		// 身份源自己验证过该邮箱归属（例如 Google 的 email_verified），我方这条邮箱记录也是已验证的，
+		// 两边指向同一个邮箱所有者，直接把身份绑定到已有账号并登录，不再要求用户先用原方式登录。
+		if (!providersWithVerifiedEmail.has(provider.id)) {
+			throw new Error('该邮箱已属于现有 Accounts 用户，请先登录原账户，再绑定此外部身份');
+		}
+		await runSql(database, sql(database).insert('passport_external_identities', { user_id: ownedEmail.user_id, provider: provider.id, subject: profile.subject, profile: serializedProfile, created_at: now, updated_at: now }));
+		return ownedEmail.user_id;
+	}
 	if (!database.batch) throw new Error('Accounts 数据库不支持原子创建外部身份');
 	const generator = getPassportSnowflakeGenerator(database, workerId), userId = (await generator.next()).toString();
 	const statements: DatabaseBatchStatement[] = [
