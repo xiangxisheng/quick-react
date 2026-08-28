@@ -8,6 +8,7 @@
 | [site-database-routing-and-isolation](site-database-routing-and-isolation.md) | 多站点路由、站点继承与数据库隔离 |
 | [passport-and-telegram-integration](passport-and-telegram-integration.md) | Passport 身份中心、Telegram 集成与 OIDC |
 | [accounts-account-center](accounts-account-center.md) | Accounts 用户名/密码补全、登录页与账户中心 |
+| [ai-agent-boundaries](ai-agent-boundaries.md) | AI agent 的称谓、身份与数据访问边界 |
 | [cloud-capability-management](cloud-capability-management.md) | 云凭据与云能力管理 |
 | [object-storage-management](object-storage-management.md) | 对象存储桶、绑定与对象管理 |
 | [optimization-checklist](optimization-checklist.md) | 持续优化清单 |
