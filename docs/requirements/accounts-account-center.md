@@ -254,3 +254,14 @@ Accounts 站点上可能同时存在两种会话：站点本地账号（`base_sy
 | Accounts 站点（passport） | `passport_sessions` | 否。`base_system_users` 在这里只是站点管理员账号 |
 
 因此 Accounts 站点上可能同时存在两种会话，头部以 Accounts 昵称为准。共库部署时三个站点看到同一张 `base_system_users` 表，但会话 Cookie 是 host-only 的，不会跨域名带过去。
+
+## 推荐登录方式与头像同步（2026-08-28 补充）
+
+- 能直接提供**已验证邮箱**的身份源（目前是 Google）在登录页排在最前并标注「新用户无需邮箱验证码」：走这条路创建账号不需要再收验证码，是体验最好的注册方式。
+- 身份源返回头像时，登录成功后**后台异步**把头像同步到对象存储（`avatars` 用途的默认绑定），失败只记录日志，不影响登录：
+  - 对象路径完全由 `user_id` 推导为 `avatars/<user_id>`，不在数据库保存路径；内容类型由对象存储保存，因此不带扩展名。
+  - 已存在同名对象时跳过下载和上传，不会每次登录都重新拉取。
+  - 只从身份源自己的图片域名拉取（Google 限定 `*.googleusercontent.com`），要求 https、`image/*` 且不超过 2 MB，避免把任意 URL 变成服务端请求。
+  - Worker 运行时用 `executionCtx.waitUntil` 保活，Node 运行时直接后台执行。
+- 账户中心概览展示头像同步状态；`GET /api/panel/accounts/avatar` 返回临时访问地址，供后续页面展示头像使用。
+- 覆盖测试：`npm run test:accounts-avatar`。

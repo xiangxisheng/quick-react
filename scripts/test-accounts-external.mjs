@@ -61,7 +61,12 @@ try {
 	// 登录页是邮箱输入框 + 第三方按钮；未注册的邮箱先让用户确认。
 	const sign = await (await app.request('http://accounts.test/api/accounts/sign.php')).json();
 	assert.equal(sign.formPage.initialValues.step, 'email');
+	// 能直接提供已验证邮箱的身份源排在最前并标注推荐，新用户走这条路不需要邮箱验证码。
 	assert.deepEqual(sign.formPage.externalLogins.map((item) => item.key), ['google', 'wechat']);
+	assert.equal(sign.formPage.externalLogins[0].recommended, true);
+	assert.equal(sign.formPage.externalLogins[0].hint, '新用户无需邮箱验证码');
+	assert.equal(sign.formPage.externalLogins[1].recommended, undefined);
+	assert.match(sign.formPage.description, /标注推荐的方式无需邮箱验证码/);
 	const unknownEmail = await jsonRequest(app, '/api/accounts/sign.php', { step: 'email', email: 'wechat@example.com' });
 	const unknownEmailResult = await unknownEmail.json();
 	assert.equal(unknownEmail.status, 200);

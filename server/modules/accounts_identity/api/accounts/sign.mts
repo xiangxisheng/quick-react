@@ -8,7 +8,7 @@ import { clearPassportSessionCookie, createPassportSessionCookie, loadPassportSe
 import { clearOidcRequestCookie, oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
 import { authorizationRequest } from '@server/accounts/repository.mjs';
 import { oidcIssuer, revokeOidcSession } from '@server/accounts/provider.mjs';
-import { clearExternalPendingCookie, clearPasswordResetCookie, clearSignupEmailCookie, passwordResetCookie, passwordResetCookieName, discardExternalEmailOtp, externalPendingCookieName, externalProviders, issueExternalEmailOtp, pendingExternalEmailOtp, pendingExternalIdentity, signupEmailCookie, signupEmailCookieName, verifyExternalEmailOtp } from '@server/accounts/external.mjs';
+import { clearExternalPendingCookie, clearPasswordResetCookie, clearSignupEmailCookie, passwordResetCookie, passwordResetCookieName, discardExternalEmailOtp, externalPendingCookieName, externalProviders, providersWithVerifiedEmail, issueExternalEmailOtp, pendingExternalEmailOtp, pendingExternalIdentity, signupEmailCookie, signupEmailCookieName, verifyExternalEmailOtp } from '@server/accounts/external.mjs';
 import { isSecureRequest } from '@server/request-origin.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
 import { sendDefaultCloudEmail } from '@server/cloud/email.mjs';
@@ -28,8 +28,8 @@ type SelectOption = { value: string; text: string };
 /** 登录页：邮箱输入框在上，第三方登录以图标链接的形式排在下方。 */
 const signInForm = (email: string, externalLogins: FormPageExternalLogin[], returnHost = ''): FormPageConfig => ({
 	description: returnHost
-		? `正在为 ${returnHost} 登录。请输入邮箱后点击下一步，未注册的邮箱同样从此处开始；也可以使用下方的第三方账号登录。`
-		: '请输入邮箱后点击下一步，未注册的邮箱同样从此处开始；也可以使用下方的第三方账号登录。',
+		? `正在为 ${returnHost} 登录。请输入邮箱后点击下一步，未注册的邮箱同样从此处开始；也可以使用下方的第三方账号登录，其中标注推荐的方式无需邮箱验证码即可完成注册。`
+		: '请输入邮箱后点击下一步，未注册的邮箱同样从此处开始；也可以使用下方的第三方账号登录，其中标注推荐的方式无需邮箱验证码即可完成注册。',
 	submitLabel: '下一步',
 	...(returnHost ? { actions: [{ key: 'return_to_client', label: '取消登录' }] } : {}),
 	externalLogins,
@@ -204,10 +204,14 @@ const handler: ApiHandler = async (c, next) => {
 			externalProviders(database, true),
 			firstSql(globalDatabase, sql(globalDatabase).select({ table: 'global_telegram_bots', columns: { id: 'id' }, where: [{ column: 'status', value: 'enabled' }], limit: 1 })),
 		]);
-		return [
-			...providers.map((provider) => ({ key: provider.id, label: provider.display_name })),
+		const entries: FormPageExternalLogin[] = [
+			...providers.map((provider) => providersWithVerifiedEmail.has(provider.id)
+				? { key: provider.id, label: provider.display_name, recommended: true, hint: '新用户无需邮箱验证码' }
+				: { key: provider.id, label: provider.display_name }),
 			...(bot ? [{ key: 'telegram', label: 'Telegram' }] : []),
 		];
+		// 推荐的方式排在最前面。
+		return entries.sort((left, right) => Number(Boolean(right.recommended)) - Number(Boolean(left.recommended)));
 	};
 	const providerOptions = async (includeTelegram = false) => {
 		const [providers, bot] = await Promise.all([

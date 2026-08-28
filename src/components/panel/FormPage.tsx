@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Divider, Form, Input, message, Modal, Select, Space, Switch, Typography } from 'antd';
+import { Alert, Button, Card, Divider, Form, Input, message, Modal, Select, Space, Switch, Tag, Typography } from 'antd';
 import { ClearOutlined, GoogleCircleFilled, RollbackOutlined, SendOutlined, UserOutlined, WechatFilled } from '@ant-design/icons';
 import type { CommonApi } from '@/utils/common/api.js';
 import type { FormPageField, FormPageResponse } from '@shared/types/form-page.mjs';
@@ -305,13 +305,15 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 					const brand = externalLoginIcons[item.key];
 					return <Typography.Link
 						key={item.key}
-						title={item.label}
+						title={item.hint ? `${item.label}（${item.hint}）` : item.label}
 						disabled={saving || Boolean(runningAction)}
 						onClick={() => runAction(`provider:${item.key}`)}
 						style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 6, color: 'inherit' }}
 					>
 						<span style={{ fontSize: 34, lineHeight: 1, color: brand?.color ?? '#8c8c8c' }}>{brand?.icon ?? <UserOutlined />}</span>
 						<Typography.Text type="secondary" style={{ fontSize: 12 }}>{item.label}</Typography.Text>
+						{/* 推荐方式标注出来，引导新用户走无需邮箱验证码的路径。 */}
+						{item.recommended ? <Tag color="blue" style={{ margin: 0, fontSize: 11, lineHeight: '16px' }}>{item.hint ?? '推荐'}</Tag> : null}
 					</Typography.Link>;
 				})}
 			</Space>

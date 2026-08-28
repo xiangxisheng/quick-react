@@ -3,6 +3,7 @@ import { apiMessage, apiResponse } from '@server/api-response.mjs';
 import { bindReturnCookieName, clearBindReturnCookie, clearExternalStateCookie, consumeExternalState, createExternalState, createPendingExternalIdentity, discardExternalEmailOtp, externalAuthorizationUrl, externalPendingCookie, externalProvider, externalQrState, externalStateCookie, externalIdentityUser, externalStateCookieName, externalVerifiedCookie, fetchExternalProfile, issueExternalEmailOtp, pendingExternalIdentityByQrState, resolveExternalUser, verifyExternalEmailOtp, type ExternalProviderId } from '@server/accounts/external.mjs';
 import { readCookie } from '@server/accounts/oidc.mjs';
 import { postLoginRedirect } from '@server/accounts/onboarding.mjs';
+import { externalAvatarUrl, syncExternalAvatar } from '@server/passport/avatar.mjs';
 import { createPassportSessionCookie, loadPassportSession } from '@server/passport/session.mjs';
 import { runSql, sql } from '@server/database/sql.mjs';
 import { isSecureRequest, requestOrigin } from '@server/request-origin.mjs';
@@ -106,6 +107,14 @@ const handler: ApiHandler = async (c, _next, params) => {
 			return c.redirect(`/accounts/sign${c.get('techStackConfig').pageSuffix}`, 302);
 		}
 		const userId = await resolveExternalUser(database, c.env.SNOWFLAKE_WORKER_ID, provider, profile, current?.id ? String(current.id) : undefined);
+		// 身份源带头像时后台同步到对象存储，失败不影响登录。
+		const avatarUrl = externalAvatarUrl(provider.id, profile.raw);
+		if (avatarUrl) {
+			const task = syncExternalAvatar(c.get('globalDatabase'), c.get('site').siteKey, userId, avatarUrl, c.env.OIDC_FETCH ?? fetch)
+				.catch((error) => console.error('头像同步失败', error));
+			try { c.executionCtx.waitUntil(task); }
+			catch { void task; }
+		}
 		if (provider.wechat_mode === 'official_account' && !cookieState) {
 			await runSql(database, sql(database).update('passport_external_login_states', { qr_status: 'authorized', qr_user_id: userId }, [{ column: 'id_hash', value: await sha256(returnedState) }]));
 			// consume=1 来自手机上的回调页面，它按 JSON 解析响应；直接用浏览器打开时才返回提示页面。

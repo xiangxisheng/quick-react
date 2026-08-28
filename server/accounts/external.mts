@@ -13,6 +13,9 @@ export type ExternalLoginState = { provider: ExternalProviderId; code_verifier: 
 export type PendingExternalIdentity = { id_hash: string; provider: ExternalProviderId; subject: string; nickname: string; profile: string; status: string; expires_at: number };
 
 const providerColumns = { id: 'id', display_name: 'display_name', client_id: 'client_id', client_secret: 'client_secret', wechat_mode: 'wechat_mode', wechat_redirect_domain: 'wechat_redirect_domain', status: 'status' } as const;
+/** 能直接提供已验证邮箱的身份源：这些方式创建新账号时不需要再收邮箱验证码。 */
+export const providersWithVerifiedEmail = new Set<ExternalProviderId>(['google']);
+
 export const externalProviders = (database: DatabaseAdapter, enabledOnly = false) => allSql<ExternalProvider>(database, sql(database).select({
 	table: 'passport_external_providers', columns: providerColumns,
 	where: enabledOnly ? [{ column: 'status', value: 'enabled' }] : [], orderBy: [{ column: 'created_at' }],

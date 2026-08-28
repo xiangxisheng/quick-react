@@ -14,8 +14,11 @@ export type FormPageField = {
 	rules?: { required?: boolean; message?: string }[];
 };
 
-/** 第三方登录入口：前端按 key 渲染图标链接，点击后走 `?action=provider:<key>`。 */
-export type FormPageExternalLogin = { key: string; label: string };
+/**
+ * 第三方登录入口：前端按 key 渲染图标链接，点击后走 `?action=provider:<key>`。
+ * recommended 的入口排在最前并标注 hint，用于优先引导到体验更好的登录方式。
+ */
+export type FormPageExternalLogin = { key: string; label: string; recommended?: boolean; hint?: string };
 
 export type FormPageConfig = {
 	/** 需要前往 Accounts 完成登录的页面：只在用户点击后弹出登录窗口，本页既不自动跳转也不整页跳走。 */

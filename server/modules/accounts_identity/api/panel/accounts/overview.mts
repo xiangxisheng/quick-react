@@ -1,11 +1,16 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiResponse } from '@server/api-response.mjs';
 import { loadAccountProfile, utcMinutes } from '@server/passport/account.mjs';
+import { loadAvatarUrl } from '@server/passport/avatar.mjs';
 import type { DashboardData } from '@shared/types/dashboard.mjs';
 
 const handler: ApiHandler = async (c, next) => {
 	if (c.req.method !== 'GET') return next();
-	const profile = await loadAccountProfile(c.get('passportDatabase')!, String(c.get('passportUser')!.id));
+	const userId = String(c.get('passportUser')!.id);
+	const [profile, avatarUrl] = await Promise.all([
+		loadAccountProfile(c.get('passportDatabase')!, userId),
+		loadAvatarUrl(c.get('globalDatabase'), c.get('site').siteKey, userId).catch(() => ''),
+	]);
 	const dashboard: DashboardData = {
 		recentTitle: '账户信息',
 		statistics: [
@@ -22,6 +27,7 @@ const handler: ApiHandler = async (c, next) => {
 			{ key: 'nickname', item: '昵称', value: profile.nickname },
 			{ key: 'email', item: '主邮箱', value: profile.primaryEmail || '未设置' },
 			{ key: 'password', item: '密码', value: profile.hasPassword ? '已设置' : '未设置' },
+			{ key: 'avatar', item: '头像', value: avatarUrl ? '已同步到对象存储' : '未同步' },
 			{ key: 'created_at', item: '注册时间', value: profile.createdAt ? utcMinutes(profile.createdAt) : '未知' },
 		],
 	};
