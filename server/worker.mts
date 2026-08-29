@@ -17,7 +17,7 @@ import { loadPassportSession } from './passport/session.mjs';
 import { loadSystemConfigFromStore } from './system-config.mjs';
 import { applyTechStackHeaders, loadTechStackConfigFromStore } from './tech-stack.mjs';
 import type { AppEnv, RuntimeBindings } from './types.mjs';
-import { workerApiModuleSites, workerApiModules, workerApiRoutes } from './.generated/worker-api-registry.mjs';
+import { workerApiModules, workerApiRoutes } from './.generated/worker-api-registry.mjs';
 
 export type WorkerBindings = RuntimeBindings & {
 	ASSETS?: { fetch: (request: Request) => Promise<Response> };
@@ -66,7 +66,7 @@ const configureForRequest = async (c: Context<WorkerEnv>) => {
 	const database = await resolveSiteDatabase(c, site, defaultDatabase);
 	if (!database) throw new Error(`Database target is unavailable for site ${site.siteKey}`);
 	// 身份中心用自己的库；控制面额外连一份用于校验关联数据。业务站点只走 OIDC，不直连身份库。
-	const passportSite = site.codeSiteChain.includes('accounts_identity') ? site : site.isSystem ? await siteRouter.resolveBySiteKey('passport', site.hostname) : undefined;
+	const passportSite = site.codeSiteChain.includes('passport') ? site : site.isSystem ? await siteRouter.resolveBySiteKey('passport', site.hostname) : undefined;
 	let passportDatabase: DatabaseAdapter | undefined;
 	if (passportSite) {
 		try { passportDatabase = passportSite.siteKey === site.siteKey ? database : await resolveSiteDatabase(c, passportSite, defaultDatabase); }
@@ -101,7 +101,7 @@ const configureForRequest = async (c: Context<WorkerEnv>) => {
 	const currentUser = await loadCurrentUser(database, c.req.raw);
 	if (currentUser) c.set('currentUser', currentUser);
 	// Accounts 会话与站点本地会话相互独立，存在时额外授予 accounts 角色。
-	const passportUser = passportDatabase && site.codeSiteChain.includes('accounts_identity')
+	const passportUser = passportDatabase && site.codeSiteChain.includes('passport')
 		? await loadPassportSession(passportDatabase, c.req.raw)
 		: undefined;
 	if (passportUser) c.set('passportUser', passportUser);
@@ -180,7 +180,6 @@ app.use('/bundle.js.map', async (c, next) => {
 
 const apiGateway = createApiGateway((c) => c.get('techStackConfig').apiSuffix, {
 	routes: workerApiRoutes,
-	moduleSites: workerApiModuleSites,
 	loadModule: async (file) => workerApiModules[file] ?? {},
 });
 app.all('/api', apiGateway);

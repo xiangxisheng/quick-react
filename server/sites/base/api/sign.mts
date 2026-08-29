@@ -4,6 +4,9 @@ import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 import { firstSql, runSql, sql } from '@server/database/sql.mjs';
+import { accountsLoginCookie, loadAccountsOidcConfig, loadDiscovery } from '@server/accounts/client.mjs';
+import { randomToken, sha256Base64Url } from '@server/accounts/oidc.mjs';
+import { isSecureRequest, requestOrigin } from '@server/request-origin.mjs';
 
 const parseCredentials = async (c: Parameters<ApiHandler>[0]) => {
 	let body: Record<string, unknown> = {};
@@ -21,7 +24,8 @@ const registrationAvailable = async (database: DatabaseAdapter) => {
 	return row?.value === 'open';
 };
 
-const handler: ApiHandler = async (c, next) => {
+/** 本站账号密码登录：Accounts 登录未启用时使用，也是启用后仍保留的站点管理员入口。 */
+const localSign: ApiHandler = async (c, next) => {
 	const database = c.get('database');
 	if (c.req.method === 'GET') {
 		const isSignUp = new URL(c.req.url).searchParams.get('mode') === 'sign-up';
@@ -79,4 +83,41 @@ const handler: ApiHandler = async (c, next) => {
 	return next();
 };
 
+/** 登录入口：站点在系统设置里启用 Accounts 登录后走 OIDC，否则回落到本站账号密码登录。 */
+const handler: ApiHandler = async (c, next) => {
+	const config = await loadAccountsOidcConfig(c);
+	if (!config.enabled) {
+		// 未启用 Accounts 登录时，SDK 的登录请求不能被当成本地账号密码登录，否则会报"用户名或密码错误"。
+		if (c.req.method === 'POST') {
+			const body = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>));
+			if (body.action === 'login') return apiMessage(c, 409, '本站未启用 Accounts 登录，请使用本站账号密码登录');
+		}
+		return localSign(c, next, {});
+	}
+	if (c.req.method === 'GET') {
+		const currentUser = c.get('currentUser') ?? null;
+		const formPage: FormPageConfig = {
+			description: '使用 Accounts 账号中心完成统一登录。点击下方按钮将打开 Accounts 登录窗口，完成后自动返回本站；本页不会自动跳转。',
+			submitLabel: '前往 Accounts 登录',
+			passportLogin: { enabled: true },
+			initialValues: { action: 'login' },
+			fields: [{ name: 'action', label: '', type: 'hidden' }],
+		};
+		return apiResponse(c, 200, { user: currentUser, registrationAvailable: false, formPage });
+	}
+	if (c.req.method === 'POST') {
+		try {
+			const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
+			const discovery = await loadDiscovery(c, config.issuer), id = crypto.randomUUID(), state = randomToken(), nonce = randomToken(), verifier = randomToken(48), now = Date.now();
+			const database = c.get('database');
+			await runSql(database, sql(database).insert('base_oidc_login_requests', { id, issuer: config.issuer, state, nonce, code_verifier: verifier, return_path: '/', expires_at: now + 600_000, created_at: now }));
+			const callback = `${requestOrigin(c)}/api/accounts/oidc/callback`;
+			const authorize = new URL(discovery.authorization_endpoint); authorize.search = new URLSearchParams({ response_type: 'code', client_id: config.clientId, redirect_uri: callback, scope: 'openid profile email', state, nonce, code_challenge: await sha256Base64Url(verifier), code_challenge_method: 'S256' }).toString();
+			c.header('Set-Cookie', accountsLoginCookie(id, isSecureRequest(c)));
+			return apiResponse(c, 200, { redirectTo: authorize.toString(), feedback: { component: 'message', type: 'success', message: '正在前往 Accounts 登录', redirectAfter: 0 } });
+		} catch (error) { return apiMessage(c, 502, error instanceof Error ? error.message : 'Accounts 登录初始化失败'); }
+	}
+	if (c.req.method === 'PUT') return apiMessage(c, 403, '启用 Accounts 登录后不能创建本地用户');
+	return localSign(c, next, {});
+};
 export default handler;

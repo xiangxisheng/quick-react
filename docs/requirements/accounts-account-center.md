@@ -2,7 +2,7 @@
 
 - 提出日期：2026-08-27
 - 状态：已实现（2026-08-27）
-- 涉及范围：`base` 站点角色对照表、`passport` 站点与 `accounts_identity` 模块
+- 涉及范围：`base` 站点角色对照表、`passport` 站点
 - 上游需求：[passport-and-telegram-integration](passport-and-telegram-integration.md)（本文档遵循其中的身份模型与表结构约定）
 
 ## 背景
@@ -208,7 +208,7 @@ passport_user_email_otps                -- 已登录用户添加邮箱时的验�
 - 通用 `FormPage` 的自定义 action 现在也会应用响应里的 `formPage`/`currentValues`/`redirectTo`；只要响应里带 `formPage` 就不再安排跳转，修掉了多步表单被反馈倒计时带走的问题。
 - 账户中心概览用 `dashboard` 组件（统计 + 账户信息表），邮箱管理用 `table` 组件：工具栏"添加邮箱"发送验证码，工具栏"输入验证码"完成绑定（通用抽屉的新增表单只有一步，验证码必须作为独立动作）。
 - 待验证邮箱以只读行的形式出现在邮箱列表里，数据来自 `passport_user_email_otps`，不写入 `passport_emails`。
-- 业务站点的个人中心由 `accounts_oidc_client` 模块覆盖 `/api/panel/me`，启用 Accounts 登录时下发指向 `<issuer>/panel/accounts` 的链接（不带页面后缀，由 Accounts 站点跳转到规范地址），页面上不再重复本站的占位说明。
+- 业务站点的个人中心由 Base 的 `/api/panel/me` 提供，启用 Accounts 登录时下发指向 `<issuer>/panel/accounts` 的链接（不带页面后缀，由 Accounts 站点跳转到规范地址），页面上不再重复本站的占位说明。
 - 覆盖测试：`npm run test:user-roles`、`npm run test:accounts-center`，以及扩展后的 `npm run test:accounts-external`、`npm run test:passport-login`。
 
 ## 分离部署约束（2026-08-27 补充）

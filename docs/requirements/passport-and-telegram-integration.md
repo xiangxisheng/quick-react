@@ -58,7 +58,7 @@ Passport 网页首次登录采用邮箱与 Telegram 数字批准流程：用户�
 
 业务站点启用 Accounts 登录后不得提供本地注册或本地密码登录，只跳转到配置的 Accounts Issuer。OIDC 客户端密钥保存在业务站点自己的数据库中；授权码只允许消费一次，令牌必须绑定客户端、用户和 Accounts Session。Accounts 全局退出通过 OIDC Back-Channel Logout 通知已经建立会话的业务站点按 `sid` 删除本地 Session。
 
-登录配置属于 Base 数据能力：配置表和 migration 位于业务站点继承的 Base schema，每个业务站点在自己的数据库中独立保存 `enabled`、Issuer、Client ID 和 Client Secret。处理逻辑保持为独立 `accounts_oidc_client` 模块，只注入普通业务站点；开关关闭时模块把 `/api/sign` 交还 Base 用户名密码登录，开启时才覆盖 Base。`global` 和 `passport` 不注入该客户端模块。
+登录配置属于 Base 数据能力：配置表和 migration 位于业务站点继承的 Base schema，每个业务站点在自己的数据库中独立保存 `enabled`、Issuer、Client ID 和 Client Secret。处理逻辑就写在 Base 的 `/api/sign` 里：开关关闭时走本站用户名密码登录，开启时才走 OIDC。所有站点（含 `global` 和 `passport`）都有这张设置页和这套逻辑，是否使用由各自的开关决定。
 
 ## 3. Passport 用户模型
 

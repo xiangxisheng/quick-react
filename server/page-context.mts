@@ -8,10 +8,8 @@ import { loadAccountsOidcConfig } from './accounts/client.mjs';
 // 前端固定注册的第三方登录回调页面，不属于导航树。
 const callbackPagePaths = ['/accounts/external/callback', '/accounts/external/wechat'];
 
-/** 站点是否用 Accounts 作为登录入口：只有 OIDC 客户端站点算，Accounts 自己不算。 */
-export const usesAccountsLogin = async (c: Context<AppEnv>) => (
-	c.get('site').codeSiteChain.includes('accounts_oidc_client') && (await loadAccountsOidcConfig(c)).enabled
-);
+/** 站点是否用 Accounts 作为登录入口：每个站点都能接入，看它自己的系统设置开关。 */
+export const usesAccountsLogin = async (c: Context<AppEnv>) => (await loadAccountsOidcConfig(c)).enabled;
 
 export const buildAuthState = async (c: Context<AppEnv>): Promise<AuthState> => {
 	const site = c.get('site');
@@ -21,7 +19,7 @@ export const buildAuthState = async (c: Context<AppEnv>): Promise<AuthState> => 
 	const signPages: AuthPage[] = [
 		{ path: `/sign${siteConfig.pageSuffix}`, title: '登录', description: '登录 Quick React', mode: 'sign', apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'POST', redirectPath: `/panel/admin${siteConfig.pageSuffix}` },
 		...(site.siteKey === 'global' ? [{ path: `/sign-up${siteConfig.pageSuffix}`, title: '注册', description: '创建初始管理员', mode: 'sign-up' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'PUT' as const, redirectPath: `/sign${siteConfig.pageSuffix}` }] : []),
-		...(site.codeSiteChain.includes('accounts_identity')
+		...(site.codeSiteChain.includes('passport')
 			? [{ path: `/accounts/sign${siteConfig.pageSuffix}`, title: 'Accounts 身份登录', description: '使用 Accounts 身份完成统一登录', mode: 'sign' as const, apiPath: `/api/accounts/sign${siteConfig.apiSuffix}`, submitMethod: 'POST' as const, redirectPath: `/` }]
 			: []),
 	];
@@ -35,7 +33,7 @@ export const buildAuthState = async (c: Context<AppEnv>): Promise<AuthState> => 
 		{ key: '/accounts/sign', label: '退出 Accounts', action: 'logout', icon: 'logout' },
 	];
 	// Accounts 站点上以 Accounts 身份（昵称）为准；同时存在站点本地会话时，两套入口都给出。
-	if (site.codeSiteChain.includes('accounts_identity') && passportUser) {
+	if (site.codeSiteChain.includes('passport') && passportUser) {
 		return {
 			component: 'dropdown',
 			currentUser: passportUser,
@@ -50,7 +48,7 @@ export const buildAuthState = async (c: Context<AppEnv>): Promise<AuthState> => 
 		return { component: 'dropdown', currentUser: passportUser, actions: accountsActions, pages: signPages };
 	}
 	// Accounts 站点的登录入口指向账号登录页（第三方与邮箱登录都在那里），本地账号密码页只给站点管理员使用。
-	const signInKey = site.codeSiteChain.includes('accounts_identity') ? '/accounts/sign' : '/sign';
+	const signInKey = site.codeSiteChain.includes('passport') ? '/accounts/sign' : '/sign';
 	return {
 		component: 'buttons',
 		actions: [
