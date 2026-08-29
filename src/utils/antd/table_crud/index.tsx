@@ -9,7 +9,8 @@ import type { TableAction, TableQueryField } from '@shared/types/table.mjs';
 import { resolveTableFormColumns } from '@shared/table-form.mjs';
 
 import { useRef, useState, useEffect } from 'react';
-import { Table, Button, Flex, Input, Space, Tag, Select, Progress, Typography } from 'antd';
+import { Table, Avatar, Button, Flex, Input, Space, Tag, Select, Progress, Typography, Modal } from 'antd';
+import FormPage from '@/components/panel/FormPage.js';
 import { useNavigate } from 'react-router-dom';
 import { PlusOutlined, DeleteOutlined, SearchOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useDrawer } from '@/utils/common/drawer.js';
@@ -36,6 +37,12 @@ const formatBytes = (bytes: number): string => {
 	const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
 	return `${(bytes / (1024 ** index)).toFixed(index === 0 ? 0 : 2)} ${units[index]}`;
 };
+
+/** 后端确认文案可以引用当前行字段，例如 {provider_label}、{detail}。 */
+const rowConfirmText = (template: string, record: DataType) => template.replace(/\{([A-Za-z0-9_]+)\}/g, (placeholder, field: string) => {
+	const value = record[field];
+	return value === undefined || value === null || value === '' ? placeholder : String(value);
+});
 
 
 export default ({ commonApi, resourcePath }: TableCrudType) => {
@@ -66,6 +73,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 	// 代码分类：API数据加载
 	const [loading, setLoading] = useState(false);
 	const [uploadState, setUploadState] = useState<UploadState>();
+	const [modalAction, setModalAction] = useState<{ path: string; title: string }>();
 	const uploadAbortController = useRef<AbortController | undefined>(undefined);
 	const [pagination, setPagination] = useState<TablePaginationConfig>({
 		current: 1,
@@ -108,7 +116,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 	const onDeleteOne = async (value: any, record: DataType, index: number, action?: TableAction): Promise<void> => {
 		// 点击删除按钮时，弹出提示让用户确认删除操作
 		const rowKey = tableOptionRef.current.rowKey, rowId = record[rowKey];
-		const aContentLine: string[] = [action?.confirm ?? `确定要删除 ${rowKey} = ${rowId} 吗？`];
+		const aContentLine: string[] = [action?.confirm ? rowConfirmText(action.confirm, record) : `确定要删除 ${rowKey} = ${rowId} 吗？`];
 		if (!await commonApi.modalConfirm(aContentLine)) {
 			return;
 		}
@@ -225,7 +233,9 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 						const { tableDisplay, tableDisplayTextField, ...tableColumn } = column;
 						tableColumns.push({
 							...tableColumn,
-							render: (value, record) => {
+								render: (value, record) => {
+								if (column.component === 'avatar') return value ? <Avatar src={String(value)} /> : <Avatar />;
+								if (column.component === 'avatar_text') return <Space size={8}><Avatar src={record.avatar ? String(record.avatar) : undefined} /> <span>{String(value ?? '') || '未设置昵称'}</span></Space>;
 								if (column.dayjsFormat) {
 									if (!value) {
 										return <span style={{ color: '#CCCCCC' }}>(空)</span>;
@@ -431,7 +441,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 			if (!popup) throw new Error('授权窗口被浏览器拦截');
 			const timer = window.setInterval(() => {
 				try {
-					if (popup.closed) { window.clearInterval(timer); return; }
+					if (popup.closed) { window.clearInterval(timer); void fetchData(); return; }
 					if (popup.location.origin === window.location.origin && popup.location.pathname.includes('/panel/accounts/identities')) {
 						window.clearInterval(timer); popup.close(); void fetchData();
 					}
@@ -443,7 +453,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 	const onSimpleRowAction = async (action: TableAction, record: DataType) => {
 		const rowId = String(record[tableOptionRef.current.rowKey] ?? '');
 		if (!rowId || action.disabled) return;
-		if (action.confirm && !await commonApi.modalConfirm([action.confirm])) return;
+		if (action.confirm && !await commonApi.modalConfirm([rowConfirmText(action.confirm, record)])) return;
 		await commonApi.apiFetch(`${apiPath}/${encodeURIComponent(rowId)}?action=${encodeURIComponent(action.key)}`, { method: 'POST' });
 		await fetchData();
 	};
@@ -451,7 +461,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 		if (!action.form || action.disabled) return;
 		const rowId = String(record[tableOptionRef.current.rowKey] ?? '');
 		if (!rowId) return;
-		if (action.confirm && !await commonApi.modalConfirm([action.confirm])) return;
+		if (action.confirm && !await commonApi.modalConfirm([rowConfirmText(action.confirm, record)])) return;
 		const drawerForm = drawer.drawerForm({
 			title: action.label,
 			columns: action.form.columns,
@@ -534,6 +544,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 			input.click();
 		}}>{action.label}</Button>,
 	};
+	const renderModalAction = (action: TableAction) => <Button key={action.key} disabled={loading || action.disabled} onClick={() => action.modalPath && setModalAction({ path: action.modalPath, title: action.label })}>{action.label}</Button>;
 	const queryActionHandlers: Record<string, (action: TableAction) => React.ReactNode> = {
 		// 查询条件变化（例如数据管理切换数据表）时，必须清掉上一次的选中行和列筛选，否则会按旧表的状态操作新数据。
 		search: (action) => <Button key={action.key} onClick={() => { cursorsByPage.current = { 1: undefined }; setSelectedRowKeys([]); setFilters({}); setAppliedQueryValues(queryValues); setSearchRequestKey((previous) => previous + 1); setPagination((prev) => ({ ...prev, current: 1 })); }} icon={<SearchOutlined />} disabled={loading || action.disabled}>{action.label}</Button>,
@@ -553,10 +564,13 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 			{queryActions.map((action) => queryActionHandlers[action.key]?.(action) ?? null)}
 		</Flex>
 		<Flex wrap gap="small">
-			{(resJsonTableOption.actions?.toolbar ?? []).map((action) => toolbarActionHandlers[action.key]?.(action)
+			{(resJsonTableOption.actions?.toolbar ?? []).map((action) => action.modalPath ? renderModalAction(action) : toolbarActionHandlers[action.key]?.(action)
 				?? (action.form ? <Button key={action.key} disabled={loading || action.disabled} onClick={() => onToolbarFormAction(action)}>{action.label}</Button>
 					: <Button key={action.key} disabled={loading || action.disabled} onClick={() => onToolbarSimpleAction(action)}>{action.label}</Button>))}
 		</Flex>
+		<Modal open={Boolean(modalAction)} title={modalAction?.title} footer={null} destroyOnHidden width={560} onCancel={() => setModalAction(undefined)}>
+			{modalAction ? <FormPage embedded commonApi={commonApi} apiPath={`/api${modalAction.path}${initialData?.apiSuffix ?? ''}`} title={modalAction.title} submitMethod="POST" onCompleted={() => { setModalAction(undefined); void fetchData(); }} /> : null}
+		</Modal>
 		{uploadState && <Flex gap="middle" align="center" style={{ padding: '12px 16px', border: '1px solid #f0f0f0', borderRadius: 8 }}>
 			<Flex vertical style={{ flex: 1, minWidth: 0 }}>
 				<Typography.Text ellipsis title={uploadState.fileName}>{uploadState.fileName}</Typography.Text>

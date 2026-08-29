@@ -1,5 +1,5 @@
 export type TableData = Record<string, unknown>;
-export type TableColumnComponent = 'textbox' | 'url' | 'textarea' | 'select' | 'switch' | 'datepicker' | 'datepicker_rangepicker' | 'inputnumber' | 'upload';
+export type TableColumnComponent = 'textbox' | 'url' | 'avatar' | 'avatar_text' | 'textarea' | 'select' | 'switch' | 'datepicker' | 'datepicker_rangepicker' | 'inputnumber' | 'upload';
 export type TableDataType = 'js_timestamp' | 'int' | 'float' | 'string' | 'datetime';
 export type TableColumnRule = { required: boolean; message: string };
 export type TableColumnRemoteOptions = { action: string; dependencies: string[]; clearFields?: string[] };
@@ -33,6 +33,8 @@ export type TableAction = {
 	form?: {
 		columns: TableColumn[];
 	};
+	/** 在当前列表内打开后端驱动的表单弹窗。 */
+	modalPath?: string;
 };
 export type TableQueryField = {
 	dataIndex: string;

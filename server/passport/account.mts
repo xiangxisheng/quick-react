@@ -180,16 +180,31 @@ export type AccountIdentity = {
 	identity_key: string;
 	kind: 'external' | 'telegram';
 	provider_label: string;
+	nickname: string;
+	avatar: string;
 	detail: string;
 	created_at: number;
+};
+
+const externalIdentityNickname = (profile: string) => {
+	try {
+		const parsed = JSON.parse(profile) as Record<string, unknown>;
+		return String(parsed.nickname ?? parsed.name ?? parsed.given_name ?? '').trim();
+	} catch { return ''; }
+};
+const externalIdentityAvatar = (profile: string) => {
+	try {
+		const parsed = JSON.parse(profile) as Record<string, unknown>;
+		return String(parsed.picture ?? parsed.headimgurl ?? parsed.avatar ?? '').trim();
+	} catch { return ''; }
 };
 
 /** 账户中心的身份列表：外部身份源和 Telegram 账号；机器人信息来自 global 库。 */
 export const listAccountIdentities = async (database: DatabaseAdapter, globalDatabase: DatabaseAdapter, userId: string): Promise<AccountIdentity[]> => {
 	const [externals, providers, telegrams] = await Promise.all([
-		allSql<{ id: string; provider: string; subject: string; created_at: number }>(database, sql(database).select({
+		allSql<{ id: string; provider: string; subject: string; profile: string; created_at: number }>(database, sql(database).select({
 			table: 'passport_external_identities',
-			columns: { id: { column: 'id', cast: 'text' }, provider: 'provider', subject: 'subject', created_at: 'created_at' },
+			columns: { id: { column: 'id', cast: 'text' }, provider: 'provider', subject: 'subject', profile: 'profile', created_at: 'created_at' },
 			where: [{ column: 'user_id', value: userId }],
 			orderBy: [{ column: 'created_at' }],
 		})),
@@ -211,6 +226,8 @@ export const listAccountIdentities = async (database: DatabaseAdapter, globalDat
 			identity_key: `external:${item.id}`,
 			kind: 'external' as const,
 			provider_label: providerNames.get(item.provider) ?? item.provider,
+			nickname: externalIdentityNickname(item.profile),
+			avatar: externalIdentityAvatar(item.profile),
 			// 微信的 subject 是 appid:openid，只展示后半段，避免泄露应用标识。
 			detail: item.subject.includes(':') ? item.subject.slice(item.subject.indexOf(':') + 1) : item.subject,
 			created_at: item.created_at,
@@ -219,7 +236,9 @@ export const listAccountIdentities = async (database: DatabaseAdapter, globalDat
 			identity_key: `telegram:${item.id}`,
 			kind: 'telegram' as const,
 			provider_label: 'Telegram',
-			detail: `${item.nickname} / @${botNames.get(item.bot_id) ?? item.bot_id} / ${item.telegram_user_id}`,
+			nickname: item.nickname,
+			avatar: '',
+			detail: `@${botNames.get(item.bot_id) ?? item.bot_id} / ${item.telegram_user_id}`,
 			created_at: item.created_at,
 		})),
 	];

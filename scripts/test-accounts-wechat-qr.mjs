@@ -29,12 +29,11 @@ try {
 	database.prepare("INSERT INTO passport_usernames (user_id,username,created_at) VALUES (?,'wxuser2026',?)").run(userId, now);
 	database.prepare("INSERT INTO passport_emails (id,email,verified,created_at,updated_at) VALUES (2000000000000000011,'wx@example.com',1,?,?)").run(now, now);
 	database.prepare("INSERT INTO passport_user_emails (user_id,email_id,is_primary,created_at) VALUES (?,2000000000000000011,1,?)").run(userId, now);
-	// 微信身份的 subject 是 client_id:openid。
-	database.prepare("INSERT INTO passport_external_identities (user_id,provider,subject,profile,created_at,updated_at) VALUES (?,'wechat','wechat-app:wechat-openid-1','{}',?,?)").run(userId, now, now);
+	database.prepare("INSERT INTO passport_sessions (id,user_id,expires_at,created_at) VALUES ('desktop-session',?, ?, ?)").run(userId, now + 3600000, now);
 	database.close();
 
 	// 电脑打开二维码页。
-	const qr = await (await app.request('https://accounts.test/api/accounts/external/wechat?format=json')).json();
+	const qr = await (await app.request('https://accounts.test/api/accounts/external/wechat?format=json', { headers: { cookie: 'passport_session=desktop-session' } })).json();
 	assert.equal(qr.mode, 'qrcode');
 	const state = new URL(qr.authorizationUrl).searchParams.get('state');
 	assert.ok(state);
@@ -47,14 +46,14 @@ try {
 	const phone = await app.request(`https://accounts.test/api/accounts/external/wechat?code=wechat-code&state=${encodeURIComponent(state)}&consume=1`);
 	assert.equal(phone.status, 200);
 	assert.equal(phone.headers.get('content-type')?.includes('application/json'), true, '手机回调页需要 JSON 响应');
-	assert.deepEqual(await phone.json(), { status: 'signed_in' });
+	assert.deepEqual(await phone.json(), { status: 'authorized' });
 
 	// 电脑轮询拿到会话；二维码页可能开在业务站点的登录弹窗里，去向必须由后端给出，不能自己跳首页。
 	// 该用户还没有设置密码，按规则先回登录页提示，补全后登录页才带 request_id 回授权端点。
-	const polled = await app.request(`https://accounts.test${qr.pollUrl}`, { headers: { cookie: 'accounts_oidc_request=qr-request' } });
+	const polled = await app.request(`https://accounts.test${qr.pollUrl}`, { headers: { cookie: 'accounts_oidc_request=qr-request; passport_session=desktop-session' } });
 	const polledResult = await polled.json();
 	assert.equal(polledResult.status, 'authenticated');
-	assert.equal(polledResult.redirectTo, '/accounts/sign.html');
+	assert.equal(polledResult.redirectTo, '/panel/accounts/identities.html');
 	const sessionCookie = setCookie(polled, 'passport_session');
 	assert.ok(sessionCookie, '电脑端必须拿到 Accounts 会话');
 

@@ -57,7 +57,7 @@ const handler: ApiHandler = async (c, next) => {
 	if (action?.startsWith('provider:')) {
 		const provider = await externalProviders(database, true).then((items) => items.find((item) => item.id === action.slice('provider:'.length)));
 		if (!provider) return apiMessage(c, 400, '外部身份源不存在或未启用');
-		c.header('Set-Cookie', bindReturnCookie(`/panel/accounts/bind-email${c.get('techStackConfig').pageSuffix}`, isSecureRequest(c)));
+		c.header('Set-Cookie', bindReturnCookie(`/panel/accounts/emails${c.get('techStackConfig').pageSuffix}`, isSecureRequest(c)));
 		return apiResponse(c, 200, { redirectTo: `/api/accounts/external/${provider.id}`, feedback: { component: 'message' as const, type: 'success' as const, message: `正在前往${provider.display_name}认证`, redirectAfter: 0 } });
 	}
 	if (action === 'restart') {
@@ -92,8 +92,8 @@ const handler: ApiHandler = async (c, next) => {
 	if (step === 'verify') {
 		const result = await verifyAccountEmailOtp(database, c.env.SNOWFLAKE_WORKER_ID, userId, String(body.code ?? ''));
 		if (result.status === 'bound') {
-			const formPage = emailForm();
-			return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues, feedback: { component: 'inline' as const, type: 'success' as const, message: `${result.email} 已绑定，可在邮箱管理中设为主邮箱` } });
+			// 不再返回 formPage，通知通用弹窗流程已经完成，由列表关闭弹窗并重新加载数据。
+			return apiResponse(c, 200, { feedback: { component: 'message' as const, type: 'success' as const, message: `${result.email} 已绑定` } });
 		}
 		if (result.status === 'conflict') return apiMessage(c, 409, result.message);
 		if (result.status === 'none') return apiMessage(c, 409, '没有待验证的邮箱，请重新发送验证码');

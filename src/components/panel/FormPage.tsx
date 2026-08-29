@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Divider, Form, Input, message, Modal, Select, Space, Switch, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Divider, Form, Input, message, Modal, Select, Space, Spin, Switch, Tag, Typography } from 'antd';
 import { ClearOutlined, GoogleCircleFilled, RollbackOutlined, SendOutlined, UserOutlined, WechatFilled } from '@ant-design/icons';
 import type { CommonApi } from '@/utils/common/api.js';
 import type { FormPageField, FormPageResponse } from '@shared/types/form-page.mjs';
@@ -27,6 +27,7 @@ type FormProps = {
 	redirectOnFeedback?: boolean;
 	onSaved?: (values: Record<string, unknown>) => string | undefined | Promise<string | undefined>;
 	onCompleted?: () => void | Promise<void>;
+	embedded?: boolean;
 };
 
 /** 第三方登录图标按 key 渲染，未登记的身份源用通用图标兜底。 */
@@ -55,7 +56,7 @@ const fieldControl = (field: FormPageField, readOnly: boolean) => {
 	return <Input type={field.type === 'password' ? 'password' : 'text'} placeholder={field.placeholder} maxLength={field.maxLength} readOnly={readOnly} disabled={readOnly} />;
 };
 
-export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PUT', redirectOnFeedback = false, onSaved, onCompleted }: FormProps) {
+export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PUT', redirectOnFeedback = false, onSaved, onCompleted, embedded = false }: FormProps) {
 	const [form] = Form.useForm<Record<string, unknown>>();
 	const [messageApi, messageContextHolder] = message.useMessage();
 	const [loading, setLoading] = useState(true);
@@ -133,6 +134,11 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 		if (result.closeWindow) {
 			window.close();
 			if (result.redirectTo) window.setTimeout(() => { if (!window.closed) window.location.assign(result.redirectTo!); }, 300);
+			return;
+		}
+		if (result.openWindow && result.redirectTo) {
+			const popup = window.open(result.redirectTo, 'accounts_email_bind', 'width=480,height=680,resizable=yes,scrollbars=yes');
+			if (!popup) setPassportError('授权窗口被浏览器拦截');
 			return;
 		}
 		const target = result.redirectTo ?? (result.formPage ? undefined : await onSaved?.(values));
@@ -221,7 +227,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 		</Modal>
 	) : null;
 
-	return <Card title={title} loading={loading}>
+	const content = <>
 		{messageContextHolder}
 		{modalFeedback}
 		{inlineFeedback}
@@ -325,5 +331,6 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 				})}
 			</Space>
 		</> : null}
-	</Card>;
+	</>;
+	return embedded ? <Spin spinning={loading}>{content}</Spin> : <Card title={title} loading={loading}>{content}</Card>;
 }

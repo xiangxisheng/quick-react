@@ -4,14 +4,9 @@ import { listAccountIdentities, unbindAccountIdentity } from '@server/passport/a
 import { bindReturnCookie, externalProviders } from '@server/accounts/external.mjs';
 import { isSecureRequest } from '@server/request-origin.mjs';
 
-const kindOptions = [
-	{ value: 'external', text: '第三方账号', color: 'blue' },
-	{ value: 'telegram', text: 'Telegram', color: 'cyan' },
-];
-
 const columns = [
 	{ dataIndex: 'provider_label', title: '身份来源' },
-	{ dataIndex: 'kind', title: '类型', component: 'select' as const, options: kindOptions },
+	{ dataIndex: 'nickname', title: '昵称', component: 'avatar_text' as const },
 	{ dataIndex: 'detail', title: '账号标识' },
 	{ dataIndex: 'created_at', title: '绑定时间', dataType: 'js_timestamp' as const, dayjsFormat: 'YYYY-MM-DD HH:mm:ss' },
 ];
@@ -30,7 +25,7 @@ const handler: ApiHandler = async (c, _next, params) => {
 				option: {
 					rowKey: 'identity_key',
 					actions: { toolbar: providers.map((provider) => ({ key: `bind:${provider.id}`, label: `绑定${provider.display_name}` })),
-						row: [{ key: 'delete', label: '解绑', confirm: '解绑后将不能再用该身份登录，确认解绑？' }] },
+						row: [{ key: 'delete', label: '解绑', confirm: '确认解绑 {provider_label} 身份（{detail}）吗？解绑后将不能再使用这个账号登录。' }] },
 				},
 				columns,
 				dataSource: identities,

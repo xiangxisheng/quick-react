@@ -1,6 +1,8 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
 import { listAccountEmails, pendingAccountEmailOtp, setPrimaryAccountEmail, unbindAccountEmail } from '@server/passport/account.mjs';
+import { bindReturnCookie } from '@server/accounts/external.mjs';
+import { isSecureRequest } from '@server/request-origin.mjs';
 
 const primaryOptions = [
 	{ value: '1', text: '主邮箱', color: 'green' },
@@ -18,7 +20,6 @@ const columns = [
 	{ dataIndex: 'email', title: '邮箱' },
 	{ dataIndex: 'is_primary', title: '主邮箱', component: 'select' as const, options: primaryOptions, form: { create: false as const, edit: false as const } },
 	{ dataIndex: 'verified', title: '状态', component: 'select' as const, options: verifiedOptions, form: { create: false as const, edit: false as const } },
-	// 添加邮箱要先完成第三方认证，单独放在“绑定邮箱”页面。
 	{ dataIndex: 'created_at', title: '绑定时间', dataType: 'js_timestamp' as const, dayjsFormat: 'YYYY-MM-DD HH:mm:ss' },
 ];
 
@@ -37,7 +38,7 @@ const handler: ApiHandler = async (c, _next, params) => {
 			table: {
 				option: {
 					rowKey: 'email_id',
-					actions: {
+					actions: { toolbar: [{ key: 'bind-email', label: '绑定邮箱', modalPath: '/panel/accounts/bind-email' }],
 						row: [
 							{ key: 'primary', label: '设为主邮箱' },
 							{ key: 'delete', label: '解绑', confirm: '解绑后该邮箱将不能用于登录，确认解绑？' },
@@ -49,6 +50,11 @@ const handler: ApiHandler = async (c, _next, params) => {
 				totalRecords: dataSource.length,
 			},
 		});
+	}
+
+	if ((c.req.method === 'POST' || c.req.method === 'PUT') && !params.id && action === 'bind-email') {
+		c.header('Set-Cookie', bindReturnCookie(`/panel/accounts/emails${c.get('techStackConfig').pageSuffix}`, isSecureRequest(c)));
+		return apiResponse(c, 200, { redirectTo: `/panel/accounts/bind-email${c.get('techStackConfig').pageSuffix}`, openWindow: true });
 	}
 
 	// 待验证邮箱只是列表里的提示行，不能设主邮箱也不能解绑。

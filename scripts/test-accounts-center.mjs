@@ -91,11 +91,11 @@ try {
 	assert.equal(savedProfile.status, 200);
 	assert.equal((await savedProfile.json()).currentValues.nickname, '新昵称');
 
-	// 邮箱管理只做展示、设为主邮箱和解绑。
+	// 邮箱管理提供绑定、设为主邮箱和解绑。
 	const emailsPath = '/api/panel/accounts/emails.php';
 	const initialEmails = await (await request(emailsPath, { cookie })).json();
 	assert.deepEqual(initialEmails.table.dataSource.map((row) => [row.email, row.is_primary, row.verified]), [['center@example.com', '1', '1']]);
-	assert.equal(initialEmails.table.option.actions.toolbar, undefined);
+	assert.deepEqual(initialEmails.table.option.actions.toolbar.map((action) => action.key), ['bind-email']);
 	assert.deepEqual(initialEmails.table.option.actions.row.map((action) => action.key), ['primary', 'delete']);
 
 	// 绑定邮箱：没有第三方认证凭证时不允许发送验证码。
@@ -119,7 +119,9 @@ try {
 	const pendingEmails = await (await request(emailsPath, { cookie })).json();
 	assert.deepEqual(pendingEmails.table.dataSource.map((row) => [row.email, row.verified]), [['center@example.com', '1'], ['second@example.com', '0']]);
 	assert.equal((await request(bindPath, { method: 'POST', cookie: verifiedCookie, body: { step: 'verify', code: '000000' } })).status, 409);
-	assert.equal((await request(bindPath, { method: 'POST', cookie: verifiedCookie, body: { step: 'verify', code: deliveredCode } })).status, 200);
+	const bound = await request(bindPath, { method: 'POST', cookie: verifiedCookie, body: { step: 'verify', code: deliveredCode } });
+	assert.equal(bound.status, 200);
+	assert.equal((await bound.json()).formPage, undefined, '绑定完成后应结束弹窗流程并刷新列表');
 	const boundEmails = await (await request(emailsPath, { cookie })).json();
 	assert.deepEqual(boundEmails.table.dataSource.map((row) => [row.email, row.is_primary, row.verified]), [['center@example.com', '1', '1'], ['second@example.com', '0', '1']]);
 	const secondEmailId = boundEmails.table.dataSource.find((row) => row.email === 'second@example.com').email_id;
@@ -137,7 +139,7 @@ try {
 	const identityDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
 	const identityNow = Date.now();
 	identityDatabase.prepare("INSERT INTO passport_external_providers (id,display_name,client_id,client_secret,status,created_at,updated_at) VALUES ('google','Google','g','s','enabled',?,?)").run(identityNow, identityNow);
-	identityDatabase.prepare("INSERT INTO passport_external_identities (user_id,provider,subject,profile,created_at,updated_at) VALUES (?,'google','google-sub','{}',?,?)").run(userId, identityNow, identityNow);
+	identityDatabase.prepare("INSERT INTO passport_external_identities (user_id,provider,subject,profile,created_at,updated_at) VALUES (?,'google','google-sub','{\"name\":\"Google用户\"}',?,?)").run(userId, identityNow, identityNow);
 	identityDatabase.prepare("INSERT INTO global_telegram_bots (id,name,bot_token,bot_username,secret_token,webhook_hostname,status,created_at,updated_at) VALUES (7,'bot','7:token','center_bot','secret','accounts.test','enabled',?,?)").run(identityNow, identityNow);
 	identityDatabase.close();
 
@@ -147,16 +149,18 @@ try {
 	assert.match((await lastIdentity.json()).feedback.message, /最后一个登录方式/);
 
 	const telegramDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
-	telegramDatabase.prepare("INSERT INTO passport_external_identities (user_id,provider,subject,profile,created_at,updated_at) VALUES (?,'wechat','wx-appid:o6fZopenid','{}',?,?)").run(userId, identityNow, identityNow);
+	telegramDatabase.prepare("INSERT INTO passport_external_identities (user_id,provider,subject,profile,created_at,updated_at) VALUES (?,'wechat','wx-appid:o6fZopenid','{\"nickname\":\"微信用户\"}',?,?)").run(userId, identityNow, identityNow);
 	telegramDatabase.prepare("INSERT INTO passport_external_providers (id,display_name,client_id,client_secret,status,created_at,updated_at) VALUES ('wechat','微信','w','s','enabled',?,?)").run(identityNow, identityNow);
 	telegramDatabase.prepare('INSERT INTO passport_telegram_accounts (id,user_id,bot_id,telegram_user_id,chat_id,nickname,created_at,updated_at) VALUES (77,?,7,9001,9001,\'TG用户\',?,?)').run(userId, identityNow, identityNow);
 	telegramDatabase.close();
 	const identities = await (await request(identitiesPath, { cookie })).json();
-	assert.deepEqual(identities.table.dataSource.map((row) => [row.kind, row.provider_label]), [['external', 'Google'], ['external', '微信'], ['telegram', 'Telegram']]);
+	assert.deepEqual(identities.table.dataSource.map((row) => row.provider_label), ['Google', '微信', 'Telegram']);
+	assert.deepEqual(identities.table.dataSource.map((row) => row.nickname), ['Google用户', '微信用户', 'TG用户']);
 	// 微信的 subject 是 appid:openid，列表只展示 openid。
 	assert.equal(identities.table.dataSource[1].detail, 'o6fZopenid');
-	assert.match(identities.table.dataSource[2].detail, /TG用户 \/ @center_bot \/ 9001/);
+	assert.match(identities.table.dataSource[2].detail, /@center_bot \/ 9001/);
 	assert.deepEqual(identities.table.option.actions.row.map((action) => action.key), ['delete']);
+	assert.match(identities.table.option.actions.row[0].confirm, /\{provider_label\}.*\{detail\}/);
 
 	// Telegram 账号要在机器人里解绑，这里给出明确提示。
 	const telegramUnbind = await request(identitiesPath, { method: 'DELETE', cookie, body: ['telegram:77'] });

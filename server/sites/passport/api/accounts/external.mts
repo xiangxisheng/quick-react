@@ -55,14 +55,23 @@ const handler: ApiHandler = async (c, _next, params) => {
 		if (!polled || polled.provider !== id || polled.expires_at <= Date.now()) return apiResponse(c, 200, { status: 'expired' });
 		if (polled.qr_status === 'authorized' && !polled.qr_user_id) return apiResponse(c, 200, { status: 'needs_email', bindUrl: `/api/accounts/external/${id}?bind=${encodeURIComponent(pollState)}` });
 		if (polled.qr_status !== 'authorized' || !polled.qr_user_id) return apiResponse(c, 200, { status: polled.qr_status });
+		const current = await loadPassportSession(database, c.req.raw);
 		const sessionId = crypto.randomUUID(), now = Date.now();
 		await runSql(database, sql(database).insert('passport_sessions', { id: sessionId, user_id: polled.qr_user_id, expires_at: now + 24 * 60 * 60 * 1000, created_at: now }));
 		await runSql(database, sql(database).update('passport_external_login_states', { qr_status: 'consumed' }, [{ column: 'id_hash', value: await sha256(pollState) }, { column: 'qr_status', value: 'authorized' }]));
 		c.header('Set-Cookie', createPassportSessionCookie(sessionId, secure, 24 * 60 * 60));
-		return apiResponse(c, 200, { status: 'authenticated', redirectTo: await postLoginRedirect(c, database, String(polled.qr_user_id)) });
+		const redirectTo = current && String(current.id) === String(polled.qr_user_id)
+			? `/panel/accounts/identities${c.get('techStackConfig').pageSuffix}`
+			: await postLoginRedirect(c, database, String(polled.qr_user_id));
+		return apiResponse(c, 200, { status: 'authenticated', redirectTo });
 	}
 	if (!code && !returnedState) {
 		const created = await createExternalState(database, id, redirectUri);
+		// 二维码在电脑端发起时记住当前 Accounts 用户；手机只负责确认外部身份，电脑端无需再次走邮箱验证。
+		if (id === 'wechat' && provider.wechat_mode === 'official_account') {
+			const current = await loadPassportSession(database, c.req.raw);
+			if (current) await runSql(database, sql(database).update('passport_external_login_states', { qr_user_id: String(current.id) }, { id_hash: await sha256(created.state) }));
+		}
 		c.header('Set-Cookie', externalStateCookie(created.state, secure));
 		const authorizationUrl = await externalAuthorizationUrl(provider, redirectUri, created.state, created.nonce, created.codeVerifier);
 		const isWechatClient = /MicroMessenger/i.test(c.req.header('user-agent') ?? '');
@@ -88,6 +97,9 @@ const handler: ApiHandler = async (c, _next, params) => {
 	if (!code || !returnedState) return apiMessage(c, 400, '外部授权回调缺少 code 或 state');
 	const cookieState = readCookie(c.req.raw, externalStateCookieName);
 	if ((!cookieState || cookieState !== returnedState) && !(id === 'wechat' && provider.wechat_mode === 'official_account')) return apiMessage(c, 400, '外部授权 state 与当前浏览器不匹配，请重新登录');
+	const qrState = id === 'wechat' && provider.wechat_mode === 'official_account' && !cookieState
+		? await externalQrState(database, await sha256(returnedState))
+		: null;
 	const state = await consumeExternalState(database, returnedState);
 	if (!state || state.provider !== id || state.redirect_uri !== redirectUri) return apiMessage(c, 400, '外部授权请求不存在、已过期或已经使用');
 	try {
@@ -97,6 +109,11 @@ const handler: ApiHandler = async (c, _next, params) => {
 		const bound = await externalIdentityUser(database, provider.id, profile.subject);
 		if (!current && !bound && !profile.email) {
 			if (provider.wechat_mode === 'official_account' && !cookieState && consume) {
+				if (qrState?.qr_user_id) {
+					const userId = await resolveExternalUser(database, c.env.SNOWFLAKE_WORKER_ID, provider, profile, qrState.qr_user_id);
+					await runSql(database, sql(database).update('passport_external_login_states', { qr_status: 'authorized', qr_user_id: userId }, { id_hash: await sha256(returnedState) }));
+					return apiResponse(c, 200, { status: 'authorized' });
+				}
 				await createPendingExternalIdentity(database, profile, provider.id, await sha256(returnedState));
 				await runSql(database, sql(database).update('passport_external_login_states', { qr_status: 'authorized' }, [{ column: 'id_hash', value: await sha256(returnedState) }]));
 				return apiResponse(c, 200, { status: 'authorized' });
