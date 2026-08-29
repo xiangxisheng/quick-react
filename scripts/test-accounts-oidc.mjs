@@ -87,7 +87,7 @@ try {
 	const selfAuthorized = await app.request(selfAuthorizeUrl, { headers: { cookie: `passport_session=${sessionId}` } });
 	const selfCallbackResponse = await app.request(selfAuthorized.headers.get('location'), { headers: { cookie: selfLoginCookie } });
 	assert.equal(selfCallbackResponse.status, 200);
-	const selfSessionCookie = selfCallbackResponse.headers.getSetCookie().find((item) => item.startsWith('quick_react_session='))?.split(';')[0];
+	const selfSessionCookie = selfCallbackResponse.headers.getSetCookie().find((item) => item.startsWith('base_system_session='))?.split(';')[0];
 	assert.ok(selfSessionCookie);
 	const signedInPassport = await (await request('/api/sign.php', { headers: { cookie: selfSessionCookie } })).json();
 	assert.equal(signedInPassport.user.username, 'oidcuser1');
@@ -119,11 +119,11 @@ try {
 	assert.deepEqual(businessInitial.pageStatus.actions.map((action) => [action.label, action.action]), [['登录', 'accounts-login'], ['返回首页', 'navigate']]);
 	const businessSign = await (await app.request('https://site1.test/api/sign.php')).json();
 	assert.equal(businessSign.formPage.fields[0].name, 'action');
-	const enabledLocalSession = await (await app.request('https://site1.test/api/sign.php', { headers: { cookie: 'quick_react_session=local-session' } })).json();
+	const enabledLocalSession = await (await app.request('https://site1.test/api/sign.php', { headers: { cookie: 'base_system_session=local-session' } })).json();
 	assert.equal(enabledLocalSession.user, null);
 	const modeDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
 	modeDatabase.prepare(`UPDATE base_system_configs SET value = ? WHERE key = 'accounts-oidc-client'`).run(JSON.stringify({ enabled: false, issuer: 'https://accounts.test', clientId, clientSecret }));
-	const disabledLocalSession = await (await app.request('https://site1.test/api/sign.php', { headers: { cookie: 'quick_react_session=local-session' } })).json();
+	const disabledLocalSession = await (await app.request('https://site1.test/api/sign.php', { headers: { cookie: 'base_system_session=local-session' } })).json();
 	assert.equal(disabledLocalSession.user.username, 'local_admin');
 	assert.equal(disabledLocalSession.formPage.fields[0].name, 'username');
 	modeDatabase.prepare(`UPDATE base_system_configs SET value = ? WHERE key = 'accounts-oidc-client'`).run(JSON.stringify({ enabled: true, issuer: 'https://accounts.test', clientId, clientSecret }));
@@ -144,7 +144,7 @@ try {
 	assert.match(popupBody, /postMessage/);
 	assert.match(popupBody, /next:\{action:'reload'\}/);
 	assert.equal(popupBody.includes('/accounts/oidc/popup'), false);
-	const businessSessionCookie = businessCallbackResponse.headers.getSetCookie().find((item) => item.startsWith('quick_react_session='))?.split(';')[0];
+	const businessSessionCookie = businessCallbackResponse.headers.getSetCookie().find((item) => item.startsWith('base_system_session='))?.split(';')[0];
 	assert.ok(businessSessionCookie);
 	assert.equal(businessSessionCookie, selfSessionCookie);
 	const signedInBusiness = await (await app.request('https://site1.test/api/sign.php', { headers: { cookie: businessSessionCookie } })).json();

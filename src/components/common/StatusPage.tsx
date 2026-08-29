@@ -58,7 +58,7 @@ export default function StatusPage({ commonApi, apiSuffix, pageSuffix, pageStatu
 		}
 		if (action.action === 'local-logout') {
 			try {
-				const response = await commonApi.apiFetch(`/api/sign${apiSuffix}`, { method: 'DELETE' });
+				const response = await commonApi.apiFetch(`/api/sign${apiSuffix}?logout=local`, { method: 'DELETE' });
 				runApiNextAction((await response.json()).next);
 			} catch (error) { await commonApi.modalError([error instanceof Error ? error.message : '退出本站失败']); }
 			return;

@@ -7,7 +7,7 @@ import { accountOnboarding, loginRedirectTarget, onboardingForm, refreshOidcRequ
 import { clearPassportSessionCookie, createPassportSessionCookie, loadPassportSession, readPassportSessionId } from '@server/passport/session.mjs';
 import { clearOidcRequestCookie, oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
 import { authorizationRequest } from '@server/accounts/repository.mjs';
-import { oidcIssuer, revokeOidcSession } from '@server/accounts/provider.mjs';
+import { oidcIssuer, revokePassportSession, revokeOidcSession } from '@server/accounts/provider.mjs';
 import { clearExternalPendingCookie, clearPasswordResetCookie, clearSignupEmailCookie, passwordResetCookie, passwordResetCookieName, discardExternalEmailOtp, externalPendingCookieName, externalProviders, providersWithVerifiedEmail, issueExternalEmailOtp, pendingExternalEmailOtp, pendingExternalIdentity, signupEmailCookie, signupEmailCookieName, verifyExternalEmailOtp } from '@server/accounts/external.mjs';
 import { isSecureRequest } from '@server/request-origin.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
@@ -281,9 +281,9 @@ const handler: ApiHandler = async (c, next) => {
 	}
 	if (c.req.method === 'DELETE') {
 		const sessionId = readPassportSessionId(c.req.raw);
-		if (sessionId) await revokeOidcSession(database, sessionId, oidcIssuer(c), c.env.OIDC_FETCH ?? fetch);
+		if (sessionId) await revokePassportSession(database, sessionId);
 		c.header('Set-Cookie', clearPassportSessionCookie(secure));
-		return apiMessage(c, 200, '已退出 Passport');
+		return apiMessageData(c, 200, '已退出 Accounts', { next: { action: 'reload' } });
 	}
 	if (c.req.method !== 'POST') return next();
 	const body = await parseBody(c), step = text(body.step) || 'email', action = c.req.query('action')?.trim();

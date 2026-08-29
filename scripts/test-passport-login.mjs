@@ -124,8 +124,18 @@ try {
 	const signedIn = await (await request('/api/accounts/sign.php', { cookie: passportCookie })).json();
 	assert.equal(signedIn.user.id, userId);
 	assert.equal(signedIn.user.username, 'PassportUser');
-	assert.equal((await request('/api/accounts/sign.php', { method: 'DELETE', cookie: passportCookie })).status, 200);
+	// 退出本站不能撤销仍在使用的 Accounts 会话。
+	assert.equal((await request('/api/sign.php?logout=local', { method: 'DELETE', cookie: passportCookie })).status, 200);
+	assert.equal((await (await request('/api/accounts/sign.php', { cookie: passportCookie })).json()).user.id, userId);
+	const localSessionDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
+	localSessionDatabase.prepare("INSERT INTO base_system_users (id, username, password, roles, status, created_at, updated_at) VALUES (99, 'local_user', '!local', '[]', 'enabled', ?, ?)").run(Date.now(), Date.now());
+	localSessionDatabase.prepare("INSERT INTO base_system_sessions (id, user_id, expires_at, created_at) VALUES ('local-passport-session', 99, ?, ?)").run(Date.now() + 3600000, Date.now());
+	localSessionDatabase.close();
+	const accountsLogout = await request('/api/accounts/sign.php', { method: 'DELETE', cookie: passportCookie });
+	assert.equal(accountsLogout.status, 200);
+	assert.deepEqual((await accountsLogout.json()).next, { action: 'reload' });
 	const completedDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
+	assert.equal(completedDatabase.prepare("SELECT COUNT(*) AS count FROM base_system_sessions WHERE id = 'local-passport-session'").get().count, 1, '退出 Accounts 不应删除本站会话');
 	assert.equal(completedDatabase.prepare(`SELECT status FROM passport_login_challenges WHERE id = ?`).get(challengeId).status, 'consumed');
 	assert.equal(completedDatabase.prepare(`SELECT COUNT(*) AS count FROM passport_sessions`).get().count, 0);
 	completedDatabase.close();

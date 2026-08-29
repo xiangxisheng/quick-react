@@ -32,13 +32,19 @@ export const oidcDiscovery = (c: Context<AppEnv>) => {
 	});
 };
 
+/** 仅撤销 Accounts 自身会话；不通知 OIDC 客户端，供账户中心的独立退出使用。 */
+export const revokePassportSession = async (database: DatabaseAdapter, sessionId: string) => {
+	const now = Date.now();
+	await runSql(database, sql(database).update('passport_oidc_access_tokens', { revoked_at: now }, [{ column: 'session_id', value: sessionId }, { column: 'revoked_at', operator: 'IS NULL' }]));
+	await runSql(database, sql(database).delete('passport_sessions', { id: sessionId }));
+};
+
 export const revokeOidcSession = async (database: DatabaseAdapter, sessionId: string, issuer: string, requester: typeof fetch = fetch) => {
 	const session = await passportSessionUser(database, sessionId);
 	if (!session) return;
 	const clients = await backchannelClients(database, sessionId);
 	const now = Date.now();
-	await runSql(database, sql(database).update('passport_oidc_access_tokens', { revoked_at: now }, [{ column: 'session_id', value: sessionId }, { column: 'revoked_at', operator: 'IS NULL' }]));
-	await runSql(database, sql(database).delete('passport_sessions', { id: sessionId }));
+	await revokePassportSession(database, sessionId);
 	await Promise.allSettled(clients.map(async (client) => {
 		const logoutToken = await signIdToken(database, { iss: issuer, sub: session.user_id, aud: client.id, iat: Math.floor(now / 1000), exp: Math.floor(now / 1000) + 120, jti: crypto.randomUUID(), sid: sessionId, events: { 'http://schemas.openid.net/event/backchannel-logout': {} } });
 		const response = await requester(client.backchannel_logout_uri, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ logout_token: logoutToken }) });

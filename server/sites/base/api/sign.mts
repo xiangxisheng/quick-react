@@ -108,7 +108,8 @@ const handler: ApiHandler = async (c, next) => {
 	}
 	if (c.req.method === 'DELETE') {
 		const database = c.get('database'), sessionId = readSessionId(c.req.raw);
-		const oidcSession = sessionId ? await firstSql<{ sid: string }>(database, sql(database).select({
+		const localOnly = c.req.query('logout') === 'local';
+		const oidcSession = !localOnly && sessionId ? await firstSql<{ sid: string }>(database, sql(database).select({
 			table: 'base_oidc_sessions', columns: { sid: 'sid' }, where: [{ column: 'issuer', value: config.issuer }, { column: 'session_id', value: sessionId }],
 		})) : undefined;
 		if (oidcSession) {

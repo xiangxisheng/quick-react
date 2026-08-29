@@ -79,7 +79,7 @@ export const verifyPassword = async (password: string, encoded: string) => {
 	return difference === 0;
 };
 
-export const sessionCookieName = 'quick_react_session';
+export const sessionCookieName = 'base_system_session';
 
 export const readSessionId = (request: Request) => {
 	const cookies = request.headers.get('cookie') ?? '';
