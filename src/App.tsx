@@ -104,6 +104,7 @@ const App = ({ commonApi }: AppType) => {
 	routes.push({ path: '*', element: <StatusPage commonApi={commonApi} apiSuffix={initialData.apiSuffix} pageSuffix={initialData.pageSuffix} pageStatus={initialData.pageStatus} /> });
 
 	const location = useLocation(); // 获取当前 URL 路径
+	const isPopup = new URLSearchParams(location.search).get('popup') === '1';
 	const [current, setCurrent] = useState(''); // 当前高亮的顶层菜单，无匹配时为空
 	const navigate = useNavigate();
 	const items: MenuItem[] = toMenuItems(siteNavigation, (key) => navigate(pageUrl(key)));
@@ -134,7 +135,7 @@ const App = ({ commonApi }: AppType) => {
 	const memoizedRoutes = useMemo(() => routes, []);
 	return (
 		<Layout style={{ height: '100%' }}>
-			<Layout.Header style={{ height: 48, minHeight: 48, lineHeight: '48px', padding: '0 24px', display: 'flex', alignItems: 'center', background: '#fff', borderBottom: '1px solid #f0f0f0' }}>
+			{!isPopup && <Layout.Header style={{ height: 48, minHeight: 48, lineHeight: '48px', padding: '0 24px', display: 'flex', alignItems: 'center', background: '#fff', borderBottom: '1px solid #f0f0f0' }}>
 				<Menu
 					onClick={onClick}
 					selectedKeys={[current]}
@@ -143,7 +144,7 @@ const App = ({ commonApi }: AppType) => {
 					style={{ flex: 1, minWidth: 0, borderBottom: 0 }}
 				/>
 				<Space size={4}><AuthActions auth={initialData.auth} commonApi={commonApi} apiSuffix={initialData.apiSuffix} pageSuffix={initialData.pageSuffix} /></Space>
-			</Layout.Header>
+			</Layout.Header>}
 			<Content>
 				<Routes>
 					{memoizedRoutes.map((route) => (

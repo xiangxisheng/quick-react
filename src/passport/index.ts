@@ -24,7 +24,9 @@ const Passport = {
 		const result = await response.json();
 		if (!response.ok || !result.redirectTo) throw new Error(result?.feedback?.message || 'Passport 登录初始化失败');
 		// 登录一律在弹窗里完成，业务页面不会离开。
-		const popup = window.open(result.redirectTo, 'passport_login', `width=${options.width ?? 480},height=${options.height ?? 680},resizable=yes,scrollbars=yes`);
+		const popupUrl = new URL(result.redirectTo, currentOrigin());
+		popupUrl.searchParams.set('popup', '1');
+		const popup = window.open(popupUrl.toString(), 'passport_login', `width=${options.width ?? 480},height=${options.height ?? 680},resizable=yes,scrollbars=yes`);
 		if (!popup) throw new Error('登录窗口被浏览器拦截');
 		return new Promise<{ next?: PassportNextAction }>((resolve, reject) => {
 			const timer = window.setTimeout(() => { window.clearInterval(closeWatcher); popup.close(); window.removeEventListener('message', listener); reject(new Error('Passport 登录已超时')); }, 10 * 60 * 1000);
