@@ -35,4 +35,5 @@ const handler: ApiHandler = async (c, next, params) => {
 	return apiResponse(c, 200, { table: { option: { rowKey: 'user_id', actions: { row: [{ key: 'reset-password', label: '重设密码', form: { columns: passwordResetColumns } }] } }, columns, dataSource, totalRecords: dataSource.length } });
 };
 
+export const acceptsTrailingParams = true;
 export default handler;
