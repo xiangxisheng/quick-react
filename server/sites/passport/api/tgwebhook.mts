@@ -63,7 +63,7 @@ const handler: ApiHandler = async (c) => {
 	if (!database) return jsonStatus(c, 500, 'error');
 	if (!await claimUpdate(database, botId, update.update_id)) return jsonStatus(c, 200, 'ok');
 	try {
-		await handlePassportTelegramUpdate(database, c.get('globalDatabase'), c.env.SNOWFLAKE_WORKER_ID, {
+		await handlePassportTelegramUpdate(database, c.get('globalDatabase'), c.get('site').siteKey, c.env.SNOWFLAKE_WORKER_ID, {
 			id: String(bot.id),
 			botToken: bot.bot_token,
 		}, update);

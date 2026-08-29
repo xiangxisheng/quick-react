@@ -49,10 +49,10 @@ const resolveSiteDsn = (dsn: string) => {
 };
 
 const migrateSite = async (siteKey: string) => {
-	const rows = await allSql<{ site_key: string; base_site_key: string | null; dsn: string; database_binding: string }>(defaultDatabase, sql(defaultDatabase).select({ table: 'global_sites', columns: { site_key: 'site_key', base_site_key: 'base_site_key', dsn: 'dsn', database_binding: 'database_binding' } }));
+	const rows = await allSql<{ site_key: string; base_site_key: string | null; dsn: string; database_binding: string; is_system: number }>(defaultDatabase, sql(defaultDatabase).select({ table: 'global_sites', columns: { site_key: 'site_key', base_site_key: 'base_site_key', dsn: 'dsn', database_binding: 'database_binding', is_system: 'is_system' } }));
 	const sites = new Map(rows.map((site) => [site.site_key, site]));
 	const site = sites.get(siteKey);
-	if (!site || siteKey === 'global') throw new Error('Site is not eligible for business migration');
+	if (!site || site.is_system) throw new Error('Site is not eligible for business migration');
 	if (site.database_binding) throw new Error('D1 Binding migrations must run during deployment');
 	const chain: string[] = [];
 	const visited = new Set<string>();
@@ -80,7 +80,7 @@ const migrateSite = async (siteKey: string) => {
 await initializeCodeSites(defaultDatabase, workerCodeSites, Object.fromEntries(
 	Object.entries(workerSiteNavigations).map(([siteKey, navigation]) => [siteKey, navigation[0]?.label || siteKey]),
 ));
-const codeSiteRows = await allSql<{ site_key: string; database_binding: string }>(defaultDatabase, sql(defaultDatabase).select({ table: 'global_sites', columns: { site_key: 'site_key', database_binding: 'database_binding' }, where: [{ column: 'site_key', operator: '!=', value: 'global' }, { column: 'site_key', operator: '!=', value: 'base' }] }));
+const codeSiteRows = await allSql<{ site_key: string; database_binding: string }>(defaultDatabase, sql(defaultDatabase).select({ table: 'global_sites', columns: { site_key: 'site_key', database_binding: 'database_binding' }, where: [{ column: 'is_system', value: 0 }] }));
 for (const site of codeSiteRows) {
 	if (!workerCodeSites.includes(site.site_key as typeof workerCodeSites[number]) || site.database_binding) continue;
 	await migrateSite(site.site_key);

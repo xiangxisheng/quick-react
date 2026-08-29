@@ -47,7 +47,7 @@ export const initializeCodeSites = async (
 	siteNames: Record<string, string> = {},
 ) => {
 	for (const siteKey of codeSites) {
-		if (!siteKeyPattern.test(siteKey) || siteKey === 'base' || siteKey === 'global') continue;
+		if (!siteKeyPattern.test(siteKey) || siteKey === 'base') continue;
 		const name = siteNames[siteKey] || siteKey;
 		await runSql(database, sql(database).ignoreInsert('global_sites', ['site_key'], { site_key: siteKey, name, base_site_key: 'base', dsn: '', database_binding: '', status: 'enabled', migration_status: 'ready', is_default: 0, is_system: 0 }));
 	}

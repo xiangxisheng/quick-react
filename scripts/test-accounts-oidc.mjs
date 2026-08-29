@@ -95,7 +95,10 @@ try {
 	const strictStart = await request('/api/sign.php', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
 	const strictAuthorize = await app.request((await strictStart.json()).redirectTo, { headers: { cookie: `passport_session=${sessionId}` } });
 	assert.equal(strictAuthorize.status, 400);
-	assert.match((await strictAuthorize.json()).feedback.message, /redirect_uri 未注册/);
+	const strictMessage = (await strictAuthorize.json()).feedback.message;
+	assert.match(strictMessage, /redirect_uri 未注册/);
+	assert.match(strictMessage, /实际请求为 https:\/\/accounts\.test\/api\/accounts\/oidc\/callback/);
+	assert.match(strictMessage, /允许地址为 https:\/\/client\.test\/callback/);
 	strictDatabase.prepare('UPDATE passport_oidc_clients SET strict_redirect_uri = 0 WHERE id = ?').run(clientId);
 	strictDatabase.close();
 	// 启用 Accounts 登录的业务站点：需要登录的页面直接弹窗，不再跳登录页，也不给本地注册入口。

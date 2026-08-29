@@ -32,7 +32,10 @@ const handler: ApiHandler = async (c) => {
 	const client: Client | null = await oidcClient(database, values.client_id);
 	if (!client || client.status !== 'enabled') return apiMessage(c, 400, 'OIDC 客户端不存在或已停用');
 	const registeredRedirectUris = await registeredClientRedirectUris(c, client);
-	if (!registeredRedirectUris.includes(values.redirect_uri)) return apiMessage(c, 400, 'redirect_uri 未注册');
+	if (!registeredRedirectUris.includes(values.redirect_uri)) {
+		const allowed = registeredRedirectUris.length ? registeredRedirectUris.join('、') : '（未配置）';
+		return apiMessage(c, 400, `redirect_uri 未注册：实际请求为 ${values.redirect_uri || '（空）'}；允许地址为 ${allowed}`);
+	}
 	const scopes = [...new Set(values.scope.split(/\s+/).filter(Boolean))];
 	const allowed = new Set(client.allowed_scopes.split(/\s+/));
 	if (!scopes.includes('openid') || scopes.some((scope) => !allowed.has(scope))) return apiMessage(c, 400, '请求的 scope 不被允许');

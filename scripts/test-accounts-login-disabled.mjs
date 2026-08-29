@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { DatabaseSync } from 'node:sqlite';
 
 // 未启用 Accounts 登录的站点，任何入口都不得走 Accounts 验证。
 const temporaryDirectory = await mkdtemp(join(tmpdir(), 'quick-react-login-disabled-'));
@@ -53,8 +54,19 @@ try {
 	// 身份中心站点和业务站点用同一套模块：后台同样有“Accounts 登录”设置页，可以在这里关掉这种登录方式。
 	const cookie = login.headers.get('set-cookie').split(';')[0];
 	assert.equal((await request('/api/panel/admin/global/site/hosts.php', { method: 'POST', headers: { cookie }, body: { hostname: 'accounts.test', site_key: 'passport' } })).status, 201);
+	const siteDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
+	siteDatabase.prepare("INSERT INTO global_sites (site_key, name, base_site_key, dsn, database_binding, status, migration_status, is_default, is_system) VALUES ('business', 'Business', 'base', '', '', 'enabled', 'ready', 0, 0)").run();
+	siteDatabase.close();
+	assert.equal((await request('/api/panel/admin/global/site/hosts.php', { method: 'POST', headers: { cookie }, body: { hostname: 'business.test', site_key: 'business' } })).status, 201);
 	const settingsPath = '/api/panel/admin/system/settings/accounts-oidc.php';
-	assert.equal((await app.request(`http://accounts.test${settingsPath}`, { headers: { cookie } })).status, 200);
+	const expectedSettingsFields = ['enabled', 'issuerSource', 'issuer', 'clientId', 'clientSecret'];
+	const globalSettings = await (await request(settingsPath, { headers: { cookie } })).json();
+	const passportSettings = await (await app.request(`http://accounts.test${settingsPath}`, { headers: { cookie } })).json();
+	const businessSettings = await (await app.request(`http://business.test${settingsPath}`, { headers: { cookie } })).json();
+	assert.deepEqual(globalSettings.formPage.fields.map((field) => field.name), expectedSettingsFields);
+	assert.deepEqual(passportSettings.formPage.fields.map((field) => field.name), expectedSettingsFields);
+	assert.deepEqual(businessSettings.formPage.fields.map((field) => field.name), expectedSettingsFields);
+	assert.deepEqual(passportSettings.formPage.actions.map((action) => action.key), ['test']);
 	const passportPanel = await (await app.request('http://accounts.test/panel/admin.html', { headers: { accept: 'text/html', cookie } })).text();
 	const passportInitial = JSON.parse(passportPanel.match(/__INITIAL_DATA__=(\{.*?\});<\/script>/s)[1]);
 	const navigationKeys = (items) => items.flatMap((item) => [String(item.key), ...navigationKeys(item.children ?? [])]);

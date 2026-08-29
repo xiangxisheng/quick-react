@@ -61,7 +61,7 @@ const transferGroups = async (database: DatabaseAdapter, siteKey: string) => {
 	const groups = new Set<PortableTableGroup>(['base']);
 	let current: string | null = siteKey;
 	for (let depth = 0; current && current !== 'base' && depth < 8; depth += 1) {
-		if (current !== 'global' && current in portableTableGroups) groups.add(current as PortableTableGroup);
+		if (current in portableTableGroups) groups.add(current as PortableTableGroup);
 		const parent: { base_site_key: string | null } | null = await firstSql<{ base_site_key: string | null }>(database, sql(database).select({ table: 'global_sites', columns: { base_site_key: 'base_site_key' }, where: [{ column: 'site_key', value: current }] }));
 		current = parent?.base_site_key ?? null;
 	}
@@ -162,8 +162,9 @@ const handler: ApiHandler = async (c, next, params) => {
 	}
 	if (params.id && c.req.method === 'POST') {
 		const action = c.req.query('action')?.trim() || 'migrate';
-		const site = await firstSql<{ site_key: string; dsn: string; database_binding: string }>(database, sql(database).select({ table: 'global_sites', columns: { site_key: 'site_key', dsn: 'dsn', database_binding: 'database_binding' }, where: [{ column: 'site_key', value: params.id }] }));
+		const site = await firstSql<{ site_key: string; dsn: string; database_binding: string; is_system: number }>(database, sql(database).select({ table: 'global_sites', columns: { site_key: 'site_key', dsn: 'dsn', database_binding: 'database_binding', is_system: 'is_system' }, where: [{ column: 'site_key', value: params.id }] }));
 		if (!site) return apiMessage(c, 404, '站点不存在');
+		if (site.is_system) return apiMessage(c, 403, '系统站点由部署流程维护，不能执行连接测试、结构迁移或数据迁移');
 
 		if (action === 'test') {
 			if (site.database_binding) return apiMessage(c, 400, 'D1 Binding 由部署环境注入，无法在这里测试连接');

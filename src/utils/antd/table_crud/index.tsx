@@ -77,6 +77,8 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 	const [tableColumns, setTableColumns] = useState<TableColumnsType<DataType>>();
 	const [resJsonColumns, setResJsonColumns] = useState<ResJsonTableColumn[]>([]);
 	const [resJsonTableOption, setResJsonTableOption] = useState<ResJsonTableOption>({ rowKey: 'key' });
+	// 行操作回调会被保存进 columns 状态，必须通过 ref 读取后端最新协议，不能捕获首次渲染的默认 rowKey。
+	const tableOptionRef = useRef<ResJsonTableOption>({ rowKey: 'key' });
 	const [queryFields, setQueryFields] = useState<TableQueryField[]>([]);
 	const [queryActions, setQueryActions] = useState<TableAction[]>([]);
 	const [queryValues, setQueryValues] = useState<Record<string, string>>({});
@@ -105,8 +107,8 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 
 	const onDeleteOne = async (value: any, record: DataType, index: number, action?: TableAction): Promise<void> => {
 		// 点击删除按钮时，弹出提示让用户确认删除操作
-		const rowId = record[resJsonTableOption.rowKey];
-		const aContentLine: string[] = [action?.confirm ?? `确定要删除 ${resJsonTableOption.rowKey} = ${rowId} 吗？`];
+		const rowKey = tableOptionRef.current.rowKey, rowId = record[rowKey];
+		const aContentLine: string[] = [action?.confirm ?? `确定要删除 ${rowKey} = ${rowId} 吗？`];
 		if (!await commonApi.modalConfirm(aContentLine)) {
 			return;
 		}
@@ -119,7 +121,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 			alert('no cacheResJsonTable.columns');
 			return;
 		}
-		const rowId = String(record[resJsonTableOption.rowKey] ?? '');
+		const rowId = String(record[tableOptionRef.current.rowKey] ?? '');
 		if (!rowId) {
 			console.error('编辑失败：记录缺少 rowKey', record);
 			return;
@@ -190,6 +192,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 				// 表格配置整体替换：合并会让上一张表的操作按钮、查询字段残留到新表上。
 				const tableOption: ResJsonTableOption = resJSON.table.option ?? resJsonTableOption;
 				if (resJSON.table.option) {
+					tableOptionRef.current = tableOption;
 					setResJsonTableOption(tableOption);
 					const fields = resJSON.table.option.queryFields;
 					setQueryActions(resJSON.table.option.actions?.query ?? []);
@@ -369,7 +372,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 	}
 
 	const onTest = async (action: TableAction, record: DataType) => {
-		const rowId = String(record[resJsonTableOption.rowKey] ?? '');
+		const rowId = String(record[tableOptionRef.current.rowKey] ?? '');
 		if (!rowId) return;
 		const url = `${apiPath}/${encodeURIComponent(rowId)}?action=test`;
 		if (!action.form) {
@@ -419,7 +422,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 		});
 	};
 	const onSimpleRowAction = async (action: TableAction, record: DataType) => {
-		const rowId = String(record[resJsonTableOption.rowKey] ?? '');
+		const rowId = String(record[tableOptionRef.current.rowKey] ?? '');
 		if (!rowId || action.disabled) return;
 		if (action.confirm && !await commonApi.modalConfirm([action.confirm])) return;
 		await commonApi.apiFetch(`${apiPath}/${encodeURIComponent(rowId)}?action=${encodeURIComponent(action.key)}`, { method: 'POST' });
@@ -427,7 +430,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 	};
 	const onRowFormAction = async (action: TableAction, record: DataType) => {
 		if (!action.form || action.disabled) return;
-		const rowId = String(record[resJsonTableOption.rowKey] ?? '');
+		const rowId = String(record[tableOptionRef.current.rowKey] ?? '');
 		if (!rowId) return;
 		if (action.confirm && !await commonApi.modalConfirm([action.confirm])) return;
 		const drawerForm = drawer.drawerForm({
@@ -460,7 +463,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 		test: (action, _value, record) => <a key={action.key} aria-disabled={action.disabled} onClick={() => !action.disabled && onTest(action, record)}>{action.label}</a>,
 		download: (action, _value, record) => <a key={action.key} aria-disabled={action.disabled} onClick={async () => {
 			if (action.disabled) return;
-			const key = String(record[resJsonTableOption.rowKey] ?? '');
+			const key = String(record[tableOptionRef.current.rowKey] ?? '');
 			const query = new URLSearchParams(appliedQueryValues);
 			query.set('key', key);
 			const response = await commonApi.apiFetch(`${apiPath}?${query}`, { method: 'PUT' });

@@ -21,7 +21,7 @@ Object.defineProperty(window, 'matchMedia', { value: () => ({ matches: false, ad
 globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} } as typeof ResizeObserver;
 
 const React = await import('react');
-const { render, screen, waitFor } = await import('@testing-library/react');
+const { cleanup, render, screen, waitFor } = await import('@testing-library/react');
 const userEvent = (await import('@testing-library/user-event')).default;
 const { MemoryRouter } = await import('react-router-dom');
 const TableCRUD = (await import('../src/utils/antd/table_crud/index.js')).default;
@@ -29,16 +29,16 @@ const TableCRUD = (await import('../src/utils/antd/table_crud/index.js')).defaul
 const queryFields = [{ dataIndex: 'table', label: '数据表', component: 'select', defaultValue: 'table_a', options: [{ value: 'table_a', text: 'table_a' }, { value: 'table_b', text: 'table_b' }] }];
 // 第一张表：有行操作和工具栏批量删除。
 const tableA = {
-	option: { rowKey: 'key', queryFields, actions: { query: [{ key: 'search', label: '搜索' }], toolbar: [{ key: 'delete', label: '删除' }], row: [{ key: 'edit', label: '编辑' }] } },
+	option: { rowKey: 'id', queryFields, actions: { query: [{ key: 'search', label: '搜索' }], toolbar: [{ key: 'delete', label: '删除' }], row: [{ key: 'edit', label: '编辑' }] } },
 	columns: [{ dataIndex: 'name', title: '名称', component: 'textbox' }],
-	dataSource: [{ key: 'shared-key', name: 'A 行' }],
+	dataSource: [{ id: 'acct_string_id', name: 'A 行' }],
 	totalRecords: 1,
 };
 // 第二张表整体没有 actions：合并语义下会残留上一张表的按钮。行键故意与上一张表相同，用来暴露选中状态残留。
 const tableB = {
 	option: { rowKey: 'key', queryFields },
 	columns: [{ dataIndex: 'title', title: '标题', component: 'textbox' }],
-	dataSource: [{ key: 'shared-key', title: 'B 行' }],
+	dataSource: [{ key: 'acct_string_id', title: 'B 行' }],
 	totalRecords: 1,
 };
 
@@ -46,6 +46,7 @@ const requests: string[] = [];
 const commonApi = {
 	apiFetch: async (url: string) => {
 		requests.push(String(url));
+		if (String(url).includes('/acct_string_id')) return new Response(JSON.stringify({ id: 'acct_string_id', name: 'A 行' }), { headers: { 'content-type': 'application/json' } });
 		const table = String(url).includes('table=table_b') ? tableB : tableA;
 		return new Response(JSON.stringify({ table }), { headers: { 'content-type': 'application/json' } });
 	},
@@ -57,8 +58,16 @@ await waitFor(() => assert.ok(screen.getByText('A 行')));
 assert.ok(screen.getByText('编辑'), '第一张表有行操作');
 assert.ok(screen.getByRole('button', { name: /删除/ }), '第一张表有工具栏删除');
 
-// 选中一行后切换数据表。
+// 操作列必须使用同一次后端响应中的字符串 rowKey，不能捕获首次渲染的默认 key。
 const user = userEvent.setup({ document: dom.window.document });
+await user.click(screen.getByText('编辑'));
+await waitFor(() => assert.ok(requests.some((url) => url.includes('/acct_string_id'))));
+cleanup();
+requests.length = 0;
+render(React.createElement(MemoryRouter, null, React.createElement(TableCRUD, { commonApi, resourcePath: '/panel/admin/data/rows' })));
+await waitFor(() => assert.ok(screen.getByText('A 行')));
+
+// 选中一行后切换数据表。
 const checkbox = document.querySelectorAll('tbody input[type="checkbox"]')[0] as HTMLInputElement;
 await user.click(checkbox);
 await waitFor(() => assert.equal((screen.getByRole('button', { name: /删除/ }) as HTMLButtonElement).disabled, false, '选中后批量删除可用'));

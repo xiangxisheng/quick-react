@@ -87,15 +87,14 @@ const editAccounts = (database: DatabaseAdapter, bot: PassportTelegramBot, ident
 
 const pendingOtp = (database: DatabaseAdapter, identity: TelegramIdentity) => firstSql<{ email: string }>(database, sql(database).select({ table: 'passport_email_otp', columns: { email: 'email' }, where: [{ column: 'bot_id', value: identity.botId }, { column: 'telegram_user_id', value: identity.telegramUserId }, { column: 'status', value: 'pending' }], orderBy: [{ column: 'created_at', direction: 'DESC' }, { column: 'id', direction: 'DESC' }], limit: 1 }));
 const latestOtp = (database: DatabaseAdapter, identity: TelegramIdentity) => firstSql<{ email: string }>(database, sql(database).select({ table: 'passport_email_otp', columns: { email: 'email' }, where: [{ column: 'bot_id', value: identity.botId }, { column: 'telegram_user_id', value: identity.telegramUserId }], orderBy: [{ column: 'created_at', direction: 'DESC' }, { column: 'id', direction: 'DESC' }], limit: 1 }));
-const issueAndSendOtp = async (database: DatabaseAdapter, globalDatabase: DatabaseAdapter, identity: TelegramIdentity, email: string) => {
+const issueAndSendOtp = async (database: DatabaseAdapter, globalDatabase: DatabaseAdapter, siteKey: string, identity: TelegramIdentity, email: string) => {
 	const issued = await issueTelegramEmailOtp(database, identity, email);
 	try {
-		await sendDefaultCloudEmail(globalDatabase, 'passport', 'email_verification', issued.email, {
+		await sendDefaultCloudEmail(globalDatabase, siteKey, 'email_verification', issued.email, {
 			code: issued.code,
 			email: issued.email,
 			nickname: identity.nickname,
 			expires_minutes: '10',
-			site_name: 'Passport',
 		});
 	} catch (error) {
 		await expireTelegramEmailOtp(database, identity);
@@ -119,12 +118,12 @@ const openEmail = async (database: DatabaseAdapter, bot: PassportTelegramBot, id
 	return editMenu(database, bot, identity, messageId, 'menu', `${row.verified ? '邮箱已验证' : '邮箱未验证'}：${row.email}`, keyboard([{ text: '返回邮箱列表', callback_data: 'menu:emails' }]));
 };
 
-const handleEmailInput = async (database: DatabaseAdapter, globalDatabase: DatabaseAdapter, bot: PassportTelegramBot, identity: TelegramIdentity, menu: MenuState, text: string) => {
+const handleEmailInput = async (database: DatabaseAdapter, globalDatabase: DatabaseAdapter, siteKey: string, bot: PassportTelegramBot, identity: TelegramIdentity, menu: MenuState, text: string) => {
 	let email: string;
 	try { email = normalizePassportEmail(text); }
 	catch { return editMenu(database, bot, identity, menu.message_id, 'email', '邮箱格式不正确，请重新输入', backAccountsKeyboard); }
 	try {
-		await issueAndSendOtp(database, globalDatabase, identity, email);
+		await issueAndSendOtp(database, globalDatabase, siteKey, identity, email);
 		return promptOtp(database, bot, identity, menu.message_id, email);
 	} catch (error) {
 		if (error instanceof TelegramOtpRateLimitError) return editMenu(database, bot, identity, menu.message_id, 'email', `发送太频繁，请 ${error.waitSeconds} 秒后重试`, backAccountsKeyboard);
@@ -151,7 +150,7 @@ const handleOtpInput = async (database: DatabaseAdapter, configuredWorkerId: unk
 	return promptOtp(database, bot, identity, menu.message_id, pending.email, prefix);
 };
 
-const handleMessage = async (database: DatabaseAdapter, globalDatabase: DatabaseAdapter, configuredWorkerId: unknown, bot: PassportTelegramBot, message: TelegramMessage) => {
+const handleMessage = async (database: DatabaseAdapter, globalDatabase: DatabaseAdapter, siteKey: string, configuredWorkerId: unknown, bot: PassportTelegramBot, message: TelegramMessage) => {
 	if (message.chat?.type !== 'private') return;
 	const identity = identityFrom(bot, message.from, message.chat);
 	if (!identity) return;
@@ -159,7 +158,7 @@ const handleMessage = async (database: DatabaseAdapter, globalDatabase: Database
 	if (/^\/(start|menu)(@\w+)?$/i.test(text)) return showRootMenu(database, bot, identity);
 	const menu = await loadMenu(database, identity);
 	if (!menu) return showRootMenu(database, bot, identity);
-	if (text && menu.mode === 'email') await handleEmailInput(database, globalDatabase, bot, identity, menu, text);
+	if (text && menu.mode === 'email') await handleEmailInput(database, globalDatabase, siteKey, bot, identity, menu, text);
 	else if (text && menu.mode === 'otp') await handleOtpInput(database, configuredWorkerId, bot, identity, menu, text);
 	else if (text) await showRootMenu(database, bot, identity);
 	if (text && message.message_id !== undefined) {
@@ -168,7 +167,7 @@ const handleMessage = async (database: DatabaseAdapter, globalDatabase: Database
 	}
 };
 
-const handleCallback = async (database: DatabaseAdapter, globalDatabase: DatabaseAdapter, configuredWorkerId: unknown, bot: PassportTelegramBot, callback: TelegramCallback) => {
+const handleCallback = async (database: DatabaseAdapter, globalDatabase: DatabaseAdapter, siteKey: string, configuredWorkerId: unknown, bot: PassportTelegramBot, callback: TelegramCallback) => {
 	const callbackId = typeof callback.id === 'string' ? callback.id : '';
 	if (callback.message?.chat?.type !== 'private') return;
 	const identity = identityFrom(bot, callback.from, callback.message.chat), messageId = decimal(callback.message.message_id);
@@ -212,7 +211,7 @@ const handleCallback = async (database: DatabaseAdapter, globalDatabase: Databas
 		const pending = await latestOtp(database, identity);
 		if (!pending) return editMenu(database, bot, identity, messageId, 'email', '没有待验证的邮箱，请先输入邮箱地址', backAccountsKeyboard);
 		try {
-			await issueAndSendOtp(database, globalDatabase, identity, pending.email);
+			await issueAndSendOtp(database, globalDatabase, siteKey, identity, pending.email);
 			return promptOtp(database, bot, identity, messageId, pending.email);
 		} catch (error) {
 			const text = error instanceof TelegramOtpRateLimitError ? `发送太频繁，请 ${error.waitSeconds} 秒后重试` : '验证码邮件发送失败，请稍后重试';
@@ -237,10 +236,11 @@ const handleCallback = async (database: DatabaseAdapter, globalDatabase: Databas
 export const handlePassportTelegramUpdate = async (
 	database: DatabaseAdapter,
 	globalDatabase: DatabaseAdapter,
+	siteKey: string,
 	configuredWorkerId: unknown,
 	bot: PassportTelegramBot,
 	update: PassportTelegramUpdate,
 ) => {
-	if (update.callback_query) await handleCallback(database, globalDatabase, configuredWorkerId, bot, update.callback_query);
-	else if (update.message) await handleMessage(database, globalDatabase, configuredWorkerId, bot, update.message);
+	if (update.callback_query) await handleCallback(database, globalDatabase, siteKey, configuredWorkerId, bot, update.callback_query);
+	else if (update.message) await handleMessage(database, globalDatabase, siteKey, configuredWorkerId, bot, update.message);
 };

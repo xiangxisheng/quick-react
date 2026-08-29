@@ -30,7 +30,7 @@ const handler: ApiHandler = async (c, _next, params) => {
 			let issued: Awaited<ReturnType<typeof issueExternalEmailOtp>>;
 			try { issued = await issueExternalEmailOtp(database, pending, String(body.email ?? '')); }
 			catch (error) { return apiMessage(c, 400, error instanceof Error ? error.message : '邮箱不合法'); }
-			try { await sendDefaultCloudEmail(c.get('globalDatabase'), 'passport', 'email_verification', issued.email, { code: issued.code, email: issued.email, expires_minutes: '10' }); }
+			try { await sendDefaultCloudEmail(c.get('globalDatabase'), c.get('site').siteKey, 'email_verification', issued.email, { code: issued.code, email: issued.email, expires_minutes: '10' }); }
 			catch (error) { await discardExternalEmailOtp(database, pending.id_hash); return apiMessage(c, 502, error instanceof Error ? error.message : '邮箱验证码发送失败'); }
 			return apiResponse(c, 200, { status: 'email_sent' });
 		}
