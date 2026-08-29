@@ -126,12 +126,12 @@ let logoutCalls = 0;
 	},
 };
 render(React.createElement(MemoryRouter, {}, React.createElement(AuthActions, {
-	auth: { component: 'dropdown', currentUser: { id: 1, username: 'logout_user' }, actions: [{ key: '/sign', label: '退出登录', action: 'logout', icon: 'logout' }], pages: [] },
+	auth: { component: 'dropdown', currentUser: { id: 1, username: 'logout_user' }, actions: [{ key: '/accounts/sign', label: '退出 Accounts', action: 'accounts-logout', icon: 'logout' }], pages: [] },
 	commonApi, apiSuffix: '.php', pageSuffix: '.html',
 })));
 const user = userEvent.setup({ document: dom.window.document });
 await user.click(screen.getByRole('button', { name: /logout_user/ }));
-await user.click(await screen.findByText('退出登录'));
+await user.click(await screen.findByText('退出 Accounts'));
 await waitFor(() => assert.equal(logoutCalls, 1));
 assert.equal(logoutCalls, 1);
 cleanup();

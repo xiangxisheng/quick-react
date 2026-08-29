@@ -1,7 +1,7 @@
 /** 业务站点统一的 Accounts 弹窗登录入口：只在用户点击后调用，本页不会离开。 */
 import type { ApiNextAction } from '@shared/types/api-response.mjs';
 
-type PassportSdk = { login: () => Promise<{ next?: ApiNextAction }>; logout: () => Promise<{ next?: ApiNextAction }> };
+type PassportSdk = { login: () => Promise<{ next?: ApiNextAction }>; logout: (options?: { signInPath?: string }) => Promise<{ next?: ApiNextAction }> };
 
 const loadPassport = async () => {
 	const passport = window as Window & { Passport?: PassportSdk };
@@ -21,4 +21,4 @@ const loadPassport = async () => {
 export const loginWithAccountsPopup = async () => (await loadPassport()).login();
 
 /** 由本站后端完成 Accounts 总退出；后续行为完全取自响应里的 next 指令。 */
-export const logoutWithAccounts = async () => (await loadPassport()).logout();
+export const logoutWithAccounts = async (options: { signInPath?: string } = {}) => (await loadPassport()).logout(options);

@@ -45,8 +45,15 @@ export default function AuthActions({ auth, commonApi, apiSuffix, pageSuffix }: 
 			} catch (error) { await commonApi.modalError([error instanceof Error ? error.message : 'Accounts 登录失败']); }
 			return;
 		}
+		if (action.action === 'local-logout') {
+			try {
+				const response = await commonApi.apiFetch(`/api/sign${apiSuffix}`, { method: 'DELETE' });
+				runApiNextAction((await response.json()).next);
+			} catch (error) { await commonApi.modalError([error instanceof Error ? error.message : '退出本站失败']); }
+			return;
+		}
 		try {
-			const result = await logoutWithAccounts() as { next?: ApiNextAction };
+			const result = await logoutWithAccounts({ signInPath: `/api/accounts/sign${apiSuffix}` }) as { next?: ApiNextAction };
 			runApiNextAction(result.next);
 		} catch (error) { await commonApi.modalError([error instanceof Error ? error.message : '退出登录失败']); }
 	};
