@@ -21,7 +21,7 @@ export const buildAuthState = async (c: Context<AppEnv>): Promise<AuthState> => 
 	const signPages: AuthPage[] = [
 		{ path: `/sign${siteConfig.pageSuffix}`, title: '登录', description: '登录 Quick React', mode: 'sign', apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'POST', redirectPath: `/panel/admin${siteConfig.pageSuffix}` },
 		...(site.siteKey === 'global' ? [{ path: `/sign-up${siteConfig.pageSuffix}`, title: '注册', description: '创建初始管理员', mode: 'sign-up' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'PUT' as const, redirectPath: `/sign${siteConfig.pageSuffix}` }] : []),
-		...(site.siteKey === 'passport' && site.codeSiteChain.includes('accounts_identity')
+		...(site.codeSiteChain.includes('accounts_identity')
 			? [{ path: `/accounts/sign${siteConfig.pageSuffix}`, title: 'Accounts 身份登录', description: '使用 Accounts 身份完成统一登录', mode: 'sign' as const, apiPath: `/api/accounts/sign${siteConfig.apiSuffix}`, submitMethod: 'POST' as const, redirectPath: `/` }]
 			: []),
 	];

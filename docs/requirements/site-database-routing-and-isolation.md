@@ -173,6 +173,13 @@ site2 -> site1 -> base
 
 构建阶段必须检查父站点存在、继承链无循环且不超过最大深度。数据库中新建或修改站点时也必须执行同样的校验。
 
+`server/modules/*` 里的功能模块插在继承链的 `base` 之前，所有站点一视同仁，不按站点标识做特殊判断：
+
+1. `accounts_oidc_client`（Accounts 登录及其“Accounts 登录”系统设置页）对每个站点都可用，包括身份中心站点自己；是否启用只看该站点系统设置里的开关。
+2. `accounts_oidc`、`accounts_identity`（OIDC 端点与 Accounts 身份）跟随 `passport` 代码站点的继承链：继承了 `passport` 的站点才提供 Accounts 身份，因为身份数据表由 `passport` 声明。
+
+因此“某个站点能不能用 Accounts 登录”“登录入口显示什么”全部由继承链和站点自己的系统设置决定，代码里不再出现 `siteKey === 'passport'` 之类的判断。
+
 请求解析需要区分代码级站点和业务站点：
 
 ```text

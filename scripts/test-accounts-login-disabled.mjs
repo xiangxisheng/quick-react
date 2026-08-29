@@ -45,6 +45,16 @@ try {
 	assert.equal(login.status, 200);
 	assert.ok(login.headers.get('set-cookie'));
 
+	// 身份中心站点和业务站点用同一套模块：后台同样有“Accounts 登录”设置页，可以在这里关掉这种登录方式。
+	const cookie = login.headers.get('set-cookie').split(';')[0];
+	assert.equal((await request('/api/panel/admin/global/site/hosts.php', { method: 'POST', headers: { cookie }, body: { hostname: 'accounts.test', site_key: 'passport' } })).status, 201);
+	const settingsPath = '/api/panel/admin/system/settings/accounts-oidc.php';
+	assert.equal((await app.request(`http://accounts.test${settingsPath}`, { headers: { cookie } })).status, 200);
+	const passportPanel = await (await app.request('http://accounts.test/panel/admin.html', { headers: { accept: 'text/html', cookie } })).text();
+	const passportInitial = JSON.parse(passportPanel.match(/__INITIAL_DATA__=(\{.*?\});<\/script>/s)[1]);
+	const navigationKeys = (items) => items.flatMap((item) => [String(item.key), ...navigationKeys(item.children ?? [])]);
+	assert.ok(navigationKeys(passportInitial.siteNavigation).includes('/panel/admin/system/settings/accounts-oidc'));
+
 	console.log('accounts login disabled test passed');
 } finally {
 	await rm(temporaryDirectory, { recursive: true, force: true });

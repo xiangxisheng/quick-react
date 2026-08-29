@@ -65,7 +65,8 @@ const configureForRequest = async (c: Context<WorkerEnv>) => {
 
 	const database = await resolveSiteDatabase(c, site, defaultDatabase);
 	if (!database) throw new Error(`Database target is unavailable for site ${site.siteKey}`);
-	const passportSite = site.siteKey === 'passport' ? site : site.siteKey === 'global' ? await siteRouter.resolveBySiteKey('passport', site.hostname) : undefined;
+	// 身份中心用自己的库；控制面额外连一份用于校验关联数据。业务站点只走 OIDC，不直连身份库。
+	const passportSite = site.codeSiteChain.includes('accounts_identity') ? site : site.isSystem ? await siteRouter.resolveBySiteKey('passport', site.hostname) : undefined;
 	let passportDatabase: DatabaseAdapter | undefined;
 	if (passportSite) {
 		try { passportDatabase = passportSite.siteKey === site.siteKey ? database : await resolveSiteDatabase(c, passportSite, defaultDatabase); }

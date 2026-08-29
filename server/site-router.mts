@@ -92,15 +92,18 @@ const buildSiteChain = (site: SiteRecord, sites: Map<string, SiteRecord>) => {
 	throw new Error(`Site inheritance exceeds maximum depth: ${site.siteKey}`);
 };
 
+/**
+ * 功能模块插在继承链的 base 之前，所有站点一视同仁：
+ * Accounts 登录（OIDC 客户端）对每个站点都可用，是否启用由站点自己的系统设置决定；
+ * 身份中心模块跟随 passport 代码站点的继承链，谁继承它谁提供 Accounts 身份。
+ */
 const buildEffectiveSiteChain = (site: SiteRecord, sites: Map<string, SiteRecord>) => {
 	const chain = buildSiteChain(site, sites);
-	if (site.siteKey === 'passport') {
-		const baseIndex = chain.lastIndexOf('base');
-		chain.splice(baseIndex < 0 ? chain.length : baseIndex, 0, 'accounts_oidc', 'accounts_identity');
-	} else {
-		const baseIndex = chain.lastIndexOf('base');
-		chain.splice(baseIndex < 0 ? chain.length : baseIndex, 0, 'accounts_oidc_client');
-	}
+	const modules = chain.includes('passport')
+		? ['accounts_oidc', 'accounts_identity', 'accounts_oidc_client']
+		: ['accounts_oidc_client'];
+	const baseIndex = chain.lastIndexOf('base');
+	chain.splice(baseIndex < 0 ? chain.length : baseIndex, 0, ...modules);
 	return chain;
 };
 
