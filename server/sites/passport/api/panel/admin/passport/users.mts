@@ -1,6 +1,6 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiMessage, apiResponse } from '@server/api-response.mjs';
-import { readStoredPassword } from '@server/auth.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiMessage, apiResponse } from '@server/modules/base/api-response.mjs';
+import { readStoredPassword } from '@server/modules/base/auth.mjs';
 import { allSql, sql } from '@server/database/sql.mjs';
 import { setPassportPassword } from '@server/passport/identity.mjs';
 

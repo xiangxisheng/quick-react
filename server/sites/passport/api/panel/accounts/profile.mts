@@ -1,5 +1,5 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiMessage, apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
 import { loadAccountProfile, updateAccountNickname } from '@server/passport/account.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 

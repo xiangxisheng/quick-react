@@ -1,7 +1,7 @@
-import type { ApiHandler } from '@server/api-router.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import { normalizeTechStackConfig } from '@server/modules/base/tech-stack.mjs';
-import { mergeChangedFields } from '@server/changed-fields.mjs';
-import { apiMessageData, apiResponse } from '@server/api-response.mjs';
+import { mergeChangedFields } from '@server/modules/base/changed-fields.mjs';
+import { apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 
 const formPage = {

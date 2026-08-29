@@ -1,5 +1,5 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiMessage, apiResponse } from '@server/api-response.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiMessage, apiResponse } from '@server/modules/base/api-response.mjs';
 import { sha256 } from '@server/accounts/oidc.mjs';
 import { accessTokenUser } from '@server/accounts/repository.mjs';
 

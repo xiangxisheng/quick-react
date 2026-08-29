@@ -1,9 +1,9 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiMessage, apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
 import { accountsOidcConfigKey, defaultAccountsOidcConfig, loadDiscovery, normalizeAccountsOidcConfig, oidcFetch } from '@server/accounts/client.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 import { allSql, sql } from '@server/database/sql.mjs';
-import { accountsIdentityApi } from '@server/navigation.mjs';
+import { accountsIdentityApi } from '@server/modules/base/navigation.mjs';
 
 const defaultIssuer = 'https://accounts.example.com';
 const createFormPage = (issuerOptions: Array<{ value: string; text: string; fieldValues?: Record<string, unknown> }>): FormPageConfig => ({

@@ -1,5 +1,5 @@
 import type { Context } from 'hono';
-import type { AppEnv } from '@server/types.mjs';
+import type { AppEnv } from '@server/modules/base/types.mjs';
 import { loadAccountsOidcConfig } from '@server/accounts/client.mjs';
 import { allSql, sql } from '@server/database/sql.mjs';
 

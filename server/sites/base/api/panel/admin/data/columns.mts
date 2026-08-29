@@ -1,9 +1,9 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiMessage, apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
 import { addColumn, databaseTypeOptions, dropColumn, renameColumn } from '@server/database/schema.mjs';
 import { runSql } from '@server/database/sql.mjs';
 import { assertTable, databaseQueryFields, databaseTableActions, getColumns, readTable } from '@server/sites/base/data/database-table.mjs';
-import { getChangedFields } from '@server/changed-fields.mjs';
+import { getChangedFields } from '@server/modules/base/changed-fields.mjs';
 
 const readBody = async (c: Parameters<ApiHandler>[0]): Promise<Record<string, unknown>> => c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>));
 const columnName = (value: unknown) => typeof value === 'string' && /^[A-Za-z_][A-Za-z0-9_]*$/.test(value) ? value : '';

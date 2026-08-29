@@ -1,6 +1,6 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiMessageData, apiResponse } from '@server/api-response.mjs';
-import { mergeChangedFields } from '@server/changed-fields.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
+import { mergeChangedFields } from '@server/modules/base/changed-fields.mjs';
 import { defaultSiteSettings, normalizeSiteSettings } from '@server/modules/base/site-settings.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 

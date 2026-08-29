@@ -1,4 +1,4 @@
-import { createStoredPassword, hashPassword, verifyPassword, verifyStoredPassword } from '@server/auth.mjs';
+import { createStoredPassword, hashPassword, verifyPassword, verifyStoredPassword } from '@server/modules/base/auth.mjs';
 import type { DatabaseAdapter, DatabaseBatchStatement } from '@server/database/index.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
 import { getPassportSnowflakeGenerator } from './snowflake.mjs';

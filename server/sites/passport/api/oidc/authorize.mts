@@ -1,11 +1,11 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiMessage } from '@server/api-response.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiMessage } from '@server/modules/base/api-response.mjs';
 import { loadPassportSession, readPassportSessionId } from '@server/passport/session.mjs';
 import { accountOnboarding } from '@server/accounts/onboarding.mjs';
 import { oidcRequestCookie, randomToken, sha256 } from '@server/accounts/oidc.mjs';
 import { runSql, sql } from '@server/database/sql.mjs';
 import { authorizationRequest, oidcClient } from '@server/accounts/repository.mjs';
-import { isSecureRequest } from '@server/request-origin.mjs';
+import { isSecureRequest } from '@server/modules/base/request-origin.mjs';
 import { registeredClientRedirectUris } from '@server/accounts/redirects.mjs';
 import { renderAuthorizeError } from '@server/templates/passport/api/oidc/authorize.mjs';
 

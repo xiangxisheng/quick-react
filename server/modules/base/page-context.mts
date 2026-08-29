@@ -3,7 +3,7 @@ import type { AppEnv } from './types.mjs';
 import type { AuthPage, AuthState, HeaderAction, PageStatus } from '@shared/types/initial-data.mjs';
 import { findNavigationItem, stripPageSuffix } from '@shared/navigation-tree.mjs';
 import { getFullSiteNavigation, getPageDefinitions, getSiteNavigation } from './navigation.mjs';
-import { firstSql, sql } from './database/sql.mjs';
+import { firstSql, sql } from '../../database/sql.mjs';
 
 // 前端固定注册的第三方登录回调页面，不属于导航树。
 const callbackPagePaths = ['/accounts/external/callback', '/accounts/external/wechat'];

@@ -1,5 +1,5 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiMessage, apiResponse } from '@server/api-response.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiMessage, apiResponse } from '@server/modules/base/api-response.mjs';
 import { oidcIssuer } from '@server/accounts/provider.mjs';
 import { parseFormBody, randomToken, safeEqual, sha256, sha256Base64Url, signIdToken } from '@server/accounts/oidc.mjs';
 import { accountUser, authorizationCode, oidcClient } from '@server/accounts/repository.mjs';

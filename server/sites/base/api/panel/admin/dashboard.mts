@@ -1,6 +1,6 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiResponse } from '@server/api-response.mjs';
-import { mockTables } from '@server/panel-data.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiResponse } from '@server/modules/base/api-response.mjs';
+import { mockTables } from '@server/modules/base/panel-data.mjs';
 import type { DashboardData } from '@shared/types/dashboard.mjs';
 
 const handler: ApiHandler = (c) => {

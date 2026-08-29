@@ -1,5 +1,5 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiMessage, apiResponse } from '@server/api-response.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiMessage, apiResponse } from '@server/modules/base/api-response.mjs';
 import { ensureSigningKey } from '@server/accounts/oidc.mjs';
 import { signingPublicKeys } from '@server/accounts/repository.mjs';
 

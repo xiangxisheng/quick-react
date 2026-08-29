@@ -1,4 +1,4 @@
-import { workerApiRoutes, workerSiteNavigations } from './.generated/worker-api-registry.mjs';
+import { workerApiRoutes, workerSiteNavigations } from '../../.generated/worker-api-registry.mjs';
 import { filterNavigationByRoles, mergeNavigation, stripPageSuffix, uniquePageDefinitions } from '@shared/navigation-tree.mjs';
 import type { NavigationItem } from '@shared/types/navigation.mjs';
 export type MenuNode = NavigationItem;

@@ -1,12 +1,12 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { clearSessionCookie, createSessionCookie, createStoredPassword, readSessionId, verifyStoredPassword } from '@server/auth.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { clearSessionCookie, createSessionCookie, createStoredPassword, readSessionId, verifyStoredPassword } from '@server/modules/base/auth.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
-import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
+import { apiMessage, apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 import { firstSql, runSql, sql } from '@server/database/sql.mjs';
 import { accountsLoginCookie, loadAccountsOidcConfig, loadDiscovery, oidcFetch } from '@server/accounts/client.mjs';
 import { randomToken, sha256Base64Url } from '@server/accounts/oidc.mjs';
-import { isSecureRequest, requestOrigin } from '@server/request-origin.mjs';
+import { isSecureRequest, requestOrigin } from '@server/modules/base/request-origin.mjs';
 import { clearPassportSessionCookie } from '@server/passport/session.mjs';
 import { passwordError } from '@server/auth/password-policy.mjs';
 

@@ -1,5 +1,5 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiMessage, apiResponse } from '@server/api-response.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiMessage, apiResponse } from '@server/modules/base/api-response.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
 import { readPassportSessionId } from '@server/passport/session.mjs';
 

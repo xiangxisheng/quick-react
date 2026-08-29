@@ -1,8 +1,8 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiMessage, apiResponse } from '@server/api-response.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiMessage, apiResponse } from '@server/modules/base/api-response.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
-import { requestOrigin } from '@server/request-origin.mjs';
+import { requestOrigin } from '@server/modules/base/request-origin.mjs';
 
 type ProviderId = 'google' | 'wechat';
 type WechatMode = 'open_platform' | 'official_account';

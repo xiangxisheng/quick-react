@@ -2,7 +2,7 @@ import type { DatabaseAdapter, DatabaseBatchStatement } from '@server/database/i
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
 import { randomToken, sha256, sha256Base64Url } from '@server/accounts/oidc.mjs';
 import { getPassportSnowflakeGenerator } from '@server/passport/snowflake.mjs';
-import { hashPassword, verifyPassword } from '@server/auth.mjs';
+import { hashPassword, verifyPassword } from '@server/modules/base/auth.mjs';
 import { normalizePassportEmail } from '@server/passport/identity.mjs';
 
 export type ExternalProviderId = 'google' | 'wechat';

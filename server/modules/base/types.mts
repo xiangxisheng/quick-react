@@ -1,12 +1,12 @@
-import type { DatabaseAdapter } from './database/index.mjs';
+import type { DatabaseAdapter } from '../../database/index.mjs';
 import type { SiteRequestContext, SiteRouter } from './site-router.mjs';
-import type { ConfigStore } from './modules/base/config-store.mjs';
-import type { SystemConfig } from './modules/base/system-config.mjs';
-import type { TechStackConfig } from './modules/base/tech-stack.mjs';
-import type { SiteSettings } from './modules/base/site-settings.mjs';
+import type { ConfigStore } from './config-store.mjs';
+import type { SystemConfig } from './system-config.mjs';
+import type { TechStackConfig } from './tech-stack.mjs';
+import type { SiteSettings } from './site-settings.mjs';
 import type { UserIdentity } from '@shared/types/user.mjs';
 import type { TableColumn, TableRow } from '@shared/types/table.mjs';
-import type { AccountsLoginMode } from './accounts/client.mjs';
+import type { AccountsLoginMode } from '../../accounts/client.mjs';
 
 export type RuntimeBindings = Record<string, unknown> & {
 	DEFAULT_DB?: unknown;

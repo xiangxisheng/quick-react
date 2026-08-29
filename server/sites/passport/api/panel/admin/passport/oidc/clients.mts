@@ -1,5 +1,5 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiMessage, apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
 import { parseRedirectUris, randomToken, sha256 } from '@server/accounts/oidc.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 import { allSql, runSql, sql } from '@server/database/sql.mjs';

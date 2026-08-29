@@ -1,7 +1,7 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
-import { createStoredPassword, readStoredPassword } from '@server/auth.mjs';
-import { getChangedFields } from '@server/changed-fields.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiMessage, apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
+import { createStoredPassword, readStoredPassword } from '@server/modules/base/auth.mjs';
+import { getChangedFields } from '@server/modules/base/changed-fields.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 import { assignableRoleOptions, parseRoles, serializeRoles, unknownAssignableRoles } from '@shared/types/role.mjs';

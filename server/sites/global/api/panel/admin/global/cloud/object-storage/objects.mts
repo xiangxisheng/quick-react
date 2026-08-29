@@ -1,5 +1,5 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiMessage, apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
 import { getCloudStorageProduct } from '@server/cloud/catalog.mjs';
 import { createCloudStorageAdapter, loadCloudStorageTarget } from '@server/cloud/resolve.mjs';
 import { allSql, sql } from '@server/database/sql.mjs';

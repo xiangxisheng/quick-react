@@ -1,12 +1,12 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiMessage, apiResponse } from '@server/api-response.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiMessage, apiResponse } from '@server/modules/base/api-response.mjs';
 import { bindReturnCookieName, clearBindReturnCookie, clearExternalStateCookie, consumeExternalState, createExternalState, createPendingExternalIdentity, discardExternalEmailOtp, externalAuthorizationUrl, externalPendingCookie, externalProvider, externalQrState, externalStateCookie, externalIdentityUser, externalStateCookieName, externalVerifiedCookie, fetchExternalProfile, issueExternalEmailOtp, pendingExternalIdentityByQrState, resolveExternalUser, verifyExternalEmailOtp, type ExternalProviderId } from '@server/accounts/external.mjs';
 import { readCookie } from '@server/accounts/oidc.mjs';
 import { postLoginRedirect } from '@server/accounts/onboarding.mjs';
 import { externalAvatarUrl, syncExternalAvatar } from '@server/passport/avatar.mjs';
 import { createPassportSessionCookie, ensurePassportDevice, loadPassportSession } from '@server/passport/session.mjs';
 import { runSql, sql } from '@server/database/sql.mjs';
-import { isSecureRequest, requestOrigin } from '@server/request-origin.mjs';
+import { isSecureRequest, requestOrigin } from '@server/modules/base/request-origin.mjs';
 import { sha256 } from '@server/accounts/oidc.mjs';
 import { sendDefaultCloudEmail } from '@server/cloud/email.mjs';
 

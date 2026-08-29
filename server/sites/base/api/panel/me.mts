@@ -1,5 +1,5 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiResponse } from '@server/api-response.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiResponse } from '@server/modules/base/api-response.mjs';
 import { loadAccountsOidcConfig } from '@server/accounts/client.mjs';
 import type { AccountCenterLink } from '@shared/types/user.mjs';
 

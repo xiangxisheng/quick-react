@@ -1,6 +1,6 @@
 import type { DatabaseAdapter, DatabaseBatchStatement } from '@server/database/index.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
-import { hashPassword, verifyPassword } from '@server/auth.mjs';
+import { hashPassword, verifyPassword } from '@server/modules/base/auth.mjs';
 import { normalizePassportEmail } from './identity.mjs';
 import { getPassportSnowflakeGenerator } from './snowflake.mjs';
 

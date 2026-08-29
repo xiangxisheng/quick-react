@@ -1,9 +1,9 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiMessage, apiResponse } from '@server/api-response.mjs';
-import { normalizeHostname } from '@server/site-router.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiMessage, apiResponse } from '@server/modules/base/api-response.mjs';
+import { normalizeHostname } from '@server/modules/base/site-router.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
-import { getChangedFields } from '@server/changed-fields.mjs';
-import { accountsIdentityApi } from '@server/navigation.mjs';
+import { getChangedFields } from '@server/modules/base/changed-fields.mjs';
+import { accountsIdentityApi } from '@server/modules/base/navigation.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
 
 const columns = [

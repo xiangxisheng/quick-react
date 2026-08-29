@@ -1,6 +1,6 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiResponse } from '@server/api-response.mjs';
-import { buildAuthState, resolvePageStatus, unavailablePageStatus } from '@server/page-context.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiResponse } from '@server/modules/base/api-response.mjs';
+import { buildAuthState, resolvePageStatus, unavailablePageStatus } from '@server/modules/base/page-context.mjs';
 
 const normalizePath = (value: string) => {
 	try { return new URL(value, 'http://localhost').pathname.slice(0, 256); }

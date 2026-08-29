@@ -1,5 +1,5 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiResponse } from '@server/api-response.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiResponse } from '@server/modules/base/api-response.mjs';
 import { loadAvatarUrl } from '@server/passport/avatar.mjs';
 
 /** 账户中心读取头像的临时访问地址；没有配置对象存储或还没有头像时返回空。 */

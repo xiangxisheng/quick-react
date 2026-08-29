@@ -1,5 +1,5 @@
-import type { DatabaseAdapter, DatabaseTarget } from './database/index.mjs';
-import { allSql, sql } from './database/sql.mjs';
+import type { DatabaseAdapter, DatabaseTarget } from '../../database/index.mjs';
+import { allSql, sql } from '../../database/sql.mjs';
 import { siteProvidesApi } from './navigation.mjs';
 
 export type SiteRecord = {

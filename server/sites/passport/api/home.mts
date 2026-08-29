@@ -1,5 +1,5 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiResponse } from '@server/api-response.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiResponse } from '@server/modules/base/api-response.mjs';
 import type { HomePageData } from '@shared/types/home.mjs';
 
 /**

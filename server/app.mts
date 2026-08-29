@@ -9,7 +9,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { compress } from 'hono/compress';
 import { etag } from 'hono/etag';
-import { getClientIp } from './client-ip.mjs';
+import { getClientIp } from './modules/base/client-ip.mjs';
 import worker from './worker.mjs';
 import { createSqliteAdapter } from './database/sqlite.mjs';
 import { createMysqlAdapter } from './database/mysql.mjs';
@@ -21,7 +21,7 @@ import { createDatabaseConfigStore } from './modules/base/config-store.mjs';
 import { configureSystemConfig, loadSystemConfig } from './modules/base/system-config.mjs';
 import { configureTechStack, loadTechStackConfig } from './modules/base/tech-stack.mjs';
 import type { WorkerBindings } from './worker.mjs';
-import type { AppEnv } from './types.mjs';
+import type { AppEnv } from './modules/base/types.mjs';
 import { workerCodeSites, workerSiteNavigations } from './.generated/worker-api-registry.mjs';
 
 const env = process.env;

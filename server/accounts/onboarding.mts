@@ -1,10 +1,10 @@
 import type { Context } from 'hono';
-import type { AppEnv } from '@server/types.mjs';
+import type { AppEnv } from '@server/modules/base/types.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 import { runSql, sql } from '@server/database/sql.mjs';
 import { clearOidcRequestCookie, oidcRequestCookie, oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
-import { isSecureRequest } from '@server/request-origin.mjs';
+import { isSecureRequest } from '@server/modules/base/request-origin.mjs';
 import { accountUsernameState, hasAccountPassword } from '@server/passport/account.mjs';
 
 export type OnboardingStep = 'username' | 'password' | 'done';

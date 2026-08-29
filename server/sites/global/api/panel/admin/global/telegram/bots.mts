@@ -1,11 +1,11 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
-import { getChangedFields } from '@server/changed-fields.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiMessage, apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
+import { getChangedFields } from '@server/modules/base/changed-fields.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { deleteTelegramWebhook, getTelegramBotIdentity, getTelegramWebhookInfo, setTelegramWebhook } from '@server/telegram/api.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
-import { accountsIdentityApi } from '@server/navigation.mjs';
+import { accountsIdentityApi } from '@server/modules/base/navigation.mjs';
 
 const columns = [
 	{ dataIndex: 'id', title: 'ID', dataType: 'int' as const },

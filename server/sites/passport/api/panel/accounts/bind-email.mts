@@ -1,9 +1,9 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiMessage, apiResponse } from '@server/api-response.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiMessage, apiResponse } from '@server/modules/base/api-response.mjs';
 import { AccountEmailRateLimitError, discardAccountEmailOtp, issueAccountEmailOtp, pendingAccountEmailOtp, verifyAccountEmailOtp } from '@server/passport/account.mjs';
 import { bindReturnCookie, externalProviders, externalVerifiedCookieName } from '@server/accounts/external.mjs';
 import { readCookie } from '@server/accounts/oidc.mjs';
-import { isSecureRequest } from '@server/request-origin.mjs';
+import { isSecureRequest } from '@server/modules/base/request-origin.mjs';
 import { sendDefaultCloudEmail } from '@server/cloud/email.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 

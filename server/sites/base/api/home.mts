@@ -1,5 +1,5 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiResponse } from '@server/api-response.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiResponse } from '@server/modules/base/api-response.mjs';
 import type { HomePageData } from '@shared/types/home.mjs';
 
 /** 站点首页的默认说明；具体站点可以在自己的 api/home.mts 里覆盖。 */

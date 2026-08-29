@@ -63,7 +63,7 @@ const navigations = navigationEntries.map(({ site, sourcePath }) => `\t'${site}'
 const generate = () => {
 	validateSiteSchemas();
 	fs.mkdirSync(generatedDir, { recursive: true });
-	fs.writeFileSync(outputPath, `${imports}\n\nimport type { ApiModule, SiteApiRoute } from '../api-router.mjs';\nimport type { MenuNode } from '../sites/base/navigation.mjs';\n\nexport const workerApiRoutes: SiteApiRoute[] = [\n${routeLines}\n];\n\nexport const workerApiModules: Record<string, ApiModule> = {\n${modules}\n};\n\nexport const workerSiteNavigations: Record<string, MenuNode[]> = {\n${navigations}\n};\n\nexport const workerCodeSites = ${JSON.stringify(siteKeys)} as const;\n`);
+	fs.writeFileSync(outputPath, `${imports}\n\nimport type { ApiModule, SiteApiRoute } from '../modules/base/api-router.mjs';\nimport type { MenuNode } from '../sites/base/navigation.mjs';\n\nexport const workerApiRoutes: SiteApiRoute[] = [\n${routeLines}\n];\n\nexport const workerApiModules: Record<string, ApiModule> = {\n${modules}\n};\n\nexport const workerSiteNavigations: Record<string, MenuNode[]> = {\n${navigations}\n};\n\nexport const workerCodeSites = ${JSON.stringify(siteKeys)} as const;\n`);
 };
 
 if (require.main === module) generate();

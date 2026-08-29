@@ -1,12 +1,12 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiMessage, apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
 import { loadCloudEmailScope, publishCloudEmailTemplate, refreshCloudEmailTemplate } from '@server/cloud/email.mjs';
 import { cloudEmailPurposeKeys, cloudEmailPurposeOptions, cloudEmailTemplateDefaults, validateCloudEmailTemplateVariables } from '@server/cloud/email-purposes.mjs';
 import { getAliyunDirectMailTemplate, listAliyunDirectMailTemplates } from '@server/cloud/providers/aliyun-direct-mail.mjs';
 import { getTencentSesTemplate, listTencentSesTemplates } from '@server/cloud/providers/tencent-ses.mjs';
 import type { CloudEmailScope, CloudEmailTemplate } from '@server/cloud/index.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
-import { getChangedFields } from '@server/changed-fields.mjs';
+import { getChangedFields } from '@server/modules/base/changed-fields.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 import { cloudProviderOptions, getCloudEmailRegionLabel, getCloudEmailRegionOptions, getCloudEmailRegions, providerSupportsEmailPush } from '@server/cloud/catalog.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';

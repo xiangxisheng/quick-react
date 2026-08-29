@@ -1,11 +1,11 @@
-import type { ApiHandler } from '@server/api-router.mjs';
-import { apiMessage } from '@server/api-response.mjs';
+import type { ApiHandler } from '@server/modules/base/api-router.mjs';
+import { apiMessage } from '@server/modules/base/api-response.mjs';
 import { clearAccountsLoginCookie, accountsLoginCookieName, loadAccountsOidcConfig, loadDiscovery, oidcFetch, verifyIdToken } from '@server/accounts/client.mjs';
 import { readCookie } from '@server/accounts/oidc.mjs';
 import { isValidAccountUsername } from '@server/passport/account.mjs';
-import { createSessionCookie } from '@server/auth.mjs';
+import { createSessionCookie } from '@server/modules/base/auth.mjs';
 import { firstSql, runSql, sql } from '@server/database/sql.mjs';
-import { isSecureRequest, requestOrigin } from '@server/request-origin.mjs';
+import { isSecureRequest, requestOrigin } from '@server/modules/base/request-origin.mjs';
 
 type LoginRequest = { id: string; issuer: string; state: string; nonce: string; code_verifier: string; return_path: string; expires_at: number };
 
