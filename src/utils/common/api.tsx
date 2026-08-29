@@ -2,7 +2,7 @@ import type React from 'react';
 import { Modal, ModalFuncProps, Spin } from 'antd';
 import { message } from 'antd';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ApiFeedback as SharedApiFeedback, ApiResponseBody } from '@shared/types/api-response.mjs';
 import type { TableColumn, TableData, TableOption, TableResponse } from '@shared/types/table.mjs';
 
@@ -37,6 +37,8 @@ export function useCommonApi(): [CommonApi, React.JSX.Element] {
 	const [modalApi, contextHolderModal] = Modal.useModal();
 	const [messageApi, contextHolderMessage] = message.useMessage();
 	const [pendingRequests, setPendingRequests] = useState(0);
+	const implementationRef = useRef<CommonApi | null>(null);
+	const stableApiRef = useRef<CommonApi | null>(null);
 
 	const getContentLine = (aContentLine: string[]): React.ReactNode => {
 		return aContentLine.map((line, index) => (
@@ -204,15 +206,22 @@ export function useCommonApi(): [CommonApi, React.JSX.Element] {
 		xhr.send(file);
 	});
 
-	const commonApi: CommonApi = {
+	implementationRef.current = {
 		modalError,
 		modalConfirm,
 		apiFetch,
 		uploadFile,
-	}
+	};
+	// 请求计数会触发本 Hook 重渲染；对外对象必须保持引用稳定，否则依赖 commonApi 的加载 effect 会重复请求。
+	stableApiRef.current ??= {
+		modalError: (...args) => implementationRef.current!.modalError(...args),
+		modalConfirm: (...args) => implementationRef.current!.modalConfirm(...args),
+		apiFetch: (...args) => implementationRef.current!.apiFetch(...args),
+		uploadFile: (...args) => implementationRef.current!.uploadFile(...args),
+	};
 
 	return [
-		commonApi,
+		stableApiRef.current,
 		<>
 			<Spin fullscreen spinning={pendingRequests > 0} />
 			{contextHolderModal}

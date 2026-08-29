@@ -26,6 +26,7 @@ const userEvent = (await import('@testing-library/user-event')).default;
 const { MemoryRouter } = await import('react-router-dom');
 const StatusPage = (await import('../src/components/common/StatusPage.js')).default;
 const AuthActions = (await import('../src/components/AuthActions.js')).default;
+const { useCommonApi } = await import('../src/utils/common/api.js');
 
 const requests: string[] = [];
 const commonApi = {
@@ -83,6 +84,37 @@ await waitFor(() => assert.ok(screen.getByText('使用本站账号登录')));
 assert.ok(screen.getByRole('dialog'));
 assert.deepEqual(requests, ['/api/sign.php']);
 cleanup();
+
+// 通用 API 的请求计数会重渲染根组件，但不能改变 commonApi 引用并反复触发表单加载 effect。
+const originalFetch = globalThis.fetch;
+let signRequests = 0;
+globalThis.fetch = async (input) => {
+	assert.equal(String(input), '/api/sign.php');
+	signRequests += 1;
+	return new Response(JSON.stringify({
+		formPage: {
+			description: '稳定引用登录表单', submitLabel: '登录', initialValues: { username: '', password: '' },
+			fields: [{ name: 'username', label: '用户名' }, { name: 'password', label: '密码', type: 'password' }],
+		},
+	}), { headers: { 'content-type': 'application/json' } });
+};
+const StableApiLogin = () => {
+	const [api, contextHolder] = useCommonApi();
+	return React.createElement(React.Fragment, null,
+		contextHolder,
+		React.createElement(StatusPage, {
+			commonApi: api, apiSuffix: '.php', pageSuffix: '.html',
+			pageStatus: { path: '/panel/admin.html', status: 401, title: '请先登录', description: '登录后才能继续', actions: [{ key: '/sign', label: '登录', action: 'local-login', icon: 'login' }] },
+		}),
+	);
+};
+render(React.createElement(MemoryRouter, { initialEntries: ['/panel/admin.html'] }, React.createElement(StableApiLogin)));
+screen.getByRole('button', { name: /登录/ }).click();
+await waitFor(() => assert.ok(screen.getByText('稳定引用登录表单')));
+await new Promise((resolve) => setTimeout(resolve, 60));
+assert.equal(signRequests, 1, '打开登录弹窗只能加载一次 /api/sign.php');
+cleanup();
+globalThis.fetch = originalFetch;
 
 // 退出行为由后端响应决定；组件不自行拼接登录状态或跳转目标。
 let logoutCalls = 0;
