@@ -14,7 +14,7 @@ server/templates/   -> 动态首页响应
 
 ## 请求流程
 
-访问 `/` 时，后端先使用内存路由快照把 Host 解析为站点，再生成 `initialData`，由 `server/templates/base/index.mts` 通过 `window.__INITIAL_DATA__` 注入页面。数据只包含 `apiSuffix`、`pageSuffix` 和已经按用户角色过滤的 `siteNavigation`；导航树同时定义菜单、路由路径、页面组件和页面元信息，前端递归导航树生成路由并通过组件注册表渲染。
+访问 `/` 时，后端先使用内存路由快照把 Host 解析为站点，再生成 `initialData`，由 `server/templates/base/index.mts` 通过 `window.__INITIAL_DATA__` 注入页面。数据包含 API/页面后缀、站点名称、页脚、调试标记、按用户角色过滤的导航、认证状态和页面访问状态；导航树同时定义菜单、路由路径、页面组件和页面元信息，前端递归导航树生成路由并通过组件注册表渲染。
 
 静态文件只从 `public/` 提供，`dist/server.mjs` 不在静态目录中。
 
@@ -65,7 +65,7 @@ API 目录本身就是分层中间件链，每一级目录都可以在进入子�
 
 ```text
 /api
-  -> sites/<site>/api.mts
+  -> routes/<site>/api.mts
   -> api/panel.mts
   -> api/panel/admin.mts
   -> api/panel/admin/data.mts
