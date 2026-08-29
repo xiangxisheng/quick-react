@@ -5,6 +5,7 @@ import { getChangedFields } from '@server/changed-fields.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 import { assignableRoleOptions, parseRoles, serializeRoles, unknownAssignableRoles } from '@shared/types/role.mjs';
+import { passwordError } from '@server/auth/password-policy.mjs';
 
 const columns = [
 	{ dataIndex: 'id', title: 'ID', dataType: 'int' as const },
@@ -40,7 +41,7 @@ const handler: ApiHandler = async (c, next, params) => {
 		const body: Record<string, unknown> = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>));
 		const username = String(body.username ?? '').trim();
 		const password = String(body.password ?? '');
-		if (!/^[a-zA-Z0-9_.-]{3,64}$/.test(username) || password.length < 8) return apiMessage(c, 400, '用户名至少 3 个合法字符，密码至少 8 个字符');
+		if (!/^[a-zA-Z0-9_.-]{3,64}$/.test(username) || passwordError(password)) return apiMessage(c, 400, '用户名至少 3 个合法字符，密码至少需要 8 个字符');
 		const roles = parseRoles(body.roles);
 		const unknownRoles = unknownAssignableRoles(roles);
 		if (unknownRoles.length) return apiMessage(c, 400, `不支持的角色：${unknownRoles.join('、')}`);
@@ -70,6 +71,8 @@ const handler: ApiHandler = async (c, next, params) => {
 		}
 		const password = String(body.password ?? '');
 		if (changedFields.has('password') && password) {
+			const error = passwordError(password);
+			if (error) return apiMessage(c, 400, error);
 			values.password = await createStoredPassword(password);
 		}
 		if (!Object.keys(values).length) return apiMessage(c, 400, '没有可修改的字段');

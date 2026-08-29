@@ -8,6 +8,7 @@ import { accountsLoginCookie, loadAccountsOidcConfig, loadDiscovery, oidcFetch }
 import { randomToken, sha256Base64Url } from '@server/accounts/oidc.mjs';
 import { isSecureRequest, requestOrigin } from '@server/request-origin.mjs';
 import { clearPassportSessionCookie } from '@server/passport/session.mjs';
+import { passwordError } from '@server/auth/password-policy.mjs';
 
 const parseCredentials = async (c: Parameters<ApiHandler>[0]) => {
 	let body: Record<string, unknown> = {};
@@ -49,7 +50,7 @@ const localSign: ApiHandler = async (c, next) => {
 	if (c.req.method === 'PUT') {
 		if (!await registrationAvailable(database)) return apiMessage(c, 409, '初始管理员已经存在');
 		const credentials = await parseCredentials(c);
-		if (!/^[a-zA-Z0-9_.-]{3,64}$/.test(credentials.username) || credentials.password.length < 8) {
+		if (!/^[a-zA-Z0-9_.-]{3,64}$/.test(credentials.username) || passwordError(credentials.password)) {
 			return apiMessage(c, 400, '用户名至少 3 个合法字符，密码至少 8 个字符');
 		}
 		const now = Date.now();

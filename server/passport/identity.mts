@@ -2,6 +2,7 @@ import { createStoredPassword, hashPassword, verifyPassword, verifyStoredPasswor
 import type { DatabaseAdapter, DatabaseBatchStatement } from '@server/database/index.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
 import { getPassportSnowflakeGenerator } from './snowflake.mjs';
+import { assertPassword } from '@server/auth/password-policy.mjs';
 
 const signed64Min = -(1n << 63n);
 const signed64Max = (1n << 63n) - 1n;
@@ -215,7 +216,7 @@ export const cancelTelegramIdentityChoice = async (database: DatabaseAdapter, id
 
 export const setPassportPassword = async (database: DatabaseAdapter, userIdValue: string | number | bigint, password: string) => {
 	const userId = decimalId(userIdValue, true);
-	if (password.length < 8) throw new Error('密码至少需要 8 个字符');
+	assertPassword(password);
 	const user = await firstSql(database, sql(database).select({ table: 'passport_users', columns: { user_id: { column: 'user_id', cast: 'text' } }, where: [{ column: 'user_id', value: userId }, { column: 'status', value: 'enabled' }] }));
 	if (!user) throw new Error('用户不存在或已停用');
 	await runSql(database, sql(database).insert('passport_user_credentials', { user_id: userId, password: await createStoredPassword(password), created_at: Date.now() }));

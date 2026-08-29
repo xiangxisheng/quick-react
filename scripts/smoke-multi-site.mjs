@@ -173,7 +173,7 @@ try {
 	assert.ok(!sitesResult.table.columns.some((column) => column.dataIndex === 'passport_sso_enabled'));
 	const hostsResult = await (await request('localhost', '/api/panel/admin/global/site/hosts.php', { cookie })).json();
 	assert.equal(hostsResult.table.columns[0]?.dataIndex, 'id');
-	const externalProvidersPath = '/api/panel/admin/accounts/external-providers.php';
+	const externalProvidersPath = '/api/panel/admin/passport/external-providers.php';
 	const externalProviders = await (await request('passport.test', externalProvidersPath, { cookie })).json();
 	const createProviderAction = externalProviders.table.option.actions.toolbar.find((action) => action.key === 'create');
 	assert.equal(createProviderAction.form, undefined);
@@ -199,7 +199,7 @@ try {
 	const issuerField = accountsSettings.formPage.fields.find((field) => field.name === 'issuer');
 	assert.ok(issuerSourceField.options.some((option) => option.value === 'https://passport.test' && option.fieldValues.issuer === 'https://passport.test'));
 	assert.deepEqual(issuerField.readOnlyWhen, { field: 'issuerSource', optionValues: true });
-	const oidcClients = await (await request('passport.test', '/api/panel/admin/accounts/oidc/clients.php', { cookie })).json();
+	const oidcClients = await (await request('passport.test', '/api/panel/admin/passport/oidc/clients.php', { cookie })).json();
 	const redirectSourceColumn = oidcClients.table.columns.find((column) => column.dataIndex === 'redirect_uri_source');
 	const redirectColumn = oidcClients.table.columns.find((column) => column.dataIndex === 'redirect_uris');
 	const logoutPathColumn = oidcClients.table.columns.find((column) => column.dataIndex === 'backchannel_logout_path');
@@ -208,16 +208,16 @@ try {
 	assert.deepEqual(redirectColumn.readOnlyWhen, { field: 'redirect_uri_source', optionValues: true });
 	assert.deepEqual(logoutPathColumn.readOnlyWhen, { field: 'redirect_uri_source', optionValues: true });
 	assert.match(strictRedirectColumn.extra, /关闭时自动允许/);
-	const createOidcClientResponse = await request('passport.test', '/api/panel/admin/accounts/oidc/clients.php', {
+	const createOidcClientResponse = await request('passport.test', '/api/panel/admin/passport/oidc/clients.php', {
 		method: 'POST', cookie, body: { name: 'Smoke OIDC Client', redirect_uris: 'https://site1.test/api/accounts/oidc/callback', backchannel_logout_path: '/api/accounts/oidc/backchannel-logout', allowed_scopes: 'openid profile email', require_pkce: true },
 	});
 	assert.equal(createOidcClientResponse.status, 201);
 	const createdOidcCredentials = await createOidcClientResponse.json();
-	const createdOidcClients = await (await request('passport.test', '/api/panel/admin/accounts/oidc/clients.php', { cookie })).json();
+	const createdOidcClients = await (await request('passport.test', '/api/panel/admin/passport/oidc/clients.php', { cookie })).json();
 	const createdOidcClient = createdOidcClients.table.dataSource.find((row) => row.name === 'Smoke OIDC Client');
 	assert.equal(createdOidcClient.redirect_uri_source, 'https://site1.test/api/accounts/oidc/callback');
 	assert.equal(createdOidcClient.strict_redirect_uri, 0);
-	const oidcClientEdit = await (await request('passport.test', `/api/panel/admin/accounts/oidc/clients/${encodeURIComponent(createdOidcClient.id)}.php`, { cookie })).json();
+	const oidcClientEdit = await (await request('passport.test', `/api/panel/admin/passport/oidc/clients/${encodeURIComponent(createdOidcClient.id)}.php`, { cookie })).json();
 	assert.equal(oidcClientEdit.redirect_uri_source, 'https://site1.test/api/accounts/oidc/callback');
 	assert.equal(oidcClientEdit.backchannel_logout_path, '/api/accounts/oidc/backchannel-logout');
 	const oidcSettingsTest = await app.request('https://site1.test/api/panel/admin/system/settings/accounts-oidc.php?action=test', {
