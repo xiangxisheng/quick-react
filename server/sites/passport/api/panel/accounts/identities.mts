@@ -1,6 +1,8 @@
 import type { ApiHandler } from '@server/api-router.mjs';
 import { apiMessage, apiResponse } from '@server/api-response.mjs';
 import { listAccountIdentities, unbindAccountIdentity } from '@server/passport/account.mjs';
+import { bindReturnCookie, externalProviders } from '@server/accounts/external.mjs';
+import { isSecureRequest } from '@server/request-origin.mjs';
 
 const kindOptions = [
 	{ value: 'external', text: '第三方账号', color: 'blue' },
@@ -19,19 +21,33 @@ const handler: ApiHandler = async (c, _next, params) => {
 	const userId = String(c.get('passportUser')!.id);
 
 	if (c.req.method === 'GET' && !params.id) {
-		const identities = await listAccountIdentities(database, globalDatabase, userId);
+		const [identities, providers] = await Promise.all([
+			listAccountIdentities(database, globalDatabase, userId),
+			externalProviders(database, true),
+		]);
 		return apiResponse(c, 200, {
 			table: {
 				option: {
 					rowKey: 'identity_key',
-					// 绑定新身份需要跳转到身份源授权，放在“绑定身份”页面完成。
-					actions: { row: [{ key: 'delete', label: '解绑', confirm: '解绑后将不能再用该身份登录，确认解绑？' }] },
+					actions: { toolbar: providers.map((provider) => ({ key: `bind:${provider.id}`, label: `绑定${provider.display_name}` })),
+						row: [{ key: 'delete', label: '解绑', confirm: '解绑后将不能再用该身份登录，确认解绑？' }] },
 				},
 				columns,
 				dataSource: identities,
 				totalRecords: identities.length,
 			},
 		});
+	}
+
+	if ((c.req.method === 'POST' || c.req.method === 'PUT') && !params.id) {
+		const action = c.req.query('action')?.trim() ?? '';
+		if (action.startsWith('bind:')) {
+			const provider = (await externalProviders(database, true)).find((item) => item.id === action.slice('bind:'.length));
+			if (!provider) return apiMessage(c, 400, '外部身份源不存在或未启用');
+			c.header('Set-Cookie', bindReturnCookie(`/panel/accounts/identities${c.get('techStackConfig').pageSuffix}`, isSecureRequest(c)));
+			return apiResponse(c, 200, { redirectTo: `/api/accounts/external/${provider.id}`, openWindow: true });
+		}
+		if (action) return apiMessage(c, 400, '不支持的操作');
 	}
 
 	if (c.req.method === 'DELETE' && !params.id) {

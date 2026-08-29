@@ -421,6 +421,25 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 			}
 		});
 	};
+	const onToolbarSimpleAction = async (action: TableAction) => {
+		if (action.disabled) return;
+		if (action.confirm && !await commonApi.modalConfirm([action.confirm])) return;
+		const response = await commonApi.apiFetch(`${apiPath}?action=${encodeURIComponent(action.key)}`, { method: 'POST' });
+		const result = await response.json().catch(() => ({})) as { redirectTo?: string; openWindow?: boolean };
+		if (result.redirectTo && result.openWindow) {
+			const popup = window.open(result.redirectTo, 'accounts_identity_bind', 'width=480,height=680,resizable=yes,scrollbars=yes');
+			if (!popup) throw new Error('授权窗口被浏览器拦截');
+			const timer = window.setInterval(() => {
+				try {
+					if (popup.closed) { window.clearInterval(timer); return; }
+					if (popup.location.origin === window.location.origin && popup.location.pathname.includes('/panel/accounts/identities')) {
+						window.clearInterval(timer); popup.close(); void fetchData();
+					}
+				} catch { /* 授权过程中仍处于第三方域名，等待回调 */ }
+			}, 500);
+		} else if (result.redirectTo) window.location.assign(result.redirectTo);
+		else await fetchData();
+	};
 	const onSimpleRowAction = async (action: TableAction, record: DataType) => {
 		const rowId = String(record[tableOptionRef.current.rowKey] ?? '');
 		if (!rowId || action.disabled) return;
@@ -535,7 +554,8 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 		</Flex>
 		<Flex wrap gap="small">
 			{(resJsonTableOption.actions?.toolbar ?? []).map((action) => toolbarActionHandlers[action.key]?.(action)
-				?? (action.form ? <Button key={action.key} disabled={loading || action.disabled} onClick={() => onToolbarFormAction(action)}>{action.label}</Button> : null))}
+				?? (action.form ? <Button key={action.key} disabled={loading || action.disabled} onClick={() => onToolbarFormAction(action)}>{action.label}</Button>
+					: <Button key={action.key} disabled={loading || action.disabled} onClick={() => onToolbarSimpleAction(action)}>{action.label}</Button>))}
 		</Flex>
 		{uploadState && <Flex gap="middle" align="center" style={{ padding: '12px 16px', border: '1px solid #f0f0f0', borderRadius: 8 }}>
 			<Flex vertical style={{ flex: 1, minWidth: 0 }}>

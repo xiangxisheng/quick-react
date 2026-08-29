@@ -320,7 +320,7 @@ const handler: ApiHandler = async (c, next) => {
 	if (action === 'account_center' || action === 'bind_identity') {
 		const user = await loadPassportSession(database, c.req.raw);
 		if (!user) return apiMessage(c, 401, '登录状态已失效，请重新登录');
-		const path = action === 'account_center' ? '/panel/accounts' : '/panel/accounts/bind-identity';
+		const path = action === 'account_center' ? '/panel/accounts' : '/panel/accounts/identities';
 		return apiMessageData(c, 200, '正在打开账户中心', { next: { action: 'navigate', path: `${path}${c.get('techStackConfig').pageSuffix}` } });
 	}
 	if (action === 'logout') {

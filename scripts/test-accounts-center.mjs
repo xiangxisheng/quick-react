@@ -163,11 +163,9 @@ try {
 	assert.equal(telegramUnbind.status, 409);
 	assert.match((await telegramUnbind.json()).feedback.message, /Telegram 机器人/);
 
-	// 绑定身份页面列出可用的身份源，点击后跳转授权。
-	const bindIdentity = await (await request('/api/panel/accounts/bind-identity.php', { cookie })).json();
-	assert.deepEqual(bindIdentity.formPage.actions.map((action) => action.key), ['provider:google', 'provider:wechat']);
-	assert.match(bindIdentity.formPage.description, /当前已绑定：Google、微信、Telegram/);
-	const startBind = await request('/api/panel/accounts/bind-identity.php?action=provider:google', { method: 'POST', cookie, body: {} });
+	// 身份绑定列表直接提供可用的身份源，点击后跳转授权。
+	assert.deepEqual(identities.table.option.actions.toolbar.map((action) => action.key), ['bind:google', 'bind:wechat']);
+	const startBind = await request(`${identitiesPath}?action=bind:google`, { method: 'POST', cookie, body: {} });
 	assert.equal((await startBind.json()).redirectTo, '/api/accounts/external/google');
 	assert.ok(startBind.headers.getSetCookie().some((value) => value.startsWith('accounts_bind_return=')), '要记住返回账户中心的页面');
 
