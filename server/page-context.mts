@@ -45,8 +45,9 @@ export const buildAuthState = async (c: Context<AppEnv>): Promise<AuthState> => 
 	const actions: HeaderAction[] = [
 		...(currentUser ? [{ key: '/panel/me', label: '个人中心', action: 'navigate' as const, icon: 'user' as const }] : []),
 		...(passportUser ? [{ key: '/panel/accounts', label: '账户中心', action: 'navigate' as const, icon: 'user' as const }] : []),
-		...(currentUser ? [{ key: '/sign', label: '退出本站', action: 'local-logout' as const, icon: 'logout' as const }] : []),
-		...(passportUser ? [{ key: '/accounts/sign', label: '退出 Accounts', action: 'accounts-logout' as const, icon: 'logout' as const }] : []),
+		...(currentUser && c.get('systemConfig').logoutLocalEnabled ? [{ key: '/sign', label: '退出本站', action: 'local-logout' as const, icon: 'logout' as const }] : []),
+		...(passportUser && c.get('systemConfig').logoutPassportEnabled ? [{ key: '/accounts/sign', label: '退出 Passport', action: 'accounts-logout' as const, icon: 'logout' as const }] : []),
+		...(currentUser || passportUser) && c.get('systemConfig').logoutAllEnabled ? [{ key: '/sign?logout=all', label: '退出登录', action: 'all-logout' as const, icon: 'logout' as const }] : [],
 	];
 	// 同时存在两套会话时以 Accounts 身份（昵称）为准。
 	const user = passportUser ?? currentUser;

@@ -63,6 +63,13 @@ export default function StatusPage({ commonApi, apiSuffix, pageSuffix, pageStatu
 			} catch (error) { await commonApi.modalError([error instanceof Error ? error.message : '退出本站失败']); }
 			return;
 		}
+		if (action.action === 'all-logout') {
+			try {
+				const response = await commonApi.apiFetch(`/api/sign${apiSuffix}`, { method: 'DELETE' });
+				runApiNextAction((await response.json()).next);
+			} catch (error) { await commonApi.modalError([error instanceof Error ? error.message : '退出登录失败']); }
+			return;
+		}
 		try {
 			const response = await commonApi.apiFetch(`/api/accounts/sign${apiSuffix}`, { method: 'DELETE' });
 			runApiNextAction((await response.json()).next);
