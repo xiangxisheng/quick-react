@@ -3,7 +3,7 @@ const path = require('node:path');
 
 const projectDir = path.resolve(__dirname, '..');
 const prismaDir = path.join(projectDir, 'prisma');
-const sitesDir = path.join(projectDir, 'server', 'sites');
+const sitesDir = path.join(projectDir, 'server', 'routes');
 const siteKeyPattern = /^[a-z][a-z0-9_]*$/;
 const modelPattern = /^\s*model\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{/gm;
 

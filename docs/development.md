@@ -36,7 +36,7 @@ npm run dev:restart
 npm run typecheck
 ```
 
-前端代码位于 `src/`，后端代码位于 `server/`。站点 API 和导航位于 `server/sites/<site_key>/`；`base` 是继承基础层，`global` 是控制面站点。新增后端模板或静态资源时，注意不要把服务端文件放入 `public/`。
+前端代码位于 `src/`，后端代码位于 `server/`。站点 API 和导航位于 `server/routes/<site_key>/`；`base` 是继承基础层，`global` 是控制面站点。新增后端模板或静态资源时，注意不要把服务端文件放入 `public/`。
 
 后续架构和工程优化事项请参阅[项目优化清单](requirements/optimization-checklist.md)。
 
@@ -70,7 +70,7 @@ npm run typecheck
 
 需要执行反馈后动作时，前端公共反馈助手在 `feedback.redirectAfter` 缺失时默认使用 2 秒；后端不需要生成这个字段。表单只有在响应明确提供 `redirectAfter` 时才自动刷新，普通保存反馈不会触发刷新。跳转目标由页面根据业务上下文决定。
 
-后端接口统一使用 `server/api-response.mts` 中的响应助手：
+后端接口统一使用 `server/modules/base/api-response.mts` 中的响应助手：
 
 ```ts
 apiResponse(c, status, data)

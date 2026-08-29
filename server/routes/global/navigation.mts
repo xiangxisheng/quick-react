@@ -1,4 +1,4 @@
-import type { MenuNode } from '@server/sites/base/navigation.mjs';
+import type { MenuNode } from '@server/routes/base/navigation.mjs';
 
 const navigation: MenuNode[] = [{
 	label: '管理后台',

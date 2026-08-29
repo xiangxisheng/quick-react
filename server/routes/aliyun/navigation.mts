@@ -1,4 +1,4 @@
-import type { MenuNode } from '@server/sites/base/navigation.mjs';
+import type { MenuNode } from '@server/routes/base/navigation.mjs';
 
 const navigation: MenuNode[] = [{
 	label: '阿里云', key: 'aliyun', icon: 'appstore', navigationGroup: 'aliyun', dropdown: false, component: 'panel', title: '阿里云管理', description: '阿里云资源管理控制台',

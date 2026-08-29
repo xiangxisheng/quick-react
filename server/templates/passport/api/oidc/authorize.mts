@@ -1,4 +1,4 @@
-import { escapeHtml } from '@server/common/html.mjs';
+import { escapeHtml } from '@server/utils/html.mjs';
 
 export const renderAuthorizeError = (message: string, signPath: string) => `<!doctype html>
 <html lang="zh-CN">

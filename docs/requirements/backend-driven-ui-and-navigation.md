@@ -4,7 +4,7 @@
 
 ## 1. 当前已完成
 
-- [x] 阿里云菜单和 API 从 `base` 拆分为独立代码站点 `server/sites/aliyun/`。
+- [x] 阿里云菜单和 API 从 `base` 拆分为独立代码站点 `server/routes/aliyun/`。
 - [x] Node 启动时根据构建期代码站点注册表幂等同步 `global_sites`。
 - [x] Worker 构建与 Node 数据库初始化分离；构建不再自动打开 SQLite 或执行 Node 初始化。
 - [x] 站点、域名和用户状态使用 Switch 编辑，并继续以 `enabled/disabled` 字符串存储。
@@ -117,7 +117,7 @@ PUT  /review     -> order.review
 
 ## 4. 导航与路径
 
-- [x] 站点导航继续由 `server/sites/<site_key>/navigation.mts` 声明。
+- [x] 站点导航继续由 `server/routes/<site_key>/navigation.mts` 声明。
 - [x] 站点继承、角色过滤和导航覆盖继续由后端负责。
 - [x] 前后端共用纯导航树算法，不把业务导航搬回前端。
 - [ ] 统一页面路径和 API 路径助手，减少前端各处字符串拼接。

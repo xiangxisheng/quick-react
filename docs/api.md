@@ -4,7 +4,7 @@
 
 ## 响应协议
 
-后端接口统一使用 `server/api-response.mts`：
+后端接口统一使用 `server/modules/base/api-response.mts`：
 
 ```ts
 apiResponse(c, status, data)
@@ -85,7 +85,7 @@ GET /api/panel/admin/dashboard
 
 返回管理后台统计数据、最近记录及最近记录的列配置，数据由后端当前数据源实时计算。Dashboard 前端不再固定列结构。
 
-接口文件按请求路径放置在 `server/sites/<site_key>/api/` 目录中，并由网关按站点继承链从根到叶子逐级执行。叶子接口同时支持无后缀和配置的 API 后缀，例如 `/api/panel/admin/data/rows` 与 `/api/panel/admin/data/rows.php` 等价。当前接口包括：
+接口文件按请求路径放置在 `server/routes/<site_key>/api/` 目录中，并由网关按站点继承链从根到叶子逐级执行。叶子接口同时支持无后缀和配置的 API 后缀，例如 `/api/panel/admin/data/rows` 与 `/api/panel/admin/data/rows.php` 等价。当前接口包括：
 
 ```text
 /api/panel/admin/dashboard

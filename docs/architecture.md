@@ -14,7 +14,7 @@ server/templates/   -> 动态首页响应
 
 ## 请求流程
 
-访问 `/` 时，后端先使用内存路由快照把 Host 解析为站点，再生成 `initialData`，由 `server/templates/index.mts` 通过 `window.__INITIAL_DATA__` 注入页面。数据只包含 `apiSuffix`、`pageSuffix` 和已经按用户角色过滤的 `siteNavigation`；导航树同时定义菜单、路由路径、页面组件和页面元信息，前端递归导航树生成路由并通过组件注册表渲染。
+访问 `/` 时，后端先使用内存路由快照把 Host 解析为站点，再生成 `initialData`，由 `server/templates/base/index.mts` 通过 `window.__INITIAL_DATA__` 注入页面。数据只包含 `apiSuffix`、`pageSuffix` 和已经按用户角色过滤的 `siteNavigation`；导航树同时定义菜单、路由路径、页面组件和页面元信息，前端递归导航树生成路由并通过组件注册表渲染。
 
 静态文件只从 `public/` 提供，`dist/server.mjs` 不在静态目录中。
 
@@ -26,21 +26,34 @@ server/templates/   -> 动态首页响应
 
 ## Accounts 会话与账户中心
 
-`passport` 站点的请求会在站点本地会话之外额外加载 Accounts 会话：存在时把 `accounts` 角色加入 `effectiveRoles`，并把身份写入 `passportUser`。账户中心导航用 `roles: ['accounts']` 控制可见性，接口在 `server/sites/passport/api/panel.mts` 统一做会话守卫。业务站点不复制账号资料，个人中心只展示只读信息并链接到 Accounts 账户中心。
+`passport` 站点的请求会在站点本地会话之外额外加载 Accounts 会话：存在时把 `accounts` 角色加入 `effectiveRoles`，并把身份写入 `passportUser`。账户中心导航用 `roles: ['accounts']` 控制可见性，接口在 `server/routes/passport/api/panel.mts` 统一做会话守卫。业务站点不复制账号资料，个人中心只展示只读信息并链接到 Accounts 账户中心。
 
 ## 页面访问状态
 
-`server/page-context.mts` 在渲染文档前判断请求路径能否打开，并把结果写入 `initialData.pageStatus`：路径不存在返回 `404`，需要登录返回 `401`，角色不足返回 `403`；文档响应使用同一状态码，提示标题、说明和按钮全部由后端下发。合法路径缺少页面后缀时先 `302` 跳转到带后缀的规范地址。
+`server/modules/base/page-context.mts` 在渲染文档前判断请求路径能否打开，并把结果写入 `initialData.pageStatus`：路径不存在返回 `404`，需要登录返回 `401`，角色不足返回 `403`；文档响应使用同一状态码，提示标题、说明和按钮全部由后端下发。合法路径缺少页面后缀时先 `302` 跳转到带后缀的规范地址。
 
 前端在路由表末尾注册兜底路由 `src/components/common/StatusPage.tsx`，优先使用 `initialData.pageStatus`；前端路由跳转到未注册路径时改为请求 `/api/page-status` 获取同一份提示，避免出现空白页面。
 
 ## 后端驱动页面
 
-普通后台页面由后端提供导航、组件标识、表格列和数据接口；前端只负责通用布局、表格和表单渲染。新增常规 CRUD 页面时，在 `server/sites/<site_key>/navigation.mts` 增加导航，并在同一站点的 `api/` 下增加接口文件，无需手工修改路由表。
+普通后台页面由后端提供导航、组件标识、表格列和数据接口；前端只负责通用布局、表格和表单渲染。新增常规 CRUD 页面时，在 `server/routes/<site_key>/navigation.mts` 增加导航，并在同一站点的 `api/` 下增加接口文件，无需手工修改路由表。
 
-公共请求和反馈层位于 `src/utils/common/`：`api.tsx` 负责请求加载状态、错误拦截和 `feedback` 展示，`feedback.ts` 负责跳转延迟计算；`src/components/common/Countdown.tsx` 提供登录和配置表单共用的倒计时组件。服务端响应输出统一由 `server/api-response.mts` 负责，业务 API 不直接调用 `c.json()`。
+公共请求和反馈层位于 `src/utils/common/`：`api.tsx` 负责请求加载状态、错误拦截和 `feedback` 展示，`feedback.ts` 负责跳转延迟计算；`src/components/common/Countdown.tsx` 提供登录和配置表单共用的倒计时组件。服务端响应输出统一由 `server/modules/base/api-response.mts` 负责，业务 API 不直接调用 `c.json()`。
 
-API 使用物理目录作为分层中间件链。构建阶段扫描 `server/sites/*/api`，生成 Worker 可静态打包的站点路由和模块注册表；运行时不扫描文件系统。每一层优先使用当前站点实现，缺少时沿继承链回退到 `base`。动态 ID 作为参数传给已匹配的叶子处理文件，例如 `/api/panel/admin/data/rows/row-1` 仍由 `rows.mts` 处理。
+API 使用物理目录作为分层中间件链。构建阶段扫描 `server/routes/*/api`，生成 Worker 可静态打包的站点路由和模块注册表；运行时不扫描文件系统。每一层优先使用当前站点实现，缺少时沿继承链回退到 `base`。动态 ID 作为参数传给已匹配的叶子处理文件，例如 `/api/panel/admin/data/rows/row-1` 仍由 `rows.mts` 处理。
+
+## 服务端模块目录
+
+`server/` 顶层只保留运行入口 `app.mts`、`worker.mts`；通用基础能力和站点能力按模块归档：
+
+```text
+server/modules/
+├── base/                 # 基础认证、导航、请求上下文、配置和 API 运行能力
+├── global/               # Global 站点能力（云服务、Telegram Bot 等）
+└── passport/             # Passport/Accounts 账号中心能力
+```
+
+数据库适配器仍位于 `server/database/`，站点 API 路由仍位于 `server/routes/<site>/`。跨模块引用统一使用 `@server/*` 别名；同一模块目录内的紧邻文件才使用相对路径。
 
 ## 架构特征
 

@@ -46,11 +46,11 @@
 云凭据、对象存储和站点绑定属于 `global` 控制面。对象存储内部按 Bucket、站点绑定和对象管理拆分：
 
 ```text
-server/sites/global/navigation.mts
-server/sites/global/api/panel/admin/global/cloud/credentials.mts
-server/sites/global/api/panel/admin/global/cloud/object-storage/buckets.mts
-server/sites/global/api/panel/admin/global/cloud/object-storage/bindings.mts
-server/sites/global/api/panel/admin/global/cloud/object-storage/objects.mts
+server/routes/global/navigation.mts
+server/routes/global/api/panel/admin/global/cloud/credentials.mts
+server/routes/global/api/panel/admin/global/cloud/object-storage/buckets.mts
+server/routes/global/api/panel/admin/global/cloud/object-storage/bindings.mts
+server/routes/global/api/panel/admin/global/cloud/object-storage/objects.mts
 ```
 
 业务站点只使用自己的绑定，不拥有全局存储配置管理权限。

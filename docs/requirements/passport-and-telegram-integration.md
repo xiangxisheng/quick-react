@@ -394,7 +394,7 @@ Webhook 处理必须避免把 Token、Secret、密码或验证码写入普通日
 代码归属为：
 
 ```text
-server/sites/passport/api/tgwebhook.mts
+server/routes/passport/api/tgwebhook.mts
 ```
 
 请求 Host 应绑定到 `passport` 业务站点。Passport 站点继承 `base` 的通用基础能力，但 webhook 业务代码由 Passport 自己声明和注册。

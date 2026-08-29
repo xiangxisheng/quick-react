@@ -1,5 +1,5 @@
 import type { DatabaseAdapter } from '@server/database/index.mjs';
-import { escapeHtml } from '@server/common/html.mjs';
+import { escapeHtml } from '@server/utils/html.mjs';
 import { getCloudEmailAdapter } from './catalog.mjs';
 import type { CloudEmailAdapter, CloudEmailMessage, CloudEmailScope, CloudEmailTarget, CloudEmailTemplate, CloudEmailTemplatePublication } from './index.mjs';
 import { createAliyunDirectMailAdapter, createAliyunDirectMailTemplate, describeAliyunDirectMailTemplate, updateAliyunDirectMailTemplate } from './providers/aliyun-direct-mail.mjs';

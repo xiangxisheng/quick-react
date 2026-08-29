@@ -73,7 +73,7 @@ const matchRoute = (path: string, siteChain: string[], matcher: RouteMatcher) =>
 };
 
 const modulePath = (site: string, routeSegments: string[], depth: number) => (
-	depth === 0 ? `sites/${site}/api.mjs` : `sites/${site}/api/${routeSegments.slice(0, depth).join('/')}.mjs`
+	depth === 0 ? `routes/${site}/api.mjs` : `routes/${site}/api/${routeSegments.slice(0, depth).join('/')}.mjs`
 );
 
 export const createApiGateway = (

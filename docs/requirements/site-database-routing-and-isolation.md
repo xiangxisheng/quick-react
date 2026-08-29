@@ -86,7 +86,7 @@ database/
 页面 HTML 继续由现有的公共模板和文档渲染逻辑处理：
 
 ```text
-server/templates/index.mts  # HTML 拼接和 __INITIAL_DATA__ 输出
+server/templates/base/index.mts  # HTML 拼接和 __INITIAL_DATA__ 输出
 Worker 文档渲染逻辑         # 根据请求路径生成页面元数据并调用模板
 ```
 
@@ -132,8 +132,8 @@ global 覆盖实现
 业务站点可以只提供需要修改的 API 文件，其余接口自动回退到 `base`：
 
 ```text
-server/sites/base/api/panel/admin/data.mts          # 基础实现
-server/sites/site1/api/panel/admin/data.mts         # site1 覆盖实现
+server/routes/base/api/panel/admin/data.mts          # 基础实现
+server/routes/site1/api/panel/admin/data.mts         # site1 覆盖实现
 ```
 
 访问 `site1` 时：
@@ -206,7 +206,7 @@ Host
 站点目录不暴露到 URL。文件路径：
 
 ```text
-server/sites/base/api/panel/admin/settings/system-config.mts
+server/routes/base/api/panel/admin/settings/system-config.mts
 ```
 
 对应的请求路径仍然是（`apiSuffix` 默认配置为 `.php` 时）：
@@ -215,7 +215,7 @@ server/sites/base/api/panel/admin/settings/system-config.mts
 /api/panel/admin/settings/system-config.php
 ```
 
-构建阶段 API 注册器需要扫描 `server/sites/*/api`，生成包含代码级站点标识的路由：
+构建阶段 API 注册器需要扫描 `server/routes/*/api`，生成包含代码级站点标识的路由：
 
 ```ts
 {
@@ -593,10 +593,10 @@ Prisma 生成的 SQL 需要检查 D1 兼容性，必要时手动调整后再部�
 3. 抽象 D1/SQLite 统一数据库接口。
 4. 增加 Node SQLite 连接缓存，并将数据库文件移动到 `database/`。
 5. 增加站点解析器和 `hosts` 内存缓存。
-6. 将 `server/api` 整体迁移到 `server/sites/base/api`，并增加 `global` 控制面站点。
+6. 将 `server/api` 整体迁移到 `server/routes/base/api`，并增加 `global` 控制面站点。
 7. 修改 API 注册器，生成带 `site` 字段的路由表。
 8. 增加 Prisma schema 命名和表名校验。
-9. 将导航和站点配置迁移到 `server/sites/base/`，实现站点覆盖和多级继承。
+9. 将导航和站点配置迁移到 `server/routes/base/`，实现站点覆盖和多级继承。
 10. 增加 Host 管理接口和后台页面。
 11. 验证 Node、Worker、D1 migration、通配符 Host 和默认站点行为。
 
@@ -606,7 +606,7 @@ Prisma 生成的 SQL 需要检查 D1 兼容性，必要时手动调整后再部�
 - Node 数据库初始化与 migration：`server/app.mts`
 - Worker 数据库选择与 Binding 限制：`server/worker.mts`
 - API 继承和路由注册：`server/api-router.mts`
-- 站点目录 API 覆盖：`server/sites/<site_key>/api/`
+- 站点目录 API 覆盖：`server/routes/<site_key>/api/`
 
 ## 12. 验收重点
 

@@ -1,7 +1,7 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
 import { firstSql, runSql, sql } from '@server/database/sql.mjs';
-import { assertTable, databaseQueryFields, databaseSelectColumns, databaseTableActions, getColumns, readTable, tableRowKey } from '@server/sites/base/data/database-table.mjs';
+import { assertTable, databaseQueryFields, databaseSelectColumns, databaseTableActions, getColumns, readTable, tableRowKey } from '@server/routes/base/data/database-table.mjs';
 import { getChangedFields } from '@server/modules/base/changed-fields.mjs';
 
 const body = async (c: Parameters<ApiHandler>[0]) => c.req.json<Record<string, unknown>>().catch(() => ({}));

@@ -1,4 +1,4 @@
-import type { MenuNode } from '@server/sites/base/navigation.mjs';
+import type { MenuNode } from '@server/routes/base/navigation.mjs';
 
 const navigation: MenuNode[] = [{
 	// 首页说明应用用途：外部身份源验证时会检查首页是否公开说明用途。
