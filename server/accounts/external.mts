@@ -95,6 +95,24 @@ const normalizedNickname = (value: string, provider: ExternalProviderId) => {
 	return (characters.length ? characters : Array.from(provider === 'google' ? 'Google用户' : '微信用户')).slice(0, 12).join('');
 };
 
+/** 将身份源已验证的邮箱补充到已有 Accounts 用户；邮箱永远作为次要邮箱，不覆盖主邮箱。 */
+const attachVerifiedExternalEmail = async (database: DatabaseAdapter, workerId: unknown, userId: string, provider: ExternalProvider, rawEmail?: string) => {
+	if (!rawEmail || !providersWithVerifiedEmail.has(provider.id)) return;
+	const email = normalizePassportEmail(rawEmail);
+	const owner = await firstSql<{ email_id: string; user_id: string; verified: number }>(database, sql(database).select({
+		table: 'passport_emails', alias: 'e', columns: { email_id: { column: 'e.id', cast: 'text' }, user_id: { column: 'ue.user_id', cast: 'text' }, verified: 'e.verified' },
+		joins: [{ table: 'passport_user_emails', alias: 'ue', left: 'ue.email_id', right: 'e.id' }], where: [{ column: 'e.email', value: email }], limit: 1,
+	}));
+	if (owner) {
+		if (owner.user_id !== userId) throw new Error('该 Google 邮箱已属于另一个 Accounts 用户，无法绑定');
+		if (!owner.verified) await runSql(database, sql(database).update('passport_emails', { verified: 1, updated_at: Date.now() }, { id: owner.email_id }));
+		return;
+	}
+	const emailId = (await getPassportSnowflakeGenerator(database, workerId).next()).toString(), now = Date.now();
+	await runSql(database, sql(database).insert('passport_emails', { id: emailId, email, verified: 1, created_at: now, updated_at: now }));
+	await runSql(database, sql(database).insert('passport_user_emails', { user_id: userId, email_id: emailId, is_primary: 0, created_at: now }));
+};
+
 /** 该外部身份是否已经绑定到启用中的 Accounts 用户；已绑定的直接登录，不再走注册验证码流程。 */
 export const externalIdentityUser = async (database: DatabaseAdapter, provider: ExternalProviderId, subject: string) => (
 	await firstSql<{ user_id: string; status: string }>(database, sql(database).select({
@@ -118,6 +136,7 @@ export const resolveExternalUser = async (database: DatabaseAdapter, workerId: u
 		// 雪花 ID 超出 JavaScript number 范围，任何取出 user_id 的查询都必须按文本读取。
 		const target = await firstSql(database, sql(database).select({ table: 'passport_users', columns: { user_id: { column: 'user_id', cast: 'text' } }, where: [{ column: 'user_id', value: targetUserId }, { column: 'status', value: 'enabled' }] }));
 		if (!target) throw new Error('准备绑定的 Accounts 用户不存在或已停用');
+		await attachVerifiedExternalEmail(database, workerId, targetUserId, provider, profile.email);
 		await runSql(database, sql(database).insert('passport_external_identities', { user_id: targetUserId, provider: provider.id, subject: profile.subject, profile: serializedProfile, created_at: now, updated_at: now }));
 		return targetUserId;
 	}

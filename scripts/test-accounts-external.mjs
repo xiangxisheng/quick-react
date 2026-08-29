@@ -173,8 +173,8 @@ try {
 	const savedPassword = await jsonRequest(app, '/api/accounts/sign.php', { step: 'set_password', password: 'wechat-password-1', password_confirm: 'wechat-password-1' }, wechatSession);
 	assert.equal(savedPassword.status, 200);
 	assert.equal((await savedPassword.json()).redirectTo, '/');
-	// 设置完成后登录页回到身份绑定表单。
-	assert.equal((await (await app.request('http://accounts.test/api/accounts/sign.php', { headers: { cookie: wechatSession } })).json()).formPage.initialValues.step, 'method');
+	// 设置完成后登录页显示已登录状态，绑定身份统一从账户中心进入。
+	assert.deepEqual((await (await app.request('http://accounts.test/api/accounts/sign.php', { headers: { cookie: wechatSession } })).json()).formPage.actions.map((action) => action.key), ['account_center', 'bind_identity', 'logout']);
 
 	// 已注册邮箱走密码登录：第一步给出密码表单，密码错误有提示。
 	const knownEmail = await (await jsonRequest(app, '/api/accounts/sign.php', { step: 'email', email: 'wechat@example.com' })).json();
@@ -201,6 +201,7 @@ try {
 	assert.equal(bindCallback.status, 302, '绑定新身份应该成功');
 	const boundIdentities = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
 	assert.equal(boundIdentities.prepare("SELECT COUNT(*) AS count FROM passport_external_identities WHERE provider = 'google'").get().count, 3);
+	assert.equal(boundIdentities.prepare("SELECT COUNT(*) AS count FROM passport_emails WHERE email = 'google-bind@example.com' AND verified = 1").get().count, 1, '绑定 Google 时应自动加入其已验证邮箱');
 	boundIdentities.close();
 
 	// 用户名被占用时也要给出明确提示，而不是数值溢出错误。
