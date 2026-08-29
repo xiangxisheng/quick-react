@@ -20,7 +20,7 @@ server/templates/   -> 动态首页响应
 
 ## 按域名覆盖静态站点（仅 Node 运行时）
 
-`wwwroot/<hostname>/` 下的文件按域名优先于应用页面，例如 `wwwroot/passport.firadio.com/index.html` 会接管该域名的首页，其余路径仍然交给应用。只接管 GET 和 HEAD，拒绝目录穿越，目录不存在时完全不生效。
+`wwwroot/<site_key>/` 下的文件按站点优先于应用页面，例如 `wwwroot/passport/index.html` 会覆盖所有绑定到 `passport` 站点的域名首页，其余路径仍然交给应用。只接管 GET 和 HEAD，拒绝目录穿越，目录不存在时完全不生效。
 
 这是 Node 运行时（`server/app.mts`）特有的虚拟主机能力。Worker 的静态资源绑定（`ASSETS`）只按路径匹配、不区分 Host，因此 Worker 部署下没有这一层，对应域名会回到应用自身的首页；应用首页本身也提供了完整的用途说明，两种部署都能满足外部身份源对首页的要求。
 

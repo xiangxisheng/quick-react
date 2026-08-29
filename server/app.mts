@@ -22,12 +22,14 @@ import { configureSystemConfig, loadSystemConfig } from './modules/base/system-c
 import { configureTechStack, loadTechStackConfig } from './modules/base/tech-stack.mjs';
 import type { WorkerBindings } from './worker.mjs';
 import type { AppEnv } from './modules/base/types.mjs';
+import { SiteRouter } from './modules/base/site-router.mjs';
 import { workerCodeSites, workerSiteNavigations } from './.generated/worker-api-registry.mjs';
 
 const env = process.env;
 const projectDirectory = fileURLToPath(new URL('../', import.meta.url));
 const defaultDatabase = createSqliteAdapter(env.DEFAULT_DATABASE_FILE || resolve(projectDirectory, 'database/default.sqlite'));
 const siteDatabases = new Map<string, DatabaseAdapter>();
+const staticSiteRouter = new SiteRouter(defaultDatabase);
 await migrateDefaultDatabase(defaultDatabase, resolve(projectDirectory, 'migrations'));
 const resolveSiteDsn = (dsn: string) => {
 	let key = dsn, factory: () => DatabaseAdapter;
@@ -126,8 +128,8 @@ nodeApp.use('*', async (c, next) => {
 	return next();
 });
 /**
- * 按域名覆盖静态站点：`wwwroot/<hostname>/` 下的文件优先于应用页面，
- * 用于给某个域名单独提供静态首页等内容；目录不存在时什么都不做。
+ * 按站点覆盖静态站点：`wwwroot/<site_key>/` 下的文件优先于应用页面，
+ * 用于给某个代码站点提供静态首页等内容；目录不存在时什么都不做。
  * 这是 Node 运行时特有的虚拟主机能力：Worker 的静态资源（ASSETS）只按路径匹配、不区分 Host，
  * 因此 Worker 部署下该域名仍然使用应用自身的首页。
  */
@@ -144,11 +146,13 @@ nodeApp.use('*', async (c, next) => {
 	const url = new URL(c.req.url);
 	const hostname = url.hostname.toLowerCase();
 	if (!hostnamePattern.test(hostname) || hostname.includes('..')) return next();
+	const site = await staticSiteRouter.resolve(c.req.raw);
+	if (!site) return next();
 	let requestPath: string;
 	try { requestPath = decodeURIComponent(url.pathname); }
 	catch { return next(); }
 	if (requestPath.includes('..') || requestPath.includes('\0')) return next();
-	const siteRoot = join(wwwrootDirectory, hostname);
+	const siteRoot = join(wwwrootDirectory, site.siteKey);
 	const candidate = join(siteRoot, requestPath.endsWith('/') ? `${requestPath}index.html` : requestPath);
 	if (candidate !== siteRoot && !candidate.startsWith(`${siteRoot}/`)) return next();
 	const info = await stat(candidate).catch(() => undefined);
