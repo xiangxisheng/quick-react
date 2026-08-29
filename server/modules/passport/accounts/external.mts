@@ -1,9 +1,9 @@
 import type { DatabaseAdapter, DatabaseBatchStatement } from '@server/database/index.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
-import { randomToken, sha256, sha256Base64Url } from '@server/accounts/oidc.mjs';
-import { getPassportSnowflakeGenerator } from '@server/passport/snowflake.mjs';
-import { hashPassword, verifyPassword } from '@server/modules/base/auth.mjs';
-import { normalizePassportEmail } from '@server/passport/identity.mjs';
+import { randomToken, sha256, sha256Base64Url } from '@server/modules/passport/accounts/oidc.mjs';
+import { getPassportSnowflakeGenerator } from '@server/modules/passport/snowflake.mjs';
+import { hashPassword, verifyPassword } from '@server/modules/base/auth/index.mjs';
+import { normalizePassportEmail } from '@server/modules/passport/identity.mjs';
 
 export type ExternalProviderId = 'google' | 'wechat';
 export type WechatMode = 'open_platform' | 'official_account';

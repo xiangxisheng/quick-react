@@ -16,7 +16,7 @@
 - 腾讯云
 - 其他（S3 兼容）
 
-当前能力为 `object_storage`。AWS S3、Cloudflare R2、阿里云 OSS、腾讯云 COS 由所选凭据的 Provider 自动确定，不额外选择产品或 Provider；MinIO 等自建服务统一使用 `other`。具体协议由 `server/cloud/providers/` 下的适配器处理。
+当前能力为 `object_storage`。AWS S3、Cloudflare R2、阿里云 OSS、腾讯云 COS 由所选凭据的 Provider 自动确定，不额外选择产品或 Provider；MinIO 等自建服务统一使用 `other`。具体协议由 `server/modules/global/cloud/providers/` 下的适配器处理。
 
 “对象存储”是能力名称，“Bucket”是项目管理的资源单位，“S3”只是可复用的协议适配器，三者不混用。未来接入使用 Container 等术语的对象存储时，由 Provider 适配器映射为项目内部的 Bucket 资源，不改变导航和站点绑定模型。
 
@@ -58,7 +58,7 @@ server/sites/global/api/panel/admin/global/cloud/object-storage/objects.mts
 云服务协议实现属于公共基础设施模块：
 
 ```text
-server/cloud/
+server/modules/global/cloud/
   catalog.mts
   index.mts
   resolve.mts
@@ -66,9 +66,9 @@ server/cloud/
     s3.mts
 ```
 
-后续短信、邮件等能力使用独立管理模块和数据表，不复用对象存储表单；底层 Provider 协议仍放在 `server/cloud/providers/`。各 Provider 使用 `fetch`、Web Crypto 和厂商公开 HTTP 签名协议实现，不引入厂商 SDK。
+后续短信、邮件等能力使用独立管理模块和数据表，不复用对象存储表单；底层 Provider 协议仍放在 `server/modules/global/cloud/providers/`。各 Provider 使用 `fetch`、Web Crypto 和厂商公开 HTTP 签名协议实现，不引入厂商 SDK。
 
-`server/cloud/catalog.mts` 是 Provider、能力和处理模块映射的唯一来源。管理接口、后端校验和运行时适配器解析均复用该目录，不分别维护 Provider 列表。
+`server/modules/global/cloud/catalog.mts` 是 Provider、能力和处理模块映射的唯一来源。管理接口、后端校验和运行时适配器解析均复用该目录，不分别维护 Provider 列表。
 
 新增 Bucket 时先选择凭据。页面本身已经确定能力为对象存储，Provider 和产品也由凭据推导，因此不显示“服务”“供应商”和“名称”输入。后端随后读取 Bucket；选择 Bucket 后自动回填 Endpoint、Region 和 Path Style。阿里云 OSS、腾讯云 COS 等地域型 Bucket 根据发现结果中的地域推导默认 Endpoint；Cloudflare R2 使用凭据中的 Account ID 生成 Endpoint。自动生成的 Endpoint 可以在 Bucket 配置中覆盖。`other`/MinIO 无法仅从密钥推导地址，因此不执行远程发现，用户手工填写 Bucket 和 Endpoint。切换凭据后必须清空 Bucket 和下游自动配置，防止沿用不匹配的数据。
 

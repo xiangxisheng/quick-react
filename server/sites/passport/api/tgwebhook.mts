@@ -1,6 +1,6 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
-import { handlePassportTelegramUpdate, type PassportTelegramUpdate } from '@server/passport/telegram-webhook.mjs';
+import { handlePassportTelegramUpdate, type PassportTelegramUpdate } from '@server/modules/passport/telegram-webhook.mjs';
 import { firstSql, runSql, sql } from '@server/database/sql.mjs';
 
 type TelegramBot = {

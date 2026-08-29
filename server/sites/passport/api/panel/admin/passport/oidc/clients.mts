@@ -1,9 +1,9 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
-import { parseRedirectUris, randomToken, sha256 } from '@server/accounts/oidc.mjs';
+import { parseRedirectUris, randomToken, sha256 } from '@server/modules/passport/accounts/oidc.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 import { allSql, runSql, sql } from '@server/database/sql.mjs';
-import { oidcClient, oidcClients } from '@server/accounts/repository.mjs';
+import { oidcClient, oidcClients } from '@server/modules/passport/accounts/repository.mjs';
 
 const defaultBackchannelLogoutPath = '/api/accounts/oidc/backchannel-logout';
 

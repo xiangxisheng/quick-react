@@ -1,8 +1,8 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import { apiMessage, apiResponse } from '@server/modules/base/api-response.mjs';
-import { readStoredPassword } from '@server/modules/base/auth.mjs';
+import { readStoredPassword } from '@server/modules/base/auth/index.mjs';
 import { allSql, sql } from '@server/database/sql.mjs';
-import { setPassportPassword } from '@server/passport/identity.mjs';
+import { setPassportPassword } from '@server/modules/passport/identity.mjs';
 
 const columns = [
 	{ dataIndex: 'user_id', title: 'ID', dataType: 'text' as const },

@@ -1,6 +1,6 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import { apiResponse } from '@server/modules/base/api-response.mjs';
-import { loadAccountsOidcConfig } from '@server/accounts/client.mjs';
+import { loadAccountsOidcConfig } from '@server/modules/passport/accounts/client.mjs';
 import type { AccountCenterLink } from '@shared/types/user.mjs';
 
 /**

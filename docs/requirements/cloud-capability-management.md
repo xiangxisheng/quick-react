@@ -97,7 +97,7 @@ Bucket 不保存人工名称，也不保存 `provider` 或 `service`。管理界
 
 ## 5. Provider 与处理模块
 
-`server/cloud/catalog.mts` 集中声明 Provider、可用能力、凭据字段、控制面 API 规则、Bucket Endpoint 推导规则和内部处理模块的映射。后端按“凭据 Provider + 当前能力”解析处理模块，不引入厂商 SDK，统一使用 `fetch`、Web Crypto 和公开 HTTP 签名协议。
+`server/modules/global/cloud/catalog.mts` 集中声明 Provider、可用能力、凭据字段、控制面 API 规则、Bucket Endpoint 推导规则和内部处理模块的映射。后端按“凭据 Provider + 当前能力”解析处理模块，不引入厂商 SDK，统一使用 `fetch`、Web Crypto 和公开 HTTP 签名协议。
 
 Provider 只表示供应商：`aws`、`cloudflare`、`aliyun`、`tencent`、`other`。AWS S3、Cloudflare R2、阿里云 OSS、腾讯云 COS 是对象存储产品，由对象存储模块根据 Provider 自动确定，不作为额外表单选择项。
 

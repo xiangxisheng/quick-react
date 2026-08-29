@@ -1,10 +1,10 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import { apiMessage, apiResponse } from '@server/modules/base/api-response.mjs';
-import { AccountEmailRateLimitError, discardAccountEmailOtp, issueAccountEmailOtp, pendingAccountEmailOtp, verifyAccountEmailOtp } from '@server/passport/account.mjs';
-import { bindReturnCookie, externalProviders, externalVerifiedCookieName } from '@server/accounts/external.mjs';
-import { readCookie } from '@server/accounts/oidc.mjs';
+import { AccountEmailRateLimitError, discardAccountEmailOtp, issueAccountEmailOtp, pendingAccountEmailOtp, verifyAccountEmailOtp } from '@server/modules/passport/account.mjs';
+import { bindReturnCookie, externalProviders, externalVerifiedCookieName } from '@server/modules/passport/accounts/external.mjs';
+import { readCookie } from '@server/modules/passport/accounts/oidc.mjs';
 import { isSecureRequest } from '@server/modules/base/request-origin.mjs';
-import { sendDefaultCloudEmail } from '@server/cloud/email.mjs';
+import { sendDefaultCloudEmail } from '@server/modules/global/cloud/email.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 
 const verifyIdentityForm = (actions: Array<{ key: string; label: string }>): FormPageConfig => ({

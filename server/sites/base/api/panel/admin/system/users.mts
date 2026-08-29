@@ -1,11 +1,11 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
-import { createStoredPassword, readStoredPassword } from '@server/modules/base/auth.mjs';
+import { createStoredPassword, readStoredPassword } from '@server/modules/base/auth/index.mjs';
 import { getChangedFields } from '@server/modules/base/changed-fields.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 import { assignableRoleOptions, parseRoles, serializeRoles, unknownAssignableRoles } from '@shared/types/role.mjs';
-import { passwordError } from '@server/auth/password-policy.mjs';
+import { passwordError } from '@server/modules/base/auth/password-policy.mjs';
 
 const columns = [
 	{ dataIndex: 'id', title: 'ID', dataType: 'int' as const },

@@ -518,7 +518,7 @@ try {
 	assert.equal((await request('localhost', `${credentialsPath}/${emailCredential.id}`, {
 		method: 'PUT', cookie, body: { provider: 'aws', __changedFields: ['provider'] },
 	})).status, 409);
-	const { createAliyunDirectMailAdapter, getAliyunDirectMailEndpoint } = await import('../server/cloud/providers/aliyun-direct-mail.mts');
+	const { createAliyunDirectMailAdapter, getAliyunDirectMailEndpoint } = await import('../server/modules/global/cloud/providers/aliyun-direct-mail.mts');
 	assert.equal(getAliyunDirectMailEndpoint('cn-hangzhou'), 'https://dm.aliyuncs.com/');
 	assert.equal(getAliyunDirectMailEndpoint('ap-southeast-1'), 'https://dm.ap-southeast-1.aliyuncs.com/');
 	assert.equal(getAliyunDirectMailEndpoint('us-east-1'), 'https://dm.us-east-1.aliyuncs.com/');

@@ -94,7 +94,7 @@ TableCRUD 同时支持可选的游标分页响应 `nextCursor` 和 `hasMore`。�
 
 全局控制面按“凭据优先、能力独立”组织云能力。所有能力先选择凭据，Provider 由凭据推导；不建立混合不同能力的通用服务表。对象存储直接使用 `global_cloud_object_storage_buckets`、`global_cloud_object_storage_bindings` 和用途关联表，邮件、短信等能力实现时使用各自的数据模型。完整约束见 `docs/requirements/cloud-capability-management.md`。
 
-云厂商、可用服务和内部适配器映射集中在 `server/cloud/catalog.mts`。协议实现位于 `server/cloud/providers/`，使用 `fetch` 和 Web Crypto，不引入厂商 SDK，也不依赖本地文件系统。当前首先实现对象存储，浏览器通过预签名 URL 直传和下载，Node 与 Cloudflare Worker 不中转大文件。
+云厂商、可用服务和内部适配器映射集中在 `server/modules/global/cloud/catalog.mts`。协议实现位于 `server/modules/global/cloud/providers/`，使用 `fetch` 和 Web Crypto，不引入厂商 SDK，也不依赖本地文件系统。当前首先实现对象存储，浏览器通过预签名 URL 直传和下载，Node 与 Cloudflare Worker 不中转大文件。
 
 云能力按模块创建，不使用混合所有字段的通用表单。对象存储的一条资源就是一个 Bucket 接入配置：创建时先选择凭据，再读取 Bucket，并由 Bucket 元数据自动回填 Region、Endpoint 和 Path Style；不填写人工名称，也不重复选择服务或 Provider。Endpoint 属于 Bucket 配置并允许覆盖，不属于凭据。凭据 Secret 只在服务端参与签名。站点只有存在启用的 Bucket 绑定且拥有对应用途关联时，才获得该对象存储能力。
 

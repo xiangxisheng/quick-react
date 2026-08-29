@@ -79,7 +79,7 @@ passport_usernames                      -- 用户设置用户名后才创建
 - 该步骤提供"跳过"按钮；跳过只对本次登录生效，下次登录仍会提示。
 - 设置成功后提示：下次可以直接用邮箱 + 密码登录。
 - 已设置密码的用户不再出现该步骤。
-- 写入复用 `setPassportPassword`（`server/passport/identity.mts`），保留密码历史。
+- 写入复用 `setPassportPassword`（`server/modules/passport/identity.mts`），保留密码历史。
 - 邮箱 + 密码登录复用 `verifyPassportPasswordHistory`：只匹配到旧密码时拒绝登录，并提示新密码的修改时间（遵循上游需求）。
 
 ### 验收标准
@@ -211,7 +211,7 @@ passport_user_email_otps                -- 已登录用户添加邮箱时的验�
 
 - 角色对照表在 `shared/types/role.mts`，用户管理的角色列改为多选；`base_system_users.roles` 仍存 JSON 文本，由接口层转换。
 - 用户名存放在独立表 `passport_usernames`，密码沿用 `passport_user_credentials`，都遵循"可选能力用独立关联表"的约定。
-- 补全流程在 `server/accounts/onboarding.mjs`，登录成功后由 `/api/accounts/sign` 继续返回 `formPage`；第三方 OAuth 回调改为先跳回登录页补全。进入补全步骤时会给 OIDC 授权请求和 cookie 续期。
+- 补全流程在 `server/modules/passport/accounts/onboarding.mjs`，登录成功后由 `/api/accounts/sign` 继续返回 `formPage`；第三方 OAuth 回调改为先跳回登录页补全。进入补全步骤时会给 OIDC 授权请求和 cookie 续期。
 - 通用 `FormPage` 的自定义 action 现在也会应用响应里的 `formPage`/`currentValues`/`redirectTo`；只要响应里带 `formPage` 就不再安排跳转，修掉了多步表单被反馈倒计时带走的问题。
 - 账户中心概览用 `dashboard` 组件（统计 + 账户信息表），邮箱管理用 `table` 组件：工具栏"添加邮箱"发送验证码，工具栏"输入验证码"完成绑定（通用抽屉的新增表单只有一步，验证码必须作为独立动作）。
 - 待验证邮箱以只读行的形式出现在邮箱列表里，数据来自 `passport_user_email_otps`，不写入 `passport_emails`。
@@ -305,7 +305,7 @@ Accounts 站点上可能同时存在两种会话：站点本地账号（`base_sy
 
 "再次登录"这一列对两类身份源是一样的，因为走的是准则一：身份已经关联过 `user_id`，邮箱不再参与判断。
 
-授权协议、state 与 PKCE、回调处理、身份表结构、解绑管理全部共用；代码里的分界线就是 `providersWithVerifiedEmail`（`server/accounts/external.mts`）。新接入的身份源只要判断它属于哪一类，加进这个集合或不加即可，不需要写第二套流程。
+授权协议、state 与 PKCE、回调处理、身份表结构、解绑管理全部共用；代码里的分界线就是 `providersWithVerifiedEmail`（`server/modules/passport/accounts/external.mts`）。新接入的身份源只要判断它属于哪一类，加进这个集合或不加即可，不需要写第二套流程。
 
 ## 按已验证邮箱自动关联身份（2026-08-28 决策）
 

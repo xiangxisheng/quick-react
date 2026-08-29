@@ -1,14 +1,14 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
-import { clearSessionCookie, createSessionCookie, createStoredPassword, readSessionId, verifyStoredPassword } from '@server/modules/base/auth.mjs';
+import { clearSessionCookie, createSessionCookie, createStoredPassword, readSessionId, verifyStoredPassword } from '@server/modules/base/auth/index.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 import { firstSql, runSql, sql } from '@server/database/sql.mjs';
-import { accountsLoginCookie, loadAccountsOidcConfig, loadDiscovery, oidcFetch } from '@server/accounts/client.mjs';
-import { randomToken, sha256Base64Url } from '@server/accounts/oidc.mjs';
+import { accountsLoginCookie, loadAccountsOidcConfig, loadDiscovery, oidcFetch } from '@server/modules/passport/accounts/client.mjs';
+import { randomToken, sha256Base64Url } from '@server/modules/passport/accounts/oidc.mjs';
 import { isSecureRequest, requestOrigin } from '@server/modules/base/request-origin.mjs';
-import { clearPassportSessionCookie } from '@server/passport/session.mjs';
-import { passwordError } from '@server/auth/password-policy.mjs';
+import { clearPassportSessionCookie } from '@server/modules/passport/session.mjs';
+import { passwordError } from '@server/modules/base/auth/password-policy.mjs';
 
 const parseCredentials = async (c: Parameters<ApiHandler>[0]) => {
 	let body: Record<string, unknown> = {};

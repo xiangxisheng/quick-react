@@ -1,7 +1,7 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import { apiMessage } from '@server/modules/base/api-response.mjs';
-import { loadAccountsOidcConfig, loadDiscovery, oidcFetch, verifyIdToken } from '@server/accounts/client.mjs';
-import { parseFormBody } from '@server/accounts/oidc.mjs';
+import { loadAccountsOidcConfig, loadDiscovery, oidcFetch, verifyIdToken } from '@server/modules/passport/accounts/client.mjs';
+import { parseFormBody } from '@server/modules/passport/accounts/oidc.mjs';
 import { firstSql, runSql, sql } from '@server/database/sql.mjs';
 
 const handler: ApiHandler = async (c) => {

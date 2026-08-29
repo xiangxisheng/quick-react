@@ -1,8 +1,8 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
-import { accountIdProviderKeys, cloudProviderKeys, cloudProviderOptions, isCredentialContextValid } from '@server/cloud/catalog.mjs';
-import { testCloudCredential } from '@server/cloud/credential-test.mjs';
-import type { CloudCredential } from '@server/cloud/index.mjs';
+import { accountIdProviderKeys, cloudProviderKeys, cloudProviderOptions, isCredentialContextValid } from '@server/modules/global/cloud/catalog.mjs';
+import { testCloudCredential } from '@server/modules/global/cloud/credential-test.mjs';
+import type { CloudCredential } from '@server/modules/global/cloud/index.mjs';
 import { getChangedFields } from '@server/modules/base/changed-fields.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';

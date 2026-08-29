@@ -1,11 +1,11 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import { apiMessage } from '@server/modules/base/api-response.mjs';
-import { clearPassportSessionCookie, readPassportSessionId } from '@server/passport/session.mjs';
-import { oidcIssuer, revokeOidcSession } from '@server/accounts/provider.mjs';
+import { clearPassportSessionCookie, readPassportSessionId } from '@server/modules/passport/session.mjs';
+import { oidcIssuer, revokeOidcSession } from '@server/modules/passport/accounts/provider.mjs';
 import { isSecureRequest } from '@server/modules/base/request-origin.mjs';
-import { oidcClient } from '@server/accounts/repository.mjs';
-import { registeredClientRedirectUris } from '@server/accounts/redirects.mjs';
-import { parseFormBody, safeEqual, sha256 } from '@server/accounts/oidc.mjs';
+import { oidcClient } from '@server/modules/passport/accounts/repository.mjs';
+import { registeredClientRedirectUris } from '@server/modules/passport/accounts/redirects.mjs';
+import { parseFormBody, safeEqual, sha256 } from '@server/modules/passport/accounts/oidc.mjs';
 import { firstSql, sql } from '@server/database/sql.mjs';
 
 const handler: ApiHandler = async (c) => {

@@ -3,9 +3,9 @@ import type { AppEnv } from '@server/modules/base/types.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 import { runSql, sql } from '@server/database/sql.mjs';
-import { clearOidcRequestCookie, oidcRequestCookie, oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
+import { clearOidcRequestCookie, oidcRequestCookie, oidcRequestCookieName, readCookie } from '@server/modules/passport/accounts/oidc.mjs';
 import { isSecureRequest } from '@server/modules/base/request-origin.mjs';
-import { accountUsernameState, hasAccountPassword } from '@server/passport/account.mjs';
+import { accountUsernameState, hasAccountPassword } from '@server/modules/passport/account.mjs';
 
 export type OnboardingStep = 'username' | 'password' | 'done';
 export type AccountOnboarding = { step: OnboardingStep; invalidUsername: string };

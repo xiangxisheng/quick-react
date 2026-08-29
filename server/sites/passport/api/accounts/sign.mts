@@ -1,18 +1,18 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
 import type { DatabaseAdapter, DatabaseBatchStatement } from '@server/database/index.mjs';
-import { normalizePassportEmail, setPassportPassword, verifyPassportPasswordHistory } from '@server/passport/identity.mjs';
-import { hasAccountPassword, setAccountUsername, utcMinutes } from '@server/passport/account.mjs';
-import { accountOnboarding, loginRedirectTarget, onboardingForm, refreshOidcRequest, resetPasswordForm } from '@server/accounts/onboarding.mjs';
-import { clearPassportSessionCookie, createPassportSessionCookie, ensurePassportDevice, loadPassportSession, readPassportSessionId } from '@server/passport/session.mjs';
-import { clearOidcRequestCookie, oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
-import { authorizationRequest } from '@server/accounts/repository.mjs';
-import { oidcIssuer, revokePassportSession, revokeOidcSession } from '@server/accounts/provider.mjs';
-import { clearExternalPendingCookie, clearPasswordResetCookie, clearSignupEmailCookie, passwordResetCookie, passwordResetCookieName, discardExternalEmailOtp, externalPendingCookieName, externalProviders, providersWithVerifiedEmail, issueExternalEmailOtp, pendingExternalEmailOtp, pendingExternalIdentity, signupEmailCookie, signupEmailCookieName, verifyExternalEmailOtp } from '@server/accounts/external.mjs';
+import { normalizePassportEmail, setPassportPassword, verifyPassportPasswordHistory } from '@server/modules/passport/identity.mjs';
+import { hasAccountPassword, setAccountUsername, utcMinutes } from '@server/modules/passport/account.mjs';
+import { accountOnboarding, loginRedirectTarget, onboardingForm, refreshOidcRequest, resetPasswordForm } from '@server/modules/passport/accounts/onboarding.mjs';
+import { clearPassportSessionCookie, createPassportSessionCookie, ensurePassportDevice, loadPassportSession, readPassportSessionId } from '@server/modules/passport/session.mjs';
+import { clearOidcRequestCookie, oidcRequestCookieName, readCookie } from '@server/modules/passport/accounts/oidc.mjs';
+import { authorizationRequest } from '@server/modules/passport/accounts/repository.mjs';
+import { oidcIssuer, revokePassportSession, revokeOidcSession } from '@server/modules/passport/accounts/provider.mjs';
+import { clearExternalPendingCookie, clearPasswordResetCookie, clearSignupEmailCookie, passwordResetCookie, passwordResetCookieName, discardExternalEmailOtp, externalPendingCookieName, externalProviders, providersWithVerifiedEmail, issueExternalEmailOtp, pendingExternalEmailOtp, pendingExternalIdentity, signupEmailCookie, signupEmailCookieName, verifyExternalEmailOtp } from '@server/modules/passport/accounts/external.mjs';
 import { isSecureRequest } from '@server/modules/base/request-origin.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
-import { sendDefaultCloudEmail } from '@server/cloud/email.mjs';
-import { sendTelegramMessage, type TelegramInlineKeyboard } from '@server/telegram/api.mjs';
+import { sendDefaultCloudEmail } from '@server/modules/global/cloud/email.mjs';
+import { sendTelegramMessage, type TelegramInlineKeyboard } from '@server/modules/global/telegram/api.mjs';
 import type { FormPageConfig, FormPageExternalLogin } from '@shared/types/form-page.mjs';
 
 type TelegramOption = {

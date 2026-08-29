@@ -1,7 +1,7 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
-import { hasAccountPassword, utcMinutes } from '@server/passport/account.mjs';
-import { setPassportPassword, verifyPassportPasswordHistory } from '@server/passport/identity.mjs';
+import { hasAccountPassword, utcMinutes } from '@server/modules/passport/account.mjs';
+import { setPassportPassword, verifyPassportPasswordHistory } from '@server/modules/passport/identity.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 
 const securityForm = (hasPassword: boolean): FormPageConfig => ({

@@ -1,7 +1,7 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
-import { getCloudStorageProduct } from '@server/cloud/catalog.mjs';
-import { createCloudStorageAdapter, loadCloudStorageTarget } from '@server/cloud/resolve.mjs';
+import { getCloudStorageProduct } from '@server/modules/global/cloud/catalog.mjs';
+import { createCloudStorageAdapter, loadCloudStorageTarget } from '@server/modules/global/cloud/resolve.mjs';
 import { allSql, sql } from '@server/database/sql.mjs';
 
 const parseBody = async (c: Parameters<ApiHandler>[0]): Promise<Record<string, unknown>> => c.req.json<Record<string, unknown>>().catch(() => ({}));

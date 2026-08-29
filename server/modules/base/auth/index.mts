@@ -1,5 +1,5 @@
-import type { DatabaseAdapter } from '../../database/index.mjs';
-import { firstSql, sql } from '../../database/sql.mjs';
+import type { DatabaseAdapter } from '@server/database/index.mjs';
+import { firstSql, sql } from '@server/database/sql.mjs';
 
 const encoder = new TextEncoder();
 const iterations = 210_000;

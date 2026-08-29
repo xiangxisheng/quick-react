@@ -1,6 +1,6 @@
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { allSql, firstSql, sql } from '@server/database/sql.mjs';
-import { loadAccountUsername } from '@server/passport/account.mjs';
+import { loadAccountUsername } from '@server/modules/passport/account.mjs';
 
 export type OidcClientRecord = { id: string; name: string; secret_hash: string; redirect_uris: string; backchannel_logout_uri: string; allowed_scopes: string; require_pkce: number; strict_redirect_uri: number; status: string; created_at: number; updated_at: number };
 export type AuthorizationRequestRecord = { client_id: string; redirect_uri: string; scope: string; state: string; nonce: string; code_challenge: string; code_challenge_method: string; expires_at: number };

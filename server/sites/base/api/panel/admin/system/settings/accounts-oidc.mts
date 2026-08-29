@@ -1,6 +1,6 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
-import { accountsOidcConfigKey, defaultAccountsOidcConfig, loadDiscovery, normalizeAccountsOidcConfig, oidcFetch } from '@server/accounts/client.mjs';
+import { accountsOidcConfigKey, defaultAccountsOidcConfig, loadDiscovery, normalizeAccountsOidcConfig, oidcFetch } from '@server/modules/passport/accounts/client.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 import { allSql, sql } from '@server/database/sql.mjs';
 import { accountsIdentityApi } from '@server/modules/base/navigation.mjs';

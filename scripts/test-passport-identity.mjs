@@ -12,8 +12,8 @@ try {
 	const bundle = await build({
 		stdin: {
 			contents: `export { createSqliteAdapter } from './server/database/sqlite.mts';
-				export { getPassportSnowflakeGenerator, PASSPORT_SNOWFLAKE_EPOCH } from './server/passport/snowflake.mts';
-					export { confirmTelegramIdentityChoice, createTelegramIdentityChoice, issueTelegramEmailOtp, normalizePassportNickname, setPassportPassword, verifyPassportPasswordHistory, verifyTelegramEmailOtp } from './server/passport/identity.mts';`,
+				export { getPassportSnowflakeGenerator, PASSPORT_SNOWFLAKE_EPOCH } from './server/modules/passport/snowflake.mts';
+					export { confirmTelegramIdentityChoice, createTelegramIdentityChoice, issueTelegramEmailOtp, normalizePassportNickname, setPassportPassword, verifyPassportPasswordHistory, verifyTelegramEmailOtp } from './server/modules/passport/identity.mts';`,
 			resolveDir: projectDirectory,
 			sourcefile: 'passport-identity-test-entry.mts',
 			loader: 'ts',

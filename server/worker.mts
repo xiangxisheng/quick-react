@@ -9,12 +9,12 @@ import { buildAuthState, resolvePagePaths, resolvePageStatus } from './modules/b
 import { createDatabaseConfigStore } from './modules/base/config-store.mjs';
 import { createD1Adapter, type D1DatabaseLike } from './database/d1.mjs';
 import { apiMessage } from './modules/base/api-response.mjs';
-import { oidcDiscovery } from './accounts/provider.mjs';
+import { oidcDiscovery } from './modules/passport/accounts/provider.mjs';
 import type { DatabaseAdapter } from './database/index.mjs';
 import { SiteRouter } from './modules/base/site-router.mjs';
-import { loadCurrentUser, sessionUsesAccountsOidc } from './modules/base/auth.mjs';
-import { loadAccountsOidcConfig, resolveAccountsLoginMode } from './accounts/client.mjs';
-import { clearPassportSessionCookie, loadPassportSession, readPassportSessionId } from './passport/session.mjs';
+import { loadCurrentUser, sessionUsesAccountsOidc } from './modules/base/auth/index.mjs';
+import { loadAccountsOidcConfig, resolveAccountsLoginMode } from './modules/passport/accounts/client.mjs';
+import { clearPassportSessionCookie, loadPassportSession, readPassportSessionId } from './modules/passport/session.mjs';
 import { loadSystemConfigFromStore } from './modules/base/system-config.mjs';
 import { applyTechStackHeaders, loadTechStackConfigFromStore } from './modules/base/tech-stack.mjs';
 import { isSecureRequest } from './modules/base/request-origin.mjs';

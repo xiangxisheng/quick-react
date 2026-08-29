@@ -1,8 +1,8 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import { apiMessage, apiResponse } from '@server/modules/base/api-response.mjs';
-import { oidcIssuer } from '@server/accounts/provider.mjs';
-import { parseFormBody, randomToken, safeEqual, sha256, sha256Base64Url, signIdToken } from '@server/accounts/oidc.mjs';
-import { accountUser, authorizationCode, oidcClient } from '@server/accounts/repository.mjs';
+import { oidcIssuer } from '@server/modules/passport/accounts/provider.mjs';
+import { parseFormBody, randomToken, safeEqual, sha256, sha256Base64Url, signIdToken } from '@server/modules/passport/accounts/oidc.mjs';
+import { accountUser, authorizationCode, oidcClient } from '@server/modules/passport/accounts/repository.mjs';
 import { sql } from '@server/database/sql.mjs';
 
 type Code = { client_id: string; user_id: string; redirect_uri: string; scope: string; nonce: string; code_challenge: string; code_challenge_method: string; expires_at: number; consumed_at: number | null; session_id: string };

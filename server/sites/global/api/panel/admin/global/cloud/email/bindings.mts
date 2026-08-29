@@ -1,7 +1,7 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
-import { getCloudEmailProduct, getCloudEmailRegionLabel } from '@server/cloud/catalog.mjs';
-import { cloudEmailPurposeOptions } from '@server/cloud/email-purposes.mjs';
+import { getCloudEmailProduct, getCloudEmailRegionLabel } from '@server/modules/global/cloud/catalog.mjs';
+import { cloudEmailPurposeOptions } from '@server/modules/global/cloud/email-purposes.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { getChangedFields } from '@server/modules/base/changed-fields.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';

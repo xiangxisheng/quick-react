@@ -1,7 +1,7 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import { apiMessage, apiResponse } from '@server/modules/base/api-response.mjs';
-import { listAccountIdentities, unbindAccountIdentity } from '@server/passport/account.mjs';
-import { bindReturnCookie, externalProviders } from '@server/accounts/external.mjs';
+import { listAccountIdentities, unbindAccountIdentity } from '@server/modules/passport/account.mjs';
+import { bindReturnCookie, externalProviders } from '@server/modules/passport/accounts/external.mjs';
 import { isSecureRequest } from '@server/modules/base/request-origin.mjs';
 
 const columns = [

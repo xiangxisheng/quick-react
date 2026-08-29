@@ -1,9 +1,9 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import { apiMessage } from '@server/modules/base/api-response.mjs';
-import { clearAccountsLoginCookie, accountsLoginCookieName, loadAccountsOidcConfig, loadDiscovery, oidcFetch, verifyIdToken } from '@server/accounts/client.mjs';
-import { readCookie } from '@server/accounts/oidc.mjs';
-import { isValidAccountUsername } from '@server/passport/account.mjs';
-import { createSessionCookie } from '@server/modules/base/auth.mjs';
+import { clearAccountsLoginCookie, accountsLoginCookieName, loadAccountsOidcConfig, loadDiscovery, oidcFetch, verifyIdToken } from '@server/modules/passport/accounts/client.mjs';
+import { readCookie } from '@server/modules/passport/accounts/oidc.mjs';
+import { isValidAccountUsername } from '@server/modules/passport/account.mjs';
+import { createSessionCookie } from '@server/modules/base/auth/index.mjs';
 import { firstSql, runSql, sql } from '@server/database/sql.mjs';
 import { isSecureRequest, requestOrigin } from '@server/modules/base/request-origin.mjs';
 

@@ -1,6 +1,6 @@
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { runSql, sql } from '@server/database/sql.mjs';
-import { activeSigningKey } from '@server/accounts/repository.mjs';
+import { activeSigningKey } from '@server/modules/passport/accounts/repository.mjs';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();

@@ -1,4 +1,4 @@
-import { sendDefaultCloudEmail } from '@server/cloud/email.mjs';
+import { sendDefaultCloudEmail } from '@server/modules/global/cloud/email.mjs';
 import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
 import {
@@ -19,7 +19,7 @@ import {
 	editTelegramMessage,
 	sendTelegramMessage,
 	type TelegramInlineKeyboard,
-} from '@server/telegram/api.mjs';
+} from '@server/modules/global/telegram/api.mjs';
 
 export type PassportTelegramBot = { id: string; botToken: string };
 

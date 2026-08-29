@@ -1,7 +1,7 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import { apiMessage, apiResponse } from '@server/modules/base/api-response.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
-import { readPassportSessionId } from '@server/passport/session.mjs';
+import { readPassportSessionId } from '@server/modules/passport/session.mjs';
 
 const columns = [
 	{ dataIndex: 'device', title: '设备' },

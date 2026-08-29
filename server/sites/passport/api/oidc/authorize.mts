@@ -1,12 +1,12 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import { apiMessage } from '@server/modules/base/api-response.mjs';
-import { loadPassportSession, readPassportSessionId } from '@server/passport/session.mjs';
-import { accountOnboarding } from '@server/accounts/onboarding.mjs';
-import { oidcRequestCookie, randomToken, sha256 } from '@server/accounts/oidc.mjs';
+import { loadPassportSession, readPassportSessionId } from '@server/modules/passport/session.mjs';
+import { accountOnboarding } from '@server/modules/passport/accounts/onboarding.mjs';
+import { oidcRequestCookie, randomToken, sha256 } from '@server/modules/passport/accounts/oidc.mjs';
 import { runSql, sql } from '@server/database/sql.mjs';
-import { authorizationRequest, oidcClient } from '@server/accounts/repository.mjs';
+import { authorizationRequest, oidcClient } from '@server/modules/passport/accounts/repository.mjs';
 import { isSecureRequest } from '@server/modules/base/request-origin.mjs';
-import { registeredClientRedirectUris } from '@server/accounts/redirects.mjs';
+import { registeredClientRedirectUris } from '@server/modules/passport/accounts/redirects.mjs';
 import { renderAuthorizeError } from '@server/templates/passport/api/oidc/authorize.mjs';
 
 type Client = { id: string; redirect_uris: string; allowed_scopes: string; require_pkce: number; strict_redirect_uri: number; status: string };

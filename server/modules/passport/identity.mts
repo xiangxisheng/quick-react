@@ -1,8 +1,8 @@
-import { createStoredPassword, hashPassword, verifyPassword, verifyStoredPassword } from '@server/modules/base/auth.mjs';
+import { createStoredPassword, hashPassword, verifyPassword, verifyStoredPassword } from '@server/modules/base/auth/index.mjs';
 import type { DatabaseAdapter, DatabaseBatchStatement } from '@server/database/index.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
 import { getPassportSnowflakeGenerator } from './snowflake.mjs';
-import { assertPassword } from '@server/auth/password-policy.mjs';
+import { assertPassword } from '@server/modules/base/auth/password-policy.mjs';
 
 const signed64Min = -(1n << 63n);
 const signed64Max = (1n << 63n) - 1n;

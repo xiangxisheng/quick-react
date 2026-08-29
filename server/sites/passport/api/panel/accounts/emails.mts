@@ -1,7 +1,7 @@
 import type { ApiHandler } from '@server/modules/base/api-router.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/modules/base/api-response.mjs';
-import { listAccountEmails, pendingAccountEmailOtp, setPrimaryAccountEmail, unbindAccountEmail } from '@server/passport/account.mjs';
-import { bindReturnCookie } from '@server/accounts/external.mjs';
+import { listAccountEmails, pendingAccountEmailOtp, setPrimaryAccountEmail, unbindAccountEmail } from '@server/modules/passport/account.mjs';
+import { bindReturnCookie } from '@server/modules/passport/accounts/external.mjs';
 import { isSecureRequest } from '@server/modules/base/request-origin.mjs';
 
 const primaryOptions = [

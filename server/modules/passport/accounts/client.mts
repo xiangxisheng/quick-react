@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 import type { AppEnv } from '@server/modules/base/types.mjs';
-import { base64Url, decodeBase64Url, safeEqual, utf8 } from '@server/accounts/oidc.mjs';
+import { base64Url, decodeBase64Url, safeEqual, utf8 } from '@server/modules/passport/accounts/oidc.mjs';
 
 export type AccountsOidcClientConfig = { enabled: boolean; issuer: string; clientId: string; clientSecret: string };
 export type AccountsLoginMode = 'local' | 'oidc';

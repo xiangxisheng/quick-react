@@ -6,7 +6,7 @@ import type { TechStackConfig } from './tech-stack.mjs';
 import type { SiteSettings } from './site-settings.mjs';
 import type { UserIdentity } from '@shared/types/user.mjs';
 import type { TableColumn, TableRow } from '@shared/types/table.mjs';
-import type { AccountsLoginMode } from '../../accounts/client.mjs';
+import type { AccountsLoginMode } from '@server/modules/passport/accounts/client.mjs';
 
 export type RuntimeBindings = Record<string, unknown> & {
 	DEFAULT_DB?: unknown;
