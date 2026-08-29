@@ -50,7 +50,7 @@ try {
 	const oidcRequestCookie = blocked.headers.getSetCookie().map((value) => value.split(';')[0]).find((value) => value.startsWith('accounts_oidc_request='));
 	assert.ok(oidcRequestCookie);
 	const fromClient = await (await request('/api/accounts/sign.php', { headers: { cookie: oidcRequestCookie } })).json();
-	assert.match(fromClient.formPage.description, /正在为 client\.test 登录/);
+	assert.match(fromClient.formPage.description, /正在为 client\.test 登录 Accounts/);
 	assert.deepEqual(fromClient.formPage.actions.map((action) => action.key), ['return_to_client']);
 	assert.equal(fromClient.formPage.actions[0].label, '取消登录');
 	const returned = await request('/api/accounts/sign.php?action=return_to_client', { method: 'POST', headers: { cookie: oidcRequestCookie, 'content-type': 'application/json' }, body: '{}' });

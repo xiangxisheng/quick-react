@@ -28,9 +28,10 @@ type SelectOption = { value: string; text: string };
 /** 登录页：邮箱输入框在上，第三方登录以图标链接的形式排在下方。 */
 const signInForm = (email: string, externalLogins: FormPageExternalLogin[], returnHost = ''): FormPageConfig => ({
 	description: returnHost
-		? `正在为 ${returnHost} 登录。请输入邮箱后点击下一步，未注册的邮箱同样从此处开始；也可以使用下方的第三方账号登录，其中标注推荐的方式无需邮箱验证码即可完成注册。`
-		: '请输入邮箱后点击下一步，未注册的邮箱同样从此处开始；也可以使用下方的第三方账号登录，其中标注推荐的方式无需邮箱验证码即可完成注册。',
+		? `正在为 ${returnHost} 登录 Accounts。可使用邮箱密码登录，也可以选择下方的第三方账号；登录完成后会返回 ${returnHost}。`
+		: '登录 Accounts。可使用邮箱密码登录，也可以选择下方的第三方账号；首次使用会自动创建账户。',
 	submitLabel: '下一步',
+	submitHint: '邮箱未注册时，将引导你完成注册。',
 	...(returnHost ? { actions: [{ key: 'return_to_client', label: '取消登录' }] } : {}),
 	externalLogins,
 	initialValues: { step: 'email', email },
