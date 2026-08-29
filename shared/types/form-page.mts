@@ -11,6 +11,8 @@ export type FormPageField = {
 	unCheckedChildren?: string;
 	options?: Array<{ value: string; text: string; fieldValues?: Record<string, unknown> }>;
 	readOnlyWhen?: FieldReadOnlyWhen;
+	/** 字段为空时“还原”使用的后端默认值。 */
+	defaultValue?: unknown;
 	rules?: { required?: boolean; message?: string }[];
 };
 

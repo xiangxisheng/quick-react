@@ -212,7 +212,10 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 		try {
 			const result = await loginWithAccountsPopup();
 			runApiNextAction(result.next);
-		} catch (error) { setPassportError(error instanceof Error ? error.message : 'Passport 登录失败'); }
+		} catch (error) {
+			if ((error as Error & { silent?: boolean })?.silent) return;
+			setPassportError(error instanceof Error ? error.message : 'Passport 登录失败');
+		}
 	};
 	const modalFeedback = saved && !refreshCancelled && feedback?.component === 'modal' ? (
 		<Modal
@@ -267,9 +270,9 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 					label={(
 						<Space size={2}>
 							<span>{field.label}</span>
-							{/* 登录、注册这类空表单没有可清空或可还原的内容，不显示这两个按钮。 */}
-							{hasInitialValue(initialValues[field.name]) ? <>
-								<Button
+							{/* 开关只提供还原；其他字段同时提供清空和还原。 */}
+							<>
+								{field.type === 'switch' ? null : <Button
 									type="text"
 									size="small"
 									title="清空"
@@ -280,20 +283,23 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 										changedFields.current.add(field.name);
 										setDirty(true);
 									}}
-								/>
-								<Button
+								/>}
+								{(field.type === 'switch' || hasInitialValue(initialValues[field.name]) || field.defaultValue !== undefined) ? <Button
 									type="text"
 									size="small"
 									title="还原"
 									icon={<RollbackOutlined />}
 									onClick={() => {
-										form.setFields([{ name: field.name, value: initialValues[field.name], touched: false, errors: [] }]);
-										setLiveValues((previous) => ({ ...previous, [field.name]: initialValues[field.name] }));
-										changedFields.current.delete(field.name);
+									const hasSavedValue = hasInitialValue(initialValues[field.name]);
+									const restoreValue = field.defaultValue !== undefined ? field.defaultValue : initialValues[field.name];
+									form.setFields([{ name: field.name, value: restoreValue, touched: false, errors: [] }]);
+									setLiveValues((previous) => ({ ...previous, [field.name]: restoreValue }));
+										if (hasSavedValue && field.defaultValue === undefined) changedFields.current.delete(field.name);
+										else changedFields.current.add(field.name);
 										setDirty(changedFields.current.size > 0);
 									}}
-								/>
-							</> : null}
+								/> : null}
+							</>
 						</Space>
 					)}
 					name={field.name}

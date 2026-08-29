@@ -10,7 +10,7 @@ const createFormPage = (issuerOptions: Array<{ value: string; text: string; fiel
 	description: '业务站点通过 OIDC Authorization Code + PKCE 登录 Accounts。客户端密钥保存在本站数据库，不会写入全局站点库。',
 	submitLabel: '保存配置', actions: [{ key: 'test', label: '测试配置' }], initialValues: defaultAccountsOidcConfig,
 	fields: [
-		{ name: 'enabled', label: '启用 Accounts 登录', type: 'switch' },
+		{ name: 'enabled', label: '启用 Accounts 登录', type: 'switch', defaultValue: false },
 		{ name: 'issuerSource', label: 'Passport 域名', type: 'select', options: issuerOptions, placeholder: '选择 Passport 域名，或选择自定义', rules: [{ required: true, message: '请选择 Passport 域名来源' }] },
 		{ name: 'issuer', label: 'Accounts Issuer', type: 'text', placeholder: 'https://accounts.example.com', readOnlyWhen: { field: 'issuerSource', optionValues: true }, rules: [{ required: true, message: '请输入 Accounts Issuer' }] },
 		{ name: 'clientId', label: '客户端 ID', type: 'text', rules: [{ required: true, message: '请输入客户端 ID' }] },

@@ -35,6 +35,7 @@ export type PageStatus = {
 };
 
 export type InitialData = {
+	debug?: boolean;
 	apiSuffix: string;
 	pageSuffix: string;
 	siteName: string;

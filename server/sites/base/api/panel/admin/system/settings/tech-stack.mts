@@ -1,5 +1,5 @@
 import type { ApiHandler } from '@server/api-router.mjs';
-import { normalizeTechStackConfig } from '@server/tech-stack.mjs';
+import { normalizeTechStackConfig } from '@server/modules/base/tech-stack.mjs';
 import { mergeChangedFields } from '@server/changed-fields.mjs';
 import { apiMessageData, apiResponse } from '@server/api-response.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
@@ -11,7 +11,7 @@ const formPage = {
 	submitHint: '修改后立即生效',
 	initialValues: { nginx: false, phpVersion: '', apiSuffix: '.php', pageSuffix: '.html' },
 	fields: [
-		{ name: 'nginx', label: 'Nginx', type: 'switch', checkedChildren: '开启', unCheckedChildren: '关闭', extra: '开启后返回 Server: nginx。' },
+		{ name: 'nginx', label: 'Nginx', type: 'switch', defaultValue: false, checkedChildren: '开启', unCheckedChildren: '关闭', extra: '开启后返回 Server: nginx。' },
 		{ name: 'phpVersion', label: 'PHP 版本号', type: 'text', extra: '填写例如 8.2.12；留空则不返回 PHP 标识。', placeholder: '例如 8.2.12', maxLength: 32 },
 		{ name: 'apiSuffix', label: 'API 路径后缀', type: 'text', extra: '例如 .php、.json；留空则使用无后缀 API 路径。', placeholder: '例如 .php', maxLength: 16 },
 		{ name: 'pageSuffix', label: '页面路径后缀', type: 'text', extra: '例如 .html；留空则使用无后缀页面路径。', placeholder: '例如 .html', maxLength: 16 },

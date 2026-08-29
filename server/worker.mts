@@ -6,7 +6,7 @@ import { renderIndexHtml } from './templates/base/index.mjs';
 import { createApiGateway } from './api-router.mjs';
 import { accountsIdentityApi, getPageMetadata, getSiteNavigation, siteProvidesApi } from './navigation.mjs';
 import { buildAuthState, resolvePagePaths, resolvePageStatus } from './page-context.mjs';
-import { createDatabaseConfigStore } from './config-store.mjs';
+import { createDatabaseConfigStore } from './modules/base/config-store.mjs';
 import { createD1Adapter, type D1DatabaseLike } from './database/d1.mjs';
 import { apiMessage } from './api-response.mjs';
 import { oidcDiscovery } from './accounts/provider.mjs';
@@ -15,10 +15,10 @@ import { SiteRouter } from './site-router.mjs';
 import { loadCurrentUser, sessionUsesAccountsOidc } from './auth.mjs';
 import { loadAccountsOidcConfig, resolveAccountsLoginMode } from './accounts/client.mjs';
 import { clearPassportSessionCookie, loadPassportSession, readPassportSessionId } from './passport/session.mjs';
-import { loadSystemConfigFromStore } from './system-config.mjs';
-import { applyTechStackHeaders, loadTechStackConfigFromStore } from './tech-stack.mjs';
+import { loadSystemConfigFromStore } from './modules/base/system-config.mjs';
+import { applyTechStackHeaders, loadTechStackConfigFromStore } from './modules/base/tech-stack.mjs';
 import { isSecureRequest } from './request-origin.mjs';
-import { loadSiteSettings } from './site-settings.mjs';
+import { loadSiteSettings } from './modules/base/site-settings.mjs';
 import { renderPrivacyHtml } from './templates/base/page/privacy.mjs';
 import { renderTermsHtml } from './templates/base/page/terms.mjs';
 import type { AppEnv, RuntimeBindings } from './types.mjs';
@@ -161,12 +161,13 @@ const renderDocument = async (c: Context<WorkerEnv>) => {
 		title,
 		canonical,
 		initialData: {
+			debug: systemConfig.debug,
 			apiSuffix: siteConfig.apiSuffix,
 			pageSuffix: siteConfig.pageSuffix,
 			siteName: site.name,
 			siteNavigation: menuItems,
 			auth,
-			footer: `Ant Design ©${new Date().getFullYear()} Created by Ant UED`,
+			footer: c.get('siteSettings').footer,
 			pageStatus,
 		},
 	}), (pageStatus?.status ?? 200) as ContentfulStatusCode);

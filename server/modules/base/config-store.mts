@@ -26,5 +26,5 @@ export const createDatabaseConfigStore = (database: DatabaseAdapter): ConfigStor
 });
 
 export const createD1ConfigStore = createDatabaseConfigStore;
-import type { DatabaseAdapter } from './database/index.mjs';
-import { firstSql, runSql, sql } from './database/sql.mjs';
+import type { DatabaseAdapter } from '../../database/index.mjs';
+import { firstSql, runSql, sql } from '../../database/sql.mjs';

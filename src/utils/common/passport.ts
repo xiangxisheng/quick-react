@@ -2,6 +2,7 @@
 import type { ApiNextAction } from '@shared/types/api-response.mjs';
 
 type PassportSdk = { login: () => Promise<{ next?: ApiNextAction }>; logout: (options?: { signInPath?: string }) => Promise<{ next?: ApiNextAction }> };
+export const isSilentPassportError = (error: unknown): boolean => Boolean(error && typeof error === 'object' && 'silent' in error && (error as { silent?: unknown }).silent === true);
 
 const loadPassport = async () => {
 	const passport = window as Window & { Passport?: PassportSdk };

@@ -5,7 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { HomeOutlined, LoginOutlined, UserOutlined } from '@ant-design/icons';
 import type { CommonApi } from '@/utils/common/api.js';
 import type { HeaderAction, PageStatus } from '@shared/types/initial-data.mjs';
-import { loginWithAccountsPopup } from '@/utils/common/passport.js';
+import { isSilentPassportError, loginWithAccountsPopup } from '@/utils/common/passport.js';
 import LocalLoginModal from '@/components/auth/LocalLoginModal.js';
 import { runApiNextAction } from '@/utils/common/response-action.js';
 
@@ -53,7 +53,7 @@ export default function StatusPage({ commonApi, apiSuffix, pageSuffix, pageStatu
 			try {
 				const result = await loginWithAccountsPopup();
 				runApiNextAction(result.next);
-			} catch (error) { await commonApi.modalError([error instanceof Error ? error.message : 'Accounts 登录失败']); }
+			} catch (error) { if (!isSilentPassportError(error)) await commonApi.modalError([error instanceof Error ? error.message : 'Accounts 登录失败']); }
 			return;
 		}
 		if (action.action === 'local-logout') {

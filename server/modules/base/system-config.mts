@@ -6,12 +6,13 @@ export type SystemConfig = {
 	publicOrigin: string;
 	trustedProxyIps: string;
 	mapAllowedIps: string;
+	debug: boolean;
 };
 
 let defaultConfig: SystemConfig = {
 	httpPort: '8088', domain: 'anan.cc', publicOrigin: '',
 	trustedProxyIps: '127.0.0.1,::1,::ffff:127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
-	mapAllowedIps: '127.0.0.1,::1,::ffff:127.0.0.1',
+	mapAllowedIps: '127.0.0.1,::1,::ffff:127.0.0.1', debug: false,
 };
 let config = { ...defaultConfig };
 let store: ConfigStore = memoryConfigStore;
@@ -28,7 +29,7 @@ export const configureSystemConfig = (options: { store?: ConfigStore; defaults?:
 	defaultConfig = {
 		httpPort: '8088', domain: 'anan.cc', publicOrigin: '',
 		trustedProxyIps: '127.0.0.1,::1,::ffff:127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
-		mapAllowedIps: '127.0.0.1,::1,::ffff:127.0.0.1',
+		mapAllowedIps: '127.0.0.1,::1,::ffff:127.0.0.1', debug: false,
 		...options.defaults,
 	};
 	config = { ...defaultConfig };
@@ -43,6 +44,7 @@ export const normalizeSystemConfig = (value: unknown, defaults: SystemConfig = d
 		publicOrigin: typeof source.publicOrigin === 'string' ? source.publicOrigin.trim().slice(0, 512) : defaults.publicOrigin,
 		trustedProxyIps: typeof source.trustedProxyIps === 'string' ? source.trustedProxyIps.trim().slice(0, 2048) : defaults.trustedProxyIps,
 		mapAllowedIps: typeof source.mapAllowedIps === 'string' ? source.mapAllowedIps.trim().slice(0, 2048) : defaults.mapAllowedIps,
+		debug: typeof source.debug === 'boolean' ? source.debug : defaults.debug,
 	};
 };
 

@@ -3,7 +3,7 @@ import type { AuthState, HeaderAction } from '@shared/types/initial-data.mjs';
 import { Avatar, Button, Dropdown, Space } from 'antd';
 import { LoginOutlined, LogoutOutlined, UserAddOutlined, UserOutlined } from '@ant-design/icons';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { loginWithAccountsPopup, logoutWithAccounts } from '@/utils/common/passport.js';
+import { isSilentPassportError, loginWithAccountsPopup, logoutWithAccounts } from '@/utils/common/passport.js';
 import { useState } from 'react';
 import LocalLoginModal from '@/components/auth/LocalLoginModal.js';
 import { runApiNextAction } from '@/utils/common/response-action.js';
@@ -42,7 +42,7 @@ export default function AuthActions({ auth, commonApi, apiSuffix, pageSuffix }: 
 			try {
 				const result = await loginWithAccountsPopup();
 				runApiNextAction(result.next);
-			} catch (error) { await commonApi.modalError([error instanceof Error ? error.message : 'Accounts 登录失败']); }
+			} catch (error) { if (!isSilentPassportError(error)) await commonApi.modalError([error instanceof Error ? error.message : 'Accounts 登录失败']); }
 			return;
 		}
 		if (action.action === 'local-logout') {

@@ -8,6 +8,9 @@ export type PassportLoginOptions = {
 
 type PassportNextAction = { action: 'reload' } | { action: 'navigate'; path: string };
 type PassportLogoutResult = { next?: PassportNextAction; feedback?: { message?: string } };
+type PassportError = Error & { silent?: boolean };
+
+const debugEnabled = () => Boolean((window as Window & { __INITIAL_DATA__?: { debug?: boolean } }).__INITIAL_DATA__?.debug);
 
 const currentOrigin = () => window.location.origin;
 /** API 后缀由站点配置决定（.php、.html 或空），不能写死。 */
@@ -40,7 +43,9 @@ const Passport = {
 			const closeWatcher = window.setInterval(() => {
 				if (!popup.closed) return;
 				window.clearTimeout(timer); window.clearInterval(closeWatcher); window.removeEventListener('message', listener);
-				reject(new Error('Passport 登录窗口已关闭'));
+				const error = new Error('Passport 登录窗口已关闭') as PassportError;
+				error.silent = !debugEnabled();
+				reject(error);
 			}, 500);
 			const listener = (event: MessageEvent) => { if (event.origin !== currentOrigin() || event.data?.source !== 'passport') return; window.clearTimeout(timer); window.clearInterval(closeWatcher); window.removeEventListener('message', listener); popup.close(); event.data.status === 'success' ? resolve({ next: event.data.next }) : reject(new Error(event.data.message || 'Passport 登录失败')); };
 			window.addEventListener('message', listener);
