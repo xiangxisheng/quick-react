@@ -24,8 +24,13 @@ const Passport = {
 		const popup = window.open(result.redirectTo, 'passport_login', `width=${options.width ?? 480},height=${options.height ?? 680},resizable=yes,scrollbars=yes`);
 		if (!popup) throw new Error('登录窗口被浏览器拦截');
 		return new Promise<{ next?: PassportNextAction }>((resolve, reject) => {
-			const timer = window.setTimeout(() => { popup.close(); reject(new Error('Passport 登录已超时')); }, 10 * 60 * 1000);
-			const listener = (event: MessageEvent) => { if (event.origin !== currentOrigin() || event.data?.source !== 'passport') return; window.clearTimeout(timer); window.removeEventListener('message', listener); popup.close(); event.data.status === 'success' ? resolve({ next: event.data.next }) : reject(new Error(event.data.message || 'Passport 登录失败')); };
+			const timer = window.setTimeout(() => { window.clearInterval(closeWatcher); popup.close(); window.removeEventListener('message', listener); reject(new Error('Passport 登录已超时')); }, 10 * 60 * 1000);
+			const closeWatcher = window.setInterval(() => {
+				if (!popup.closed) return;
+				window.clearTimeout(timer); window.clearInterval(closeWatcher); window.removeEventListener('message', listener);
+				reject(new Error('Passport 登录窗口已关闭'));
+			}, 500);
+			const listener = (event: MessageEvent) => { if (event.origin !== currentOrigin() || event.data?.source !== 'passport') return; window.clearTimeout(timer); window.clearInterval(closeWatcher); window.removeEventListener('message', listener); popup.close(); event.data.status === 'success' ? resolve({ next: event.data.next }) : reject(new Error(event.data.message || 'Passport 登录失败')); };
 			window.addEventListener('message', listener);
 		});
 	},
