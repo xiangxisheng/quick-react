@@ -37,9 +37,10 @@ export type FormPageResponse<T = Record<string, unknown>> = {
 	currentValues?: T;
 	formPage?: FormPageConfig;
 	feedback?: ApiFeedback;
+	next?: ApiNextAction;
 	redirectTo?: string;
 	/** 在弹窗里完成的流程：优先关闭窗口，关不掉时才回落到 redirectTo。 */
 	closeWindow?: boolean;
 };
-import type { ApiFeedback } from './api-response.mjs';
+import type { ApiFeedback, ApiNextAction } from './api-response.mjs';
 import type { FieldReadOnlyWhen } from '../field-linkage.mjs';

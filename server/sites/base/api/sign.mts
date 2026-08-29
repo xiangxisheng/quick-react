@@ -4,7 +4,7 @@ import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 import { firstSql, runSql, sql } from '@server/database/sql.mjs';
-import { accountsLoginCookie, loadAccountsOidcConfig, loadDiscovery } from '@server/accounts/client.mjs';
+import { accountsLoginCookie, loadAccountsOidcConfig, loadDiscovery, oidcFetch } from '@server/accounts/client.mjs';
 import { randomToken, sha256Base64Url } from '@server/accounts/oidc.mjs';
 import { isSecureRequest, requestOrigin } from '@server/request-origin.mjs';
 
@@ -72,13 +72,13 @@ const localSign: ApiHandler = async (c, next) => {
 		const now = Date.now();
 		await runSql(database, sql(database).insert('base_system_sessions', { id: sessionId, user_id: user.id, expires_at: now + maxAge * 1000, created_at: now }));
 		c.header('Set-Cookie', createSessionCookie(sessionId, new URL(c.req.url).protocol === 'https:', maxAge));
-		return apiMessageData(c, 200, '登录成功', { user: { id: user.id, username: user.username } });
+		return apiMessageData(c, 200, '登录成功', { user: { id: user.id, username: user.username }, next: { action: 'reload' } });
 	}
 	if (c.req.method === 'DELETE') {
 		const sessionId = readSessionId(c.req.raw);
 		if (sessionId) await runSql(database, sql(database).delete('base_system_sessions', { id: sessionId }));
 		c.header('Set-Cookie', clearSessionCookie(new URL(c.req.url).protocol === 'https:'));
-		return apiMessage(c, 200, '已退出登录');
+		return apiMessageData(c, 200, '已退出登录', { next: { action: 'reload' } });
 	}
 	return next();
 };
@@ -86,11 +86,12 @@ const localSign: ApiHandler = async (c, next) => {
 /** 登录入口：站点在系统设置里启用 Accounts 登录后走 OIDC，否则回落到本站账号密码登录。 */
 const handler: ApiHandler = async (c, next) => {
 	const config = await loadAccountsOidcConfig(c);
-	if (!config.enabled) {
+	if (c.get('accountsLoginMode') === 'local') {
 		// 未启用 Accounts 登录时，SDK 的登录请求不能被当成本地账号密码登录，否则会报"用户名或密码错误"。
 		if (c.req.method === 'POST') {
 			const body = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>));
 			if (body.action === 'login') return apiMessage(c, 409, '本站未启用 Accounts 登录，请使用本站账号密码登录');
+			if (typeof body.step === 'string' || 'email' in body) return apiMessage(c, 409, '登录方式已切换为本地账号密码，请刷新页面后重试');
 		}
 		return localSign(c, next, {});
 	}
@@ -105,9 +106,29 @@ const handler: ApiHandler = async (c, next) => {
 		};
 		return apiResponse(c, 200, { user: currentUser, registrationAvailable: false, formPage });
 	}
+	if (c.req.method === 'DELETE') {
+		const database = c.get('database'), sessionId = readSessionId(c.req.raw);
+		const oidcSession = sessionId ? await firstSql<{ sid: string }>(database, sql(database).select({
+			table: 'base_oidc_sessions', columns: { sid: 'sid' }, where: [{ column: 'issuer', value: config.issuer }, { column: 'session_id', value: sessionId }],
+		})) : undefined;
+		if (oidcSession) {
+			try {
+				const discovery = await loadDiscovery(c, config.issuer);
+				const response = await oidcFetch(c, discovery.end_session_endpoint || `${config.issuer}/api/oidc/logout`, {
+					method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+					body: new URLSearchParams({ client_id: config.clientId, client_secret: config.clientSecret, sid: oidcSession.sid }),
+				});
+				if (!response.ok) throw new Error(`Accounts 注销请求失败（HTTP ${response.status}）`);
+			} catch (error) { return apiMessage(c, 502, error instanceof Error ? error.message : 'Accounts 注销失败'); }
+		}
+		if (sessionId) await runSql(database, sql(database).delete('base_system_sessions', { id: sessionId }));
+		c.header('Set-Cookie', clearSessionCookie(isSecureRequest(c)));
+		return apiMessageData(c, 200, '已退出 Accounts 及所有关联站点', { next: { action: 'reload' } });
+	}
 	if (c.req.method === 'POST') {
 		try {
 			const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
+			if ('username' in body || 'remember' in body) return apiMessage(c, 409, '登录方式已切换为 Accounts 登录，请刷新页面后重试');
 			const discovery = await loadDiscovery(c, config.issuer), id = crypto.randomUUID(), state = randomToken(), nonce = randomToken(), verifier = randomToken(48), now = Date.now();
 			const database = c.get('database');
 			await runSql(database, sql(database).insert('base_oidc_login_requests', { id, issuer: config.issuer, state, nonce, code_verifier: verifier, return_path: '/', expires_at: now + 600_000, created_at: now }));

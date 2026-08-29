@@ -175,16 +175,16 @@ site2 -> site1 -> base
 
 所有站点走同一套解析逻辑，代码里不存在按站点标识的分支，能力只来自代码站点目录和继承链：
 
-1. Accounts 登录（OIDC 客户端）及其“Accounts 登录”系统设置页由 `base` 提供，因此每个站点都有，身份中心站点自己也有；是否启用只看该站点系统设置里的开关，配置和 `base_oidc_*` 表都存在站点自己的数据库里。
+1. Accounts 登录（OIDC 客户端）及其“Accounts 登录”系统设置页由 `base` 提供，因此每个站点都有，身份中心站点自己也有。登录策略保存在当前数据库的同一个 `accounts-oidc-client` 配置项中：Passport、Global 和业务站点共用数据库时，任一站点修改开关都对三者同时生效；分离数据库后才由各数据库分别配置。
 2. Accounts 身份与 OIDC 端点由 `passport` 代码站点提供，继承了 `passport` 的站点才有，因为身份数据表由 `passport` 声明。
 
 即：站点之间的差异只体现为“继承了哪个代码站点”和“自己的系统设置怎么配”，与 `global`、`passport` 这些具体标识无关。
 
-每个站点都只有 `/sign` 一个登录页、一个 `/api/sign` 接口、一个退出入口，链接对所有站点完全相同；页面内容由本站的 `/api/sign` 决定：
+每个站点都只有 `/sign` 一个对外登录入口、一个 `/api/sign` 接口和一个退出入口，链接对所有站点完全相同；页面内容由本站的 `/api/sign` 决定。身份提供方额外拥有内部 `/accounts/sign` 和 `/api/accounts/sign`，不作为普通站点登录入口，只服务于 OIDC 认证和 Accounts 账号管理。
 
-1. 没启用 Accounts 登录的站点：本站账号密码登录（Base 实现）。
-2. 启用了 Accounts 登录的站点：走 Accounts 账号登录（Base 实现里的 OIDC 分支）。
-3. 身份中心站点：`/sign` 就是 Accounts 账号登录本身（`server/sites/passport/api/sign.mts` 覆盖 Base 实现）。
+1. 共享开关关闭：Passport、Global 和业务站点都使用本地账号密码登录（Base 实现）。
+2. 共享开关开启：Passport、Global 和业务站点的 `/sign` 都走同一个 Accounts OIDC 客户端流程。Passport 另保留 `/accounts/sign` 作为身份提供方的原生认证页，OIDC 授权端点只在没有 Accounts 会话时转入该页，避免 `/sign` 自身 OIDC 循环。
+3. 开关切换后不接受上一种模式留下的会话：开启时只接受 Accounts 会话，关闭时只接受本地密码会话。
 
 差异只来自站点目录里的覆盖文件，不来自运行时判断。头部入口同样只看当前持有哪些会话：有本站会话给个人中心，有 Accounts 会话给账户中心，退出统一走 `/sign`。是否显示注册入口看本站数据库里初始管理员是否还没创建。
 

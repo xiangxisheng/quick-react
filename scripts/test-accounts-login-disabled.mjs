@@ -20,14 +20,18 @@ try {
 		return JSON.parse(html.match(/__INITIAL_DATA__=(\{.*?\});<\/script>/s)[1]);
 	};
 
-	// 头部登录按钮跳本站登录页，不弹 Accounts 登录窗口。
+	// 头部登录按钮在当前页弹出本站账号密码表单，不走 Accounts 登录窗口。
 	const home = await initialData('/');
-	assert.deepEqual(home.auth.actions.map((action) => [action.key, action.action]), [['/sign', 'navigate'], ['/sign-up', 'navigate']]);
+	assert.deepEqual(home.auth.actions.map((action) => [action.key, action.action]), [['/sign', 'local-login'], ['/sign-up', 'navigate']]);
 
-	// 需要登录的页面提示同样走本站登录页。
+	// 需要登录的页面提示同样弹出本站账号密码表单。
 	const blocked = await initialData('/panel/admin.html');
 	assert.equal(blocked.pageStatus.status, 401);
-	assert.deepEqual(blocked.pageStatus.actions.map((action) => action.action), ['navigate', 'navigate']);
+	assert.deepEqual(blocked.pageStatus.actions.map((action) => action.action), ['local-login', 'navigate']);
+
+	// 公开登录页已经取消，直接访问旧地址得到确定的 404；登录 API 仍供弹窗使用。
+	const removedSignPage = await request('/sign.html', { headers: { accept: 'text/html' } });
+	assert.equal(removedSignPage.status, 404);
 
 	// 登录页是本站账号密码表单，不下发 Accounts 登录入口。
 	const signForm = await (await request('/api/sign.php')).json();
@@ -44,6 +48,7 @@ try {
 	const login = await request('/api/sign.php', { method: 'POST', body: { username: 'local_admin', password: 'test-password-123' } });
 	assert.equal(login.status, 200);
 	assert.ok(login.headers.get('set-cookie'));
+	assert.deepEqual((await login.clone().json()).next, { action: 'reload' });
 
 	// 身份中心站点和业务站点用同一套模块：后台同样有“Accounts 登录”设置页，可以在这里关掉这种登录方式。
 	const cookie = login.headers.get('set-cookie').split(';')[0];

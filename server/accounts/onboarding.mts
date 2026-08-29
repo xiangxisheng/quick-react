@@ -80,7 +80,7 @@ export const postLoginRedirect = async (c: Context<AppEnv>, database: DatabaseAd
 	// 用户名和密码都要按规则提示，补全完成后登录页再带 request_id 回授权端点。
 	if (onboarding.step !== 'done') {
 		await refreshOidcRequest(c, database);
-		return `/sign${c.get('techStackConfig').pageSuffix}`;
+		return `/accounts/sign${c.get('techStackConfig').pageSuffix}`;
 	}
 	return loginRedirectTarget(c);
 };

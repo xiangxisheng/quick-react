@@ -6,6 +6,8 @@ import { HomeOutlined, LoginOutlined, UserOutlined } from '@ant-design/icons';
 import type { CommonApi } from '@/utils/common/api.js';
 import type { HeaderAction, PageStatus } from '@shared/types/initial-data.mjs';
 import { loginWithAccountsPopup } from '@/utils/common/passport.js';
+import LocalLoginModal from '@/components/auth/LocalLoginModal.js';
+import { runApiNextAction } from '@/utils/common/response-action.js';
 
 type StatusPageProps = {
 	commonApi: CommonApi;
@@ -23,6 +25,7 @@ export default function StatusPage({ commonApi, apiSuffix, pageSuffix, pageStatu
 	const navigate = useNavigate();
 	const serverStatus = pageStatus?.path === location.pathname ? pageStatus : undefined;
 	const [status, setStatus] = useState<PageStatus | undefined>(serverStatus);
+	const [localLoginOpen, setLocalLoginOpen] = useState(false);
 
 	useEffect(() => {
 		if (serverStatus) {
@@ -44,15 +47,16 @@ export default function StatusPage({ commonApi, apiSuffix, pageSuffix, pageStatu
 	const pageUrl = (path: string) => path === '/' ? path : `${path}${pageSuffix}`;
 	const execute = async (action: HeaderAction) => {
 		if (action.action === 'navigate') { navigate(pageUrl(action.key)); return; }
+		if (action.action === 'local-login') { setLocalLoginOpen(true); return; }
 		// 需要登录的页面直接弹出 Accounts 登录窗口，不再把用户送到登录页。
 		if (action.action === 'accounts-login') {
 			try {
-				await loginWithAccountsPopup();
-				window.location.reload();
+				const result = await loginWithAccountsPopup();
+				runApiNextAction(result.next);
 			} catch (error) { await commonApi.modalError([error instanceof Error ? error.message : 'Accounts 登录失败']); }
 		}
 	};
-	return <Result
+	return <><Result
 		status={resultStatus(status.status)}
 		title={status.title}
 		subTitle={status.description}
@@ -66,5 +70,5 @@ export default function StatusPage({ commonApi, apiSuffix, pageSuffix, pageStatu
 				>{action.label}</Button>
 			))}
 		</Space>}
-	/>;
+	/><LocalLoginModal open={localLoginOpen} onClose={() => setLocalLoginOpen(false)} commonApi={commonApi} apiSuffix={apiSuffix} /></>;
 }

@@ -29,8 +29,10 @@ try {
 	const clientId = 'acct_test', clientSecret = 'test-client-secret', verifier = base64Url(crypto.getRandomValues(new Uint8Array(48)));
 	const secretHash = Buffer.from(await sha256(clientSecret)).toString('hex'), challenge = base64Url(await sha256(verifier));
 	database.prepare(`INSERT INTO passport_oidc_clients (id, name, secret_hash, redirect_uris, allowed_scopes, require_pkce, status, created_at, updated_at, backchannel_logout_uri)
-		VALUES (?, 'Test Client', ?, '["https://client.test/callback","https://site1.test/api/accounts/oidc/callback"]', 'openid profile email', 1, 'enabled', ?, ?, 'https://site1.test/api/accounts/oidc/backchannel-logout')`).run(clientId, secretHash, now, now);
+		VALUES (?, 'Test Client', ?, '["https://client.test/callback"]', 'openid profile email', 1, 'enabled', ?, ?, 'https://site1.test/api/accounts/oidc/backchannel-logout')`).run(clientId, secretHash, now, now);
 	database.prepare(`INSERT INTO base_system_configs (key, value, updated_at) VALUES ('accounts-oidc-client', ?, ?)`).run(JSON.stringify({ enabled: true, issuer: 'https://accounts.test', clientId, clientSecret }), now);
+	database.prepare(`INSERT INTO base_system_users (id, username, password, roles, status, created_at, updated_at) VALUES (77, 'local_admin', 'unused', '["admin"]', 'enabled', ?, ?)`).run(now, now);
+	database.prepare(`INSERT INTO base_system_sessions (id, user_id, expires_at, created_at) VALUES ('local-session', 77, ?, ?)`).run(now + 3600_000, now);
 	database.close();
 	const request = (path, options = {}) => app.request(`https://accounts.test${path}`, { method: options.method, headers: options.headers, body: options.body });
 	const discovery = await (await request('/.well-known/openid-configuration')).json();
@@ -43,15 +45,15 @@ try {
 	// 还没有设置用户名的账号即使已登录，也要先回登录页补全，不发授权码。
 	const blocked = await request(`${authorize.pathname}${authorize.search}`, { headers: { cookie: `passport_session=${sessionId}` } });
 	assert.equal(blocked.status, 302);
-	assert.match(blocked.headers.get('location'), /^\/sign/);
+	assert.match(blocked.headers.get('location'), /^\/accounts\/sign/);
 	// 从业务站点跳来登录时，登录页要说明来源并提供返回入口，避免用户回不去。
 	const oidcRequestCookie = blocked.headers.getSetCookie().map((value) => value.split(';')[0]).find((value) => value.startsWith('accounts_oidc_request='));
 	assert.ok(oidcRequestCookie);
-	const fromClient = await (await request('/api/sign.php', { headers: { cookie: oidcRequestCookie } })).json();
+	const fromClient = await (await request('/api/accounts/sign.php', { headers: { cookie: oidcRequestCookie } })).json();
 	assert.match(fromClient.formPage.description, /正在为 client\.test 登录/);
 	assert.deepEqual(fromClient.formPage.actions.map((action) => action.key), ['return_to_client']);
 	assert.equal(fromClient.formPage.actions[0].label, '取消登录');
-	const returned = await request('/api/sign.php?action=return_to_client', { method: 'POST', headers: { cookie: oidcRequestCookie, 'content-type': 'application/json' }, body: '{}' });
+	const returned = await request('/api/accounts/sign.php?action=return_to_client', { method: 'POST', headers: { cookie: oidcRequestCookie, 'content-type': 'application/json' }, body: '{}' });
 	const cancelled = await returned.json();
 	// 弹窗里取消登录先关窗口，非弹窗场景才回落到来源站点。
 	assert.equal(cancelled.closeWindow, true);
@@ -75,6 +77,27 @@ try {
 	assert.equal(userinfo.sub, String(userId)); assert.equal(userinfo.name, 'AccountsUser');
 	assert.equal((await request('/api/oidc/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: tokenBody.toString() })).status, 400);
 	const jwks = await (await request('/api/oidc/jwks')).json(); assert.equal(jwks.keys[0].alg, 'RS256'); assert.ok(jwks.keys[0].n);
+	// Passport 站点自身也通过和业务站点相同的 Base OIDC 客户端登录。
+	const passportSign = await (await request('/api/sign.php')).json();
+	assert.deepEqual(passportSign.formPage.fields.map((field) => field.name), ['action']);
+	const selfStart = await request('/api/sign.php', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+	const selfLoginCookie = selfStart.headers.get('set-cookie')?.split(';')[0];
+	const selfAuthorizeUrl = (await selfStart.json()).redirectTo;
+	const selfAuthorized = await app.request(selfAuthorizeUrl, { headers: { cookie: `passport_session=${sessionId}` } });
+	const selfCallbackResponse = await app.request(selfAuthorized.headers.get('location'), { headers: { cookie: selfLoginCookie } });
+	assert.equal(selfCallbackResponse.status, 200);
+	const selfSessionCookie = selfCallbackResponse.headers.getSetCookie().find((item) => item.startsWith('quick_react_session='))?.split(';')[0];
+	assert.ok(selfSessionCookie);
+	const signedInPassport = await (await request('/api/sign.php', { headers: { cookie: selfSessionCookie } })).json();
+	assert.equal(signedInPassport.user.username, 'oidcuser1');
+	const strictDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
+	strictDatabase.prepare('UPDATE passport_oidc_clients SET strict_redirect_uri = 1 WHERE id = ?').run(clientId);
+	const strictStart = await request('/api/sign.php', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+	const strictAuthorize = await app.request((await strictStart.json()).redirectTo, { headers: { cookie: `passport_session=${sessionId}` } });
+	assert.equal(strictAuthorize.status, 400);
+	assert.match((await strictAuthorize.json()).feedback.message, /redirect_uri 未注册/);
+	strictDatabase.prepare('UPDATE passport_oidc_clients SET strict_redirect_uri = 0 WHERE id = ?').run(clientId);
+	strictDatabase.close();
 	// 启用 Accounts 登录的业务站点：需要登录的页面直接弹窗，不再跳登录页，也不给本地注册入口。
 	const businessDocument = await (await app.request('https://site1.test/panel/admin.html', { headers: { accept: 'text/html' } })).text();
 	const businessInitial = JSON.parse(businessDocument.match(/__INITIAL_DATA__=(\{.*?\});<\/script>/s)[1]);
@@ -83,6 +106,15 @@ try {
 	assert.deepEqual(businessInitial.pageStatus.actions.map((action) => [action.label, action.action]), [['登录', 'accounts-login'], ['返回首页', 'navigate']]);
 	const businessSign = await (await app.request('https://site1.test/api/sign.php')).json();
 	assert.equal(businessSign.formPage.fields[0].name, 'action');
+	const enabledLocalSession = await (await app.request('https://site1.test/api/sign.php', { headers: { cookie: 'quick_react_session=local-session' } })).json();
+	assert.equal(enabledLocalSession.user, null);
+	const modeDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
+	modeDatabase.prepare(`UPDATE base_system_configs SET value = ? WHERE key = 'accounts-oidc-client'`).run(JSON.stringify({ enabled: false, issuer: 'https://accounts.test', clientId, clientSecret }));
+	const disabledLocalSession = await (await app.request('https://site1.test/api/sign.php', { headers: { cookie: 'quick_react_session=local-session' } })).json();
+	assert.equal(disabledLocalSession.user.username, 'local_admin');
+	assert.equal(disabledLocalSession.formPage.fields[0].name, 'username');
+	modeDatabase.prepare(`UPDATE base_system_configs SET value = ? WHERE key = 'accounts-oidc-client'`).run(JSON.stringify({ enabled: true, issuer: 'https://accounts.test', clientId, clientSecret }));
+	modeDatabase.close();
 	// 业务站点不允许自动跳转到 Accounts，必须由用户点击按钮确认。
 	// 只保留弹窗登录：既不自动跳转，也不整页跳走。
 	assert.deepEqual(businessSign.formPage.passportLogin, { enabled: true });
@@ -97,9 +129,11 @@ try {
 	assert.equal(businessCallbackResponse.status, 200);
 	const popupBody = await businessCallbackResponse.clone().text();
 	assert.match(popupBody, /postMessage/);
+	assert.match(popupBody, /next:\{action:'reload'\}/);
 	assert.equal(popupBody.includes('/accounts/oidc/popup'), false);
 	const businessSessionCookie = businessCallbackResponse.headers.getSetCookie().find((item) => item.startsWith('quick_react_session='))?.split(';')[0];
 	assert.ok(businessSessionCookie);
+	assert.equal(businessSessionCookie, selfSessionCookie);
 	const signedInBusiness = await (await app.request('https://site1.test/api/sign.php', { headers: { cookie: businessSessionCookie } })).json();
 	// Accounts 用户名通过 preferred_username 下发，业务站点用它替换 passport_<user_id> 占位名。
 	assert.equal(claims.preferred_username, 'oidcuser1');
@@ -110,7 +144,15 @@ try {
 	businessUsers.close();
 	const completed = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
 	assert.equal(completed.prepare('SELECT COUNT(*) AS count FROM base_oidc_accounts').get().count, 1); completed.close();
-	assert.equal((await app.request('https://accounts.test/api/oidc/logout', { headers: { cookie: `passport_session=${sessionId}` } })).status, 200);
+	const logoutStart = await app.request('https://site1.test/api/sign.php', { method: 'DELETE', headers: { cookie: businessSessionCookie } });
+	const logoutResult = await logoutStart.json();
+	assert.equal(logoutStart.status, 200);
+	assert.equal(logoutResult.redirectTo, undefined);
+	assert.equal(logoutResult.logoutUrl, undefined);
+	assert.deepEqual(logoutResult.next, { action: 'reload' });
+	const revoked = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
+	assert.equal(revoked.prepare('SELECT COUNT(*) AS count FROM passport_sessions WHERE id = ?').get(sessionId).count, 0);
+	revoked.close();
 	const afterGlobalLogout = await (await app.request('https://site1.test/api/sign.php', { headers: { cookie: businessSessionCookie } })).json();
 	assert.equal(afterGlobalLogout.user, null);
 	console.log('accounts oidc test passed');

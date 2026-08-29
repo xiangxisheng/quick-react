@@ -108,3 +108,10 @@ export const loadCurrentUser = async (database: DatabaseAdapter, request: Reques
 	} catch { /* Invalid persisted roles are treated as empty. */ }
 	return { id: row.id, username: row.username, roles };
 };
+
+/** 当前本站会话是否由 Accounts OIDC 登录创建。 */
+export const sessionUsesAccountsOidc = async (database: DatabaseAdapter, request: Request) => {
+	const sessionId = readSessionId(request);
+	if (!sessionId) return false;
+	return Boolean(await firstSql(database, sql(database).select({ table: 'base_oidc_sessions', columns: { session_id: 'session_id' }, where: [{ column: 'session_id', value: sessionId }], limit: 1 })));
+};

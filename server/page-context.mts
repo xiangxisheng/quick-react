@@ -4,13 +4,9 @@ import type { AuthPage, AuthState, HeaderAction, PageStatus } from '@shared/type
 import { findNavigationItem, stripPageSuffix } from '@shared/navigation-tree.mjs';
 import { getFullSiteNavigation, getPageDefinitions, getSiteNavigation } from './navigation.mjs';
 import { firstSql, sql } from './database/sql.mjs';
-import { loadAccountsOidcConfig, usesExternalAccounts } from './accounts/client.mjs';
 
 // 前端固定注册的第三方登录回调页面，不属于导航树。
 const callbackPagePaths = ['/accounts/external/callback', '/accounts/external/wechat'];
-
-/** 站点是否把用户弹到外部 Accounts 登录：每个站点都能接入，看它自己的系统设置。 */
-export const usesAccountsLogin = async (c: Context<AppEnv>) => usesExternalAccounts(await loadAccountsOidcConfig(c));
 
 /** 本站是否还能创建初始管理员：由本站数据库里的引导状态决定，和站点是哪个无关。 */
 const registrationAvailable = async (c: Context<AppEnv>) => {
@@ -19,35 +15,42 @@ const registrationAvailable = async (c: Context<AppEnv>) => {
 	return row?.value === 'open';
 };
 
-export const buildAuthState = async (c: Context<AppEnv>): Promise<AuthState> => {
+/** 未登录时的认证入口；退出接口复用这份后端配置，前端无需刷新页面或自行推断登录方式。 */
+export const buildAnonymousAuthState = async (c: Context<AppEnv>): Promise<AuthState> => {
 	const siteConfig = c.get('techStackConfig');
 	// 启用 Accounts 登录的站点不跳转登录页，直接在当前页弹出登录窗口。
-	const accountsLogin = await usesAccountsLogin(c);
+	const accountsLoginMode = c.get('accountsLoginMode');
+	const accountsLogin = accountsLoginMode !== 'local';
 	// 启用 Accounts 登录后不能再创建本地账号，注册入口一并隐藏。
 	const signUp = !accountsLogin && await registrationAvailable(c);
-	// 每个站点都只有 /sign 一个登录页，页面内容由本站的 /api/sign 决定。
+	// 公共 /sign 页面已取消；只保留初始管理员注册页和身份提供方内部认证页。
 	const signPages: AuthPage[] = [
-		{ path: `/sign${siteConfig.pageSuffix}`, title: '登录', description: '登录 Quick React', mode: 'sign', apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'POST', redirectPath: `/panel/admin${siteConfig.pageSuffix}` },
-		...(signUp ? [{ path: `/sign-up${siteConfig.pageSuffix}`, title: '注册', description: '创建初始管理员', mode: 'sign-up' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'PUT' as const, redirectPath: `/sign${siteConfig.pageSuffix}` }] : []),
+		...(c.get('accountsIdentity') ? [{ path: `/accounts/sign${siteConfig.pageSuffix}`, title: 'Accounts 身份认证', description: '验证 Accounts 身份并继续 OIDC 授权', mode: 'sign' as const, apiPath: `/api/accounts/sign${siteConfig.apiSuffix}`, submitMethod: 'POST' as const, redirectPath: `/panel/accounts${siteConfig.pageSuffix}` }] : []),
+		...(signUp ? [{ path: `/sign-up${siteConfig.pageSuffix}`, title: '注册', description: '创建初始管理员', mode: 'sign-up' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'PUT' as const, redirectPath: `/` }] : []),
 	];
+	return {
+		component: 'buttons',
+		actions: [
+			{ key: '/sign', label: '登录', action: accountsLoginMode === 'oidc' ? 'accounts-login' : 'local-login', icon: 'login' },
+			...(signUp ? [{ key: '/sign-up', label: '注册', action: 'navigate' as const, icon: 'register' as const }] : []),
+		],
+		pages: signPages,
+	};
+};
+
+export const buildAuthState = async (c: Context<AppEnv>): Promise<AuthState> => {
+	const anonymous = await buildAnonymousAuthState(c);
 	const currentUser = c.get('currentUser'), passportUser = c.get('passportUser');
 	// 登录后的入口只看当前持有哪些会话，退出统一走本站的 /sign。
 	const actions: HeaderAction[] = [
 		...(currentUser ? [{ key: '/panel/me', label: '个人中心', action: 'navigate' as const, icon: 'user' as const }] : []),
 		...(passportUser ? [{ key: '/panel/accounts', label: '账户中心', action: 'navigate' as const, icon: 'user' as const }] : []),
-		{ key: '/sign', label: '退出登录', action: 'logout', icon: 'logout' },
+		{ key: passportUser ? '/accounts/sign' : '/sign', label: passportUser ? '退出 Accounts' : '退出登录', action: 'logout', icon: 'logout' },
 	];
 	// 同时存在两套会话时以 Accounts 身份（昵称）为准。
 	const user = passportUser ?? currentUser;
-	if (user) return { component: 'dropdown', currentUser: user, actions, pages: signPages };
-	return {
-		component: 'buttons',
-		actions: [
-			{ key: '/sign', label: '登录', action: accountsLogin ? 'accounts-login' : 'navigate', icon: 'login' },
-			...(signUp ? [{ key: '/sign-up', label: '注册', action: 'navigate' as const, icon: 'register' as const }] : []),
-		],
-		pages: signPages,
-	};
+	if (user) return { component: 'dropdown', currentUser: user, actions, pages: anonymous.pages };
+	return anonymous;
 };
 
 const authPagePaths = (auth: AuthState, pageSuffix: string) => auth.pages.map((page) => stripPageSuffix(page.path, pageSuffix));
@@ -93,11 +96,10 @@ export const resolvePageStatus = async (
 	const requiredRoles = Array.isArray(item?.roles) ? item.roles : [];
 	const needsAccounts = requiredRoles.includes('accounts') && !c.get('passportUser');
 	const signIn = auth.pages.filter((page) => page.mode === 'sign');
-	const signPath = (needsAccounts ? signIn.find((page) => page.apiPath.startsWith('/api/accounts/')) : undefined)?.path
-		?? signIn[0]?.path ?? `/sign${pageSuffix}`;
+	const signPath = signIn.find((page) => page.apiPath.startsWith('/api/accounts/'))?.path ?? `/accounts/sign${pageSuffix}`;
 	if (!c.get('currentUser') || needsAccounts) {
 		// 业务站点用弹窗登录，不再把用户送到登录页。
-		const popupLogin = !needsAccounts && await usesAccountsLogin(c);
+		const loginAction = needsAccounts ? 'navigate' as const : c.get('accountsLoginMode') === 'oidc' ? 'accounts-login' as const : 'local-login' as const;
 		return {
 			path: requestPath,
 			status: 401,
@@ -106,7 +108,7 @@ export const resolvePageStatus = async (
 				? `访问 ${requestPath} 需要先登录 Accounts 账号。`
 				: `访问 ${requestPath} 需要先登录，登录后才能查看该页面。`,
 			actions: [
-				{ key: stripPageSuffix(signPath, pageSuffix), label: '登录', action: popupLogin ? 'accounts-login' : 'navigate', icon: 'login' },
+				{ key: needsAccounts ? stripPageSuffix(signPath, pageSuffix) : '/sign', label: '登录', action: loginAction, icon: 'login' },
 				home,
 			],
 		};

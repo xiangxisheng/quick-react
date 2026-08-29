@@ -3,6 +3,7 @@ import type { AppEnv } from '@server/types.mjs';
 import { base64Url, decodeBase64Url, safeEqual, utf8 } from '@server/accounts/oidc.mjs';
 
 export type AccountsOidcClientConfig = { enabled: boolean; issuer: string; clientId: string; clientSecret: string };
+export type AccountsLoginMode = 'local' | 'oidc';
 export const accountsOidcConfigKey = 'accounts-oidc-client';
 export const defaultAccountsOidcConfig: AccountsOidcClientConfig = { enabled: false, issuer: '', clientId: '', clientSecret: '' };
 
@@ -18,12 +19,12 @@ export const normalizeAccountsOidcConfig = (value: unknown, previous = defaultAc
 	};
 };
 
-/** 是否接入了外部 Accounts：配置齐全才需要把用户弹到别的站点登录，身份中心自己不算。 */
-export const usesExternalAccounts = (config: AccountsOidcClientConfig) => config.enabled && Boolean(config.issuer) && Boolean(config.clientId);
+/** 所有站点共用同一条登录策略；只有 Accounts 凭据处理器按站点能力分流。 */
+export const resolveAccountsLoginMode = (config: AccountsOidcClientConfig): AccountsLoginMode => config.enabled ? 'oidc' : 'local';
 
 export const loadAccountsOidcConfig = async (c: Context<AppEnv>) => normalizeAccountsOidcConfig(await c.get('configStore').get(accountsOidcConfigKey));
 export const oidcFetch = (c: Context<AppEnv>, input: RequestInfo | URL, init?: RequestInit) => c.env.OIDC_FETCH ? c.env.OIDC_FETCH(input, init) : fetch(input, init);
-export type OidcDiscovery = { issuer: string; authorization_endpoint: string; token_endpoint: string; jwks_uri: string; userinfo_endpoint?: string };
+export type OidcDiscovery = { issuer: string; authorization_endpoint: string; token_endpoint: string; jwks_uri: string; userinfo_endpoint?: string; end_session_endpoint?: string };
 export const loadDiscovery = async (c: Context<AppEnv>, issuer: string) => {
 	const response = await oidcFetch(c, `${issuer}/.well-known/openid-configuration`);
 	if (!response.ok) throw new Error(`Accounts 发现文档请求失败（HTTP ${response.status}）`);
@@ -32,7 +33,7 @@ export const loadDiscovery = async (c: Context<AppEnv>, issuer: string) => {
 		try {
 			const configured = new URL(issuer), discovered = new URL(discovery.issuer);
 			if (configured.hostname !== discovered.hostname || configured.port !== discovered.port || configured.protocol !== 'https:' || discovered.protocol !== 'http:') throw new Error('issuer mismatch');
-			for (const key of ['authorization_endpoint', 'token_endpoint', 'userinfo_endpoint', 'jwks_uri'] as const) {
+			for (const key of ['authorization_endpoint', 'token_endpoint', 'userinfo_endpoint', 'jwks_uri', 'end_session_endpoint'] as const) {
 				const endpoint = discovery[key];
 				if (endpoint) {
 					const url = new URL(endpoint);

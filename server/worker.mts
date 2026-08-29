@@ -12,7 +12,8 @@ import { apiMessage } from './api-response.mjs';
 import { oidcDiscovery } from './accounts/provider.mjs';
 import type { DatabaseAdapter } from './database/index.mjs';
 import { SiteRouter } from './site-router.mjs';
-import { loadCurrentUser } from './auth.mjs';
+import { loadCurrentUser, sessionUsesAccountsOidc } from './auth.mjs';
+import { loadAccountsOidcConfig, resolveAccountsLoginMode } from './accounts/client.mjs';
 import { loadPassportSession } from './passport/session.mjs';
 import { loadSystemConfigFromStore } from './system-config.mjs';
 import { applyTechStackHeaders, loadTechStackConfigFromStore } from './tech-stack.mjs';
@@ -99,7 +100,16 @@ const configureForRequest = async (c: Context<WorkerEnv>) => {
 	c.set('configStore', configStore);
 	c.set('systemConfig', configuration.systemConfig);
 	c.set('techStackConfig', configuration.techStackConfig);
-	const currentUser = await loadCurrentUser(database, c.req.raw);
+	c.set('accountsIdentity', accountsIdentity);
+	const accountsConfig = await loadAccountsOidcConfig(c);
+	const accountsLoginMode = resolveAccountsLoginMode(accountsConfig);
+	c.set('accountsLoginMode', accountsLoginMode);
+	const storedCurrentUser = await loadCurrentUser(database, c.req.raw);
+	const oidcSession = storedCurrentUser && await sessionUsesAccountsOidc(database, c.req.raw);
+	// 开关切换后不继续接受上一种登录方式遗留的 Cookie。
+	const currentUser = storedCurrentUser && (accountsLoginMode === 'oidc' ? oidcSession : accountsLoginMode === 'local' && !oidcSession)
+		? storedCurrentUser
+		: undefined;
 	if (currentUser) c.set('currentUser', currentUser);
 	// Accounts 会话与站点本地会话相互独立，存在时额外授予 accounts 角色。
 	const passportUser = passportDatabase && accountsIdentity

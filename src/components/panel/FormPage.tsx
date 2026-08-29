@@ -8,6 +8,7 @@ import { changedFieldsKey, type ChangedFieldsPayload } from '@shared/types/chang
 import { CountdownDisplay, formatCountdown } from '@/components/common/Countdown.js';
 import { runAfterFeedback } from '@/utils/common/feedback.js';
 import { loginWithAccountsPopup } from '@/utils/common/passport.js';
+import { runApiNextAction } from '@/utils/common/response-action.js';
 
 const renderTemplate = (template: string, values: Record<string, React.ReactNode>) => template
 	.split(/(\{[^{}]+\})/g)
@@ -25,6 +26,7 @@ type FormProps = {
 	submitMethod?: 'POST' | 'PUT';
 	redirectOnFeedback?: boolean;
 	onSaved?: (values: Record<string, unknown>) => string | undefined | Promise<string | undefined>;
+	onCompleted?: () => void | Promise<void>;
 };
 
 /** 第三方登录图标按 key 渲染，未登记的身份源用通用图标兜底。 */
@@ -53,7 +55,7 @@ const fieldControl = (field: FormPageField, readOnly: boolean) => {
 	return <Input type={field.type === 'password' ? 'password' : 'text'} placeholder={field.placeholder} maxLength={field.maxLength} readOnly={readOnly} disabled={readOnly} />;
 };
 
-export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PUT', redirectOnFeedback = false, onSaved }: FormProps) {
+export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PUT', redirectOnFeedback = false, onSaved, onCompleted }: FormProps) {
 	const [form] = Form.useForm<Record<string, unknown>>();
 	const [messageApi, messageContextHolder] = message.useMessage();
 	const [loading, setLoading] = useState(true);
@@ -139,6 +141,11 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 		changedFields.current.clear();
 		setDirty(false);
 		setSaved(true);
+		if (!result.formPage) {
+			if (onCompleted) await onCompleted();
+			if (result.next) { runApiNextAction(result.next); return; }
+			if (onCompleted) return;
+		}
 		if (target && result.feedback && (redirectOnFeedback || result.feedback.redirectAfter !== undefined)) {
 			const schedule = runAfterFeedback(result.feedback, () => window.location.assign(target));
 			refreshSchedule.current = schedule;
@@ -197,8 +204,8 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 	const loginWithPassport = async () => {
 		setPassportError('');
 		try {
-			await loginWithAccountsPopup();
-			window.location.reload();
+			const result = await loginWithAccountsPopup();
+			runApiNextAction(result.next);
 		} catch (error) { setPassportError(error instanceof Error ? error.message : 'Passport 登录失败'); }
 	};
 	const modalFeedback = saved && !refreshCancelled && feedback?.component === 'modal' ? (

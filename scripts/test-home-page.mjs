@@ -32,20 +32,19 @@ try {
 	assert.match(accounts.home.sections.find((section) => section.key === 'privacy').body, /Google API 服务用户数据政策/);
 	assert.match(accounts.home.sections.find((section) => section.key === 'contact').body, /xiangxisheng@gmail\.com/);
 
-	// 首页给出登录入口，指向账号登录页（第三方登录都在那里），而不是站点本地账号密码页。
+	// 登录入口统一由页头弹窗提供，首页不再保留整页登录链接。
 	assert.deepEqual(accounts.home.links.map((link) => [link.key, link.url]), [
-		['sign-in', '/sign.html'],
 		['privacy', '/page/privacy.html'],
 		['terms', '/page/terms.html'],
 	]);
 	// 初始管理员还没创建时，任何站点都给出创建入口，这条规则对所有站点一致。
 	const accountsAuth = JSON.parse(accountsDocument.match(/__INITIAL_DATA__=(\{.*?\});<\/script>/s)[1]).auth;
-	assert.deepEqual(accountsAuth.actions.map((action) => [action.key, action.action]), [['/sign', 'navigate'], ['/sign-up', 'navigate']]);
+	assert.deepEqual(accountsAuth.actions.map((action) => [action.key, action.action]), [['/sign', 'local-login'], ['/sign-up', 'navigate']]);
 	// 建好初始管理员后入口消失：判断依据是本站数据库的引导状态，不是站点标识。
 	assert.equal((await app.request('http://localhost/api/sign.php', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'home_admin', password: 'test-password-123' }) })).status, 201);
 	const claimedDocument = await (await app.request('http://accounts.test/', { headers: { accept: 'text/html' } })).text();
 	const claimedAuth = JSON.parse(claimedDocument.match(/__INITIAL_DATA__=(\{.*?\});<\/script>/s)[1]).auth;
-	assert.deepEqual(claimedAuth.actions.map((action) => [action.key, action.action]), [['/sign', 'navigate']]);
+	assert.deepEqual(claimedAuth.actions.map((action) => [action.key, action.action]), [['/sign', 'local-login']]);
 
 	// 不执行脚本时也能读到用途说明和隐私政策链接。
 	const html = await (await app.request('http://accounts.test/', { headers: { accept: 'text/html' } })).text();

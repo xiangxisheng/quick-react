@@ -6,8 +6,9 @@ import { oidcRequestCookie, randomToken, sha256 } from '@server/accounts/oidc.mj
 import { runSql, sql } from '@server/database/sql.mjs';
 import { authorizationRequest, oidcClient } from '@server/accounts/repository.mjs';
 import { isSecureRequest } from '@server/request-origin.mjs';
+import { registeredClientRedirectUris } from '@server/accounts/redirects.mjs';
 
-type Client = { id: string; redirect_uris: string; allowed_scopes: string; require_pkce: number; status: string };
+type Client = { id: string; redirect_uris: string; allowed_scopes: string; require_pkce: number; strict_redirect_uri: number; status: string };
 type RequestRow = { client_id: string; redirect_uri: string; scope: string; state: string; nonce: string; code_challenge: string; code_challenge_method: string; expires_at: number };
 
 const handler: ApiHandler = async (c) => {
@@ -30,7 +31,8 @@ const handler: ApiHandler = async (c) => {
 	}
 	const client: Client | null = await oidcClient(database, values.client_id);
 	if (!client || client.status !== 'enabled') return apiMessage(c, 400, 'OIDC 客户端不存在或已停用');
-	if (!(JSON.parse(client.redirect_uris) as string[]).includes(values.redirect_uri)) return apiMessage(c, 400, 'redirect_uri 未注册');
+	const registeredRedirectUris = await registeredClientRedirectUris(c, client);
+	if (!registeredRedirectUris.includes(values.redirect_uri)) return apiMessage(c, 400, 'redirect_uri 未注册');
 	const scopes = [...new Set(values.scope.split(/\s+/).filter(Boolean))];
 	const allowed = new Set(client.allowed_scopes.split(/\s+/));
 	if (!scopes.includes('openid') || scopes.some((scope) => !allowed.has(scope))) return apiMessage(c, 400, '请求的 scope 不被允许');
@@ -43,7 +45,7 @@ const handler: ApiHandler = async (c) => {
 		if (!requestId) await runSql(database, sql(database).insert('passport_oidc_authorization_requests', { id, client_id: values.client_id, redirect_uri: values.redirect_uri, scope: scopes.join(' '), state: values.state, nonce: values.nonce, code_challenge: values.code_challenge, code_challenge_method: values.code_challenge_method, expires_at: now + 600_000, created_at: now }));
 		else await runSql(database, sql(database).update('passport_oidc_authorization_requests', { expires_at: now + 600_000 }, { id }));
 		c.header('Set-Cookie', oidcRequestCookie(id, isSecureRequest(c)));
-		return c.redirect(`/sign${c.get('techStackConfig').pageSuffix}`, 302);
+		return c.redirect(`/accounts/sign${c.get('techStackConfig').pageSuffix}`, 302);
 	}
 	const code = randomToken(32), now = Date.now(), sessionId = readPassportSessionId(c.req.raw) ?? '';
 	await runSql(database, sql(database).insert('passport_oidc_authorization_codes', { code_hash: await sha256(code), client_id: values.client_id, user_id: String(current.id), redirect_uri: values.redirect_uri, scope: scopes.join(' '), nonce: values.nonce, code_challenge: values.code_challenge, code_challenge_method: values.code_challenge_method, expires_at: now + 60_000, created_at: now, session_id: sessionId }));

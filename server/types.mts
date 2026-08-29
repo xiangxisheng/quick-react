@@ -5,6 +5,7 @@ import type { SystemConfig } from './system-config.mjs';
 import type { TechStackConfig } from './tech-stack.mjs';
 import type { UserIdentity } from '@shared/types/user.mjs';
 import type { TableColumn, TableRow } from '@shared/types/table.mjs';
+import type { AccountsLoginMode } from './accounts/client.mjs';
 
 export type RuntimeBindings = Record<string, unknown> & {
 	DEFAULT_DB?: unknown;
@@ -27,6 +28,8 @@ export type AppEnv = {
 		configStore: ConfigStore;
 		systemConfig: SystemConfig;
 		techStackConfig: TechStackConfig;
+		accountsIdentity: boolean;
+		accountsLoginMode: AccountsLoginMode;
 		currentUser?: UserIdentity;
 		passportUser?: UserIdentity;
 		effectiveRoles: string[];

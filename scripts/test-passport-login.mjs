@@ -27,6 +27,11 @@ try {
 	const database = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
 	const now = Date.now();
 	database.prepare(`INSERT INTO global_site_hosts (hostname, site_key, status, created_at) VALUES (?, 'passport', 'enabled', ?)`).run('passport.test', now);
+	database.prepare(`INSERT INTO global_site_hosts (hostname, site_key, status, created_at) VALUES (?, 'global', 'enabled', ?)`).run('global.test', now);
+	database.prepare(`INSERT INTO global_sites (site_key, name, base_site_key, dsn, status, migration_status, is_default, is_system)
+		VALUES ('business', 'Business', 'base', '', 'enabled', 'ready', 0, 0)`).run();
+	database.prepare(`INSERT INTO global_site_hosts (hostname, site_key, status, created_at) VALUES (?, 'business', 'enabled', ?)`).run('business.test', now);
+	database.prepare(`INSERT INTO base_system_configs (key, value, updated_at) VALUES ('accounts-oidc-client', ?, ?)`).run(JSON.stringify({ enabled: true, issuer: 'https://passport.test', clientId: 'shared-client', clientSecret: 'shared-secret' }), now);
 	database.prepare(`INSERT INTO global_telegram_bots
 		(id, name, bot_token, bot_username, secret_token, webhook_hostname, status, created_at, updated_at)
 		VALUES (1, 'login-bot', '1:test-token', 'passport_login_bot', 'login-secret', 'passport.test', 'enabled', ?, ?)`).run(now, now);
@@ -49,30 +54,43 @@ try {
 			body: options.body === undefined ? undefined : JSON.stringify(options.body),
 		});
 	};
-	// 站点只有 /sign 一个登录页：身份中心上它就是 Accounts 身份登录，
-	// 邮箱输入框 + 第三方按钮，Telegram 按钮进入邮箱 + 消息批准。
-	const initial = await (await request('/api/sign.php')).json();
+	// Accounts 内部认证接口下发邮箱输入框 + 第三方按钮，Telegram 按钮进入邮箱 + 消息批准；
+	// 公开 /sign 页面已经取消，三个站点的 /api/sign 都只服务于当前页登录弹窗。
+	const initial = await (await request('/api/accounts/sign.php')).json();
 	assert.equal(initial.formPage.initialValues.step, 'email');
 	assert.deepEqual(initial.formPage.externalLogins.map((item) => item.key), ['telegram']);
+	assert.deepEqual((await (await request('/api/sign.php')).json()).formPage.fields.map((field) => field.name), ['action']);
+	assert.deepEqual((await (await request('/api/sign.php', { host: 'global.test' })).json()).formPage.fields.map((field) => field.name), ['action']);
+	assert.deepEqual((await (await request('/api/sign.php', { host: 'business.test' })).json()).formPage.fields.map((field) => field.name), ['action']);
+	const staleLocalSubmit = await request('/api/sign.php', { method: 'POST', body: { username: 'old-form', password: 'password', remember: false } });
+	assert.equal(staleLocalSubmit.status, 409);
+	assert.match((await staleLocalSubmit.json()).feedback.message, /刷新页面/);
 
 	// 和其它站点同一个开关：关掉账号登录就回到本站账号密码登录，重新开启又变回账号登录。
 	const switchDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
 	const writeAccountsLogin = (enabled) => switchDatabase.prepare('INSERT INTO base_system_configs (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
-		.run('accounts-oidc-client', JSON.stringify({ enabled, issuer: '', clientId: '', clientSecret: '' }), Date.now());
+		.run('accounts-oidc-client', JSON.stringify({ enabled, issuer: 'https://passport.test', clientId: 'shared-client', clientSecret: 'shared-secret' }), Date.now());
 	writeAccountsLogin(false);
-	const localForm = await (await request('/api/sign.php')).json();
-	assert.deepEqual(localForm.formPage.fields.map((field) => field.name), ['username', 'password', 'remember']);
+	for (const host of ['passport.test', 'global.test', 'business.test']) {
+		const localForm = await (await request('/api/sign.php', { host })).json();
+		assert.deepEqual(localForm.formPage.fields.map((field) => field.name), ['username', 'password', 'remember']);
+	}
+	const staleAccountsSubmit = await request('/api/sign.php', { host: 'business.test', method: 'POST', body: { step: 'email', email: 'user@example.com' } });
+	assert.equal(staleAccountsSubmit.status, 409);
+	assert.match((await staleAccountsSubmit.json()).feedback.message, /刷新页面/);
 	writeAccountsLogin(true);
 	switchDatabase.close();
-	assert.equal((await (await request('/api/sign.php')).json()).formPage.initialValues.step, 'email');
-	const emailStep = await (await request('/api/sign.php?action=provider:telegram', { method: 'POST', body: { step: 'email', email: '' } })).json();
+	assert.deepEqual((await (await request('/api/sign.php')).json()).formPage.fields.map((field) => field.name), ['action']);
+	assert.deepEqual((await (await request('/api/sign.php', { host: 'global.test' })).json()).formPage.fields.map((field) => field.name), ['action']);
+	assert.deepEqual((await (await request('/api/sign.php', { host: 'business.test' })).json()).formPage.fields.map((field) => field.name), ['action']);
+	const emailStep = await (await request('/api/accounts/sign.php?action=provider:telegram', { method: 'POST', body: { step: 'email', email: '' } })).json();
 	assert.equal(emailStep.formPage.initialValues.step, 'telegram_email');
-	const telegramSelection = await (await request('/api/sign.php', {
+	const telegramSelection = await (await request('/api/accounts/sign.php', {
 		method: 'POST', body: { step: 'telegram_email', email: 'USER@example.com' },
 	})).json();
 	assert.equal(telegramSelection.formPage.fields.find((field) => field.name === 'account_id').type, 'select');
 	assert.equal(telegramSelection.currentValues.account_id, '201');
-	const challengeResponse = await request('/api/sign.php', {
+	const challengeResponse = await request('/api/accounts/sign.php', {
 		method: 'POST', body: { step: 'telegram', email: 'user@example.com', account_id: '201' },
 	});
 	assert.equal(challengeResponse.status, 200);
@@ -91,11 +109,11 @@ try {
 	assert.equal((await webhook({ update_id: 1, callback_query: {
 		id: 'wrong-number', from: { id: 9001, first_name: 'PassportUser' }, data: `login:approve:${challengeId}:${challenge.expected_number === 99 ? 98 : challenge.expected_number + 1}`, message: callbackMessage,
 	} })).status, 200);
-	assert.equal((await request('/api/sign.php', { method: 'POST', body: { step: 'poll', challenge_id: challengeId } })).status, 200);
+	assert.equal((await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'poll', challenge_id: challengeId } })).status, 200);
 	assert.equal((await webhook({ update_id: 2, callback_query: {
 		id: 'correct-number', from: { id: 9001, first_name: 'PassportUser' }, data: `login:approve:${challengeId}:${challenge.expected_number}`, message: callbackMessage,
 	} })).status, 200);
-	const loginResponse = await request('/api/sign.php', { method: 'POST', body: { step: 'poll', challenge_id: challengeId } });
+	const loginResponse = await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'poll', challenge_id: challengeId } });
 	assert.equal(loginResponse.status, 200);
 	const passportCookie = loginResponse.headers.get('set-cookie')?.split(';')[0];
 	assert.match(passportCookie ?? '', /^passport_session=/);
@@ -103,10 +121,10 @@ try {
 	const loginResult = await loginResponse.json();
 	assert.equal(loginResult.formPage.initialValues.step, 'set_username');
 	assert.equal(loginResult.redirectTo, undefined);
-	const signedIn = await (await request('/api/sign.php', { cookie: passportCookie })).json();
+	const signedIn = await (await request('/api/accounts/sign.php', { cookie: passportCookie })).json();
 	assert.equal(signedIn.user.id, userId);
 	assert.equal(signedIn.user.username, 'PassportUser');
-	assert.equal((await request('/api/sign.php', { method: 'DELETE', cookie: passportCookie })).status, 200);
+	assert.equal((await request('/api/accounts/sign.php', { method: 'DELETE', cookie: passportCookie })).status, 200);
 	const completedDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
 	assert.equal(completedDatabase.prepare(`SELECT status FROM passport_login_challenges WHERE id = ?`).get(challengeId).status, 'consumed');
 	assert.equal(completedDatabase.prepare(`SELECT COUNT(*) AS count FROM passport_sessions`).get().count, 0);

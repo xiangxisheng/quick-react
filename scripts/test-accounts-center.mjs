@@ -62,7 +62,7 @@ try {
 	assert.equal(initialData.auth.component, 'dropdown');
 	// 头部显示的是 Accounts 昵称，而不是站点本地账号名。
 	assert.equal(initialData.auth.currentUser.username, '账户中心用户');
-	assert.deepEqual(initialData.auth.actions.map((action) => action.key), ['/panel/accounts', '/sign']);
+	assert.deepEqual(initialData.auth.actions.map((action) => action.key), ['/panel/accounts', '/accounts/sign']);
 
 	// 同时存在站点本地会话时，仍以 Accounts 昵称为准，两个中心入口都给出，退出统一走 /sign。
 	const localDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
@@ -73,7 +73,7 @@ try {
 	const bothDocument = await (await request('/', { cookie: `${cookie}; quick_react_session=local-session`, headers: { accept: 'text/html' } })).text();
 	const bothData = JSON.parse(bothDocument.match(/__INITIAL_DATA__=(\{.*?\});<\/script>/s)[1]);
 	assert.equal(bothData.auth.currentUser.username, '账户中心用户', '不能显示站点本地账号名');
-	assert.deepEqual(bothData.auth.actions.map((action) => action.key), ['/panel/me', '/panel/accounts', '/sign']);
+	assert.deepEqual(bothData.auth.actions.map((action) => action.key), ['/panel/me', '/panel/accounts', '/accounts/sign']);
 
 	// 概览。
 	const overview = await (await request('/api/panel/accounts/overview.php', { cookie })).json();
@@ -188,10 +188,10 @@ try {
 	assert.deepEqual(afterUnbind.table.dataSource.map((row) => row.provider_label), ['微信', 'Telegram']);
 
 	// 旧密码登录会被拒绝并提示新密码的修改时间。
-	const oldPasswordLogin = await request('/api/sign.php', { method: 'POST', body: { step: 'password', email: 'second@example.com', password: 'center-password-1' } });
+	const oldPasswordLogin = await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'password', email: 'second@example.com', password: 'center-password-1' } });
 	assert.equal(oldPasswordLogin.status, 401);
 	assert.match((await oldPasswordLogin.json()).feedback.message, /密码已于.*修改/);
-	const newPasswordLogin = await request('/api/sign.php', { method: 'POST', body: { step: 'password', email: 'second@example.com', password: 'center-password-2' } });
+	const newPasswordLogin = await request('/api/accounts/sign.php', { method: 'POST', body: { step: 'password', email: 'second@example.com', password: 'center-password-2' } });
 	assert.equal(newPasswordLogin.status, 200);
 	assert.equal((await newPasswordLogin.json()).redirectTo, '/');
 

@@ -39,6 +39,12 @@ try {
 	assert.equal(anonymousPanel.response.status, 401);
 	assert.equal(anonymousPanel.pageStatus.title, '请先登录');
 	assert.deepEqual(anonymousPanel.pageStatus.actions.map((action) => action.key), ['/sign', '/']);
+	assert.deepEqual(anonymousPanel.pageStatus.actions.map((action) => action.action), ['local-login', 'navigate']);
+
+	// /sign 只保留 API，公开页面入口已移除。
+	const removedSignPage = await document('/sign.html');
+	assert.equal(removedSignPage.response.status, 404);
+	assert.equal(removedSignPage.pageStatus.status, 404);
 
 	// 公开页面正常渲染，不返回状态提示。
 	const about = await document('/about.html');

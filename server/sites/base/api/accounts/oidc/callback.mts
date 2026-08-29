@@ -12,7 +12,7 @@ type LoginRequest = { id: string; issuer: string; state: string; nonce: string; 
 /** 弹窗登录成功后通知打开方并自行关闭；内容是静态的，不拼接任何外部输入。 */
 const popupClosePage = () => `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>登录成功</title></head>`
 	+ `<body style="font-family:system-ui;padding:48px;text-align:center"><h2>登录成功</h2><p>正在返回原页面…</p>`
-	+ `<script>window.opener&&window.opener.postMessage({source:'passport',status:'success'},window.location.origin);setTimeout(function(){window.close();},100);</script>`
+	+ `<script>window.opener&&window.opener.postMessage({source:'passport',status:'success',next:{action:'reload'}},window.location.origin);setTimeout(function(){window.close();},100);</script>`
 	+ `</body></html>`;
 
 /** 未设置 Accounts 用户名时的本站占位用户名，带下划线，永远不会与合法用户名冲突。 */
@@ -61,10 +61,11 @@ const handler: ApiHandler = async (c) => {
 		}
 		if (isValidAccountUsername(preferred)) await syncLocalUsername(database, account.user_id, preferred);
 		if (account.status !== 'enabled') return apiMessage(c, 403, '本站用户已停用');
-		const sessionId = crypto.randomUUID(), maxAge = 24 * 60 * 60;
+		const maxAge = 24 * 60 * 60;
 		const previousSession = await firstSql<{ session_id: string }>(database, sql(database).select({ table: 'base_oidc_sessions', columns: { session_id: 'session_id' }, where: [{ column: 'issuer', value: config.issuer }, { column: 'sid', value: oidcSessionId }] }));
-		if (previousSession) await runSql(database, sql(database).delete('base_system_sessions', { id: previousSession.session_id }));
-		await runSql(database, sql(database).insert('base_system_sessions', { id: sessionId, user_id: account.user_id, expires_at: now + maxAge * 1000, created_at: now }));
+		const sessionId = previousSession?.session_id ?? crypto.randomUUID();
+		if (previousSession) await runSql(database, sql(database).update('base_system_sessions', { user_id: account.user_id, expires_at: now + maxAge * 1000 }, { id: sessionId }));
+		else await runSql(database, sql(database).insert('base_system_sessions', { id: sessionId, user_id: account.user_id, expires_at: now + maxAge * 1000, created_at: now }));
 		await runSql(database, sql(database).upsert('base_oidc_sessions', ['issuer', 'sid'], { issuer: config.issuer, sid: oidcSessionId, session_id: sessionId, created_at: now }, ['session_id', 'created_at']));
 		await runSql(database, sql(database).delete('base_oidc_login_requests', { id: request.id }));
 		const secure = isSecureRequest(c);

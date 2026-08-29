@@ -54,7 +54,7 @@ try {
 	const polled = await app.request(`https://accounts.test${qr.pollUrl}`, { headers: { cookie: 'accounts_oidc_request=qr-request' } });
 	const polledResult = await polled.json();
 	assert.equal(polledResult.status, 'authenticated');
-	assert.equal(polledResult.redirectTo, '/sign.html');
+	assert.equal(polledResult.redirectTo, '/accounts/sign.html');
 	const sessionCookie = setCookie(polled, 'passport_session');
 	assert.ok(sessionCookie, '电脑端必须拿到 Accounts 会话');
 
@@ -72,7 +72,7 @@ try {
 	const secondState = new URL(secondQr.authorizationUrl).searchParams.get('state');
 	await app.request(`https://accounts.test/api/accounts/external/wechat?code=wechat-code&state=${encodeURIComponent(secondState)}&consume=1`);
 	const standalone = await (await app.request(`https://accounts.test${secondQr.pollUrl}`)).json();
-	assert.deepEqual(standalone, { status: 'authenticated', redirectTo: '/sign.html' });
+	assert.deepEqual(standalone, { status: 'authenticated', redirectTo: '/accounts/sign.html' });
 
 	const credentialDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
 	credentialDatabase.prepare('INSERT INTO passport_user_credentials (user_id,password,created_at) VALUES (?,?,?)').run(userId, '{"hash":"x","pattern":"LLLL"}', Date.now());

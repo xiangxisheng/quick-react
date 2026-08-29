@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 
-const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://accounts.test/sign.html' });
+const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://accounts.test/accounts/sign.html' });
 Object.assign(globalThis, {
 	window: dom.window,
 	document: dom.window.document,
@@ -94,7 +94,7 @@ await waitFor(() => assert.ok(screen.getByText('输入邮箱后点下一步')));
 
 cleanup();
 
-// 业务站点登录页：加载时绝不自动跳转到 Accounts，必须用户点击确认。
+// Accounts 弹窗的兼容表单：加载时绝不自动跳转，必须用户点击确认。
 requests.length = 0;
 const passportForm = {
 	description: '本站使用 Accounts 账号中心统一登录。点击下面的按钮会打开 Accounts 登录窗口，完成后自动回到本站；本页不会自动跳转。',
