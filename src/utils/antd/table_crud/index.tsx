@@ -93,6 +93,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 	const [appliedQueryValues, setAppliedQueryValues] = useState<Record<string, string>>({});
 	const [searchRequestKey, setSearchRequestKey] = useState(0);
 	const initializedQueryDefaultsFor = useRef('');
+	const requestSequence = useRef(0);
 	const cursorsByPage = useRef<Record<number, string | undefined>>({ 1: undefined });
 	const selectedQuery = new URLSearchParams(appliedQueryValues).toString();
 	const selectedQuerySuffix = selectedQuery ? `?${selectedQuery}` : '';
@@ -183,6 +184,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 	}
 
 	const fetchData = async (): Promise<void> => {
+		const sequence = ++requestSequence.current;
 		setLoading(true);
 		try {
 			const query: Record<string, string> = {
@@ -196,15 +198,15 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 			const queryString = new URLSearchParams(query).toString();
 			const response: Response = await commonApi.apiFetch(`${apiPath}?${queryString}`);
 			const resJSON: ResJSON = await response.json();
+			if (sequence !== requestSequence.current) return;
 			if (resJSON.table) {
-				// 表格配置整体替换：合并会让上一张表的操作按钮、查询字段残留到新表上。
-				const tableOption: ResJsonTableOption = resJSON.table.option ?? resJsonTableOption;
-				if (resJSON.table.option) {
-					tableOptionRef.current = tableOption;
-					setResJsonTableOption(tableOption);
-					const fields = resJSON.table.option.queryFields;
-					setQueryActions(resJSON.table.option.actions?.query ?? []);
-					if (fields) {
+				// 每次响应都完整替换配置，不能让上一张表的按钮或查询字段残留。
+				const tableOption: ResJsonTableOption = resJSON.table.option ?? { rowKey: 'key' };
+				tableOptionRef.current = tableOption;
+				setResJsonTableOption(tableOption);
+				const fields = tableOption.queryFields;
+				setQueryActions(tableOption.actions?.query ?? []);
+				if (fields) {
 						setQueryFields(fields);
 						setQueryValues((previous) => Object.fromEntries(fields.map((field) => [
 							field.dataIndex,
@@ -217,12 +219,10 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 								.map((field) => [field.dataIndex, field.defaultValue as string]));
 							if (Object.keys(defaults).length) setAppliedQueryValues(defaults);
 						}
-					} else {
-						setQueryFields([]);
-						setQueryActions([]);
-						setQueryValues({});
-						setAppliedQueryValues({});
-					}
+				} else {
+					setQueryFields([]);
+					setQueryValues({});
+					setAppliedQueryValues({});
 				}
 				if (resJSON.table.columns) {
 					cacheResJsonTable.current.columns = resJSON.table.columns;
@@ -280,10 +280,12 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 						</Space>,
 					});
 					setTableColumns(tableColumns);
+				} else {
+					cacheResJsonTable.current.columns = [];
+					setResJsonColumns([]);
+					setTableColumns([]);
 				}
-				if (resJSON.table.dataSource) {
-					setDataSource(resJSON.table.dataSource);
-				}
+				setDataSource(resJSON.table.dataSource ?? []);
 				if (resJSON.table.hasMore !== undefined) {
 					if (resJSON.table.nextCursor) cursorsByPage.current[currentPage + 1] = resJSON.table.nextCursor;
 					else delete cursorsByPage.current[currentPage + 1];
@@ -312,6 +314,22 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 
 	}
 
+	useEffect(() => {
+		setDataSource([]);
+		setTableColumns(undefined);
+		setResJsonColumns([]);
+		setResJsonTableOption({ rowKey: 'key' });
+		tableOptionRef.current = { rowKey: 'key' };
+		setQueryFields([]);
+		setQueryActions([]);
+		setQueryValues({});
+		setAppliedQueryValues({});
+		setPagination((previous) => ({ ...previous, current: 1, total: 0 }));
+		cursorsByPage.current = { 1: undefined };
+		initializedQueryDefaultsFor.current = '';
+		cacheResJsonTable.current = { columns: [] };
+		requestSequence.current += 1;
+	}, [apiPath]);
 	useEffect(() => {
 		fetchData();
 	}, [apiPath, JSON.stringify(appliedQueryValues), searchRequestKey, filters, pagination.pageSize, pagination.current]);
@@ -547,7 +565,19 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 	const renderModalAction = (action: TableAction) => <Button key={action.key} disabled={loading || action.disabled} onClick={() => action.modalPath && setModalAction({ path: action.modalPath, title: action.label })}>{action.label}</Button>;
 	const queryActionHandlers: Record<string, (action: TableAction) => React.ReactNode> = {
 		// 查询条件变化（例如数据管理切换数据表）时，必须清掉上一次的选中行和列筛选，否则会按旧表的状态操作新数据。
-		search: (action) => <Button key={action.key} onClick={() => { cursorsByPage.current = { 1: undefined }; setSelectedRowKeys([]); setFilters({}); setAppliedQueryValues(queryValues); setSearchRequestKey((previous) => previous + 1); setPagination((prev) => ({ ...prev, current: 1 })); }} icon={<SearchOutlined />} disabled={loading || action.disabled}>{action.label}</Button>,
+		search: (action) => <Button key={action.key} onClick={() => {
+			requestSequence.current += 1;
+			setDataSource([]);
+			setTableColumns(undefined);
+			setResJsonColumns([]);
+			cacheResJsonTable.current = { columns: [] };
+			cursorsByPage.current = { 1: undefined };
+			setSelectedRowKeys([]);
+			setFilters({});
+			setAppliedQueryValues(queryValues);
+			setSearchRequestKey((previous) => previous + 1);
+			setPagination((prev) => ({ ...prev, current: 1, total: 0 }));
+		}} icon={<SearchOutlined />} disabled={loading || action.disabled}>{action.label}</Button>,
 	};
 
 	return (<Flex vertical gap="small">
@@ -585,6 +615,7 @@ export default ({ commonApi, resourcePath }: TableCrudType) => {
 			{(uploadState.phase === 'signing' || uploadState.phase === 'uploading') && <Button onClick={() => uploadAbortController.current?.abort()}>取消上传</Button>}
 		</Flex>}
 		<Table<DataType>
+			key={String(appliedQueryValues.table ?? apiPath)}
 			rowSelection={rowSelection}
 			pagination={pagination}
 			onChange={onChange}
