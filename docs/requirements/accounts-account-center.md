@@ -326,7 +326,7 @@ Accounts 站点上可能同时存在两种会话：站点本地账号（`base_sy
 
 Accounts 提供类似 Google 的登录设备管理。设备数据只属于 Passport/Accounts，业务站点不创建或保存设备表，也不把设备指纹复制到 `base_system_sessions`。
 
-- 设备表使用 `passport_devices`，至少保存 `device_id`、`user_id`、`fingerprint`、设备描述、浏览器/系统、最近 IP、状态、首次使用时间、最近使用时间和注销时间。
+- 设备表使用 `passport_devices`，至少保存 `device_id`、`user_id`、`fingerprint`、设备描述、浏览器/系统、最近 IP、状态、首次使用时间、最近使用时间和注销时间；其中 `device_id` 直接等于客户端生成的 SHA-256 `fingerprint`，不再二次哈希。
 - `passport_sessions` 只保存 `device_id` 作为关联键，不保存 `device_fingerprint`；同一设备可以拥有多个历史会话。
 - 浏览器设备指纹固定计算为：`fingerprint = SHA-256(canvas.toDataURL())`。`canvas.toDataURL()` 的原始内容不落库，只保存哈希值。
 - `fingerprint` 是设备识别和会话继续有效的必要条件，不是单独的登录凭证。请求必须同时具备有效 `session_id`，且指纹与该 session 关联设备匹配；缺少、变化或被注销时，Accounts 会话立即失效。

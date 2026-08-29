@@ -14,9 +14,10 @@ import type { DatabaseAdapter } from './database/index.mjs';
 import { SiteRouter } from './site-router.mjs';
 import { loadCurrentUser, sessionUsesAccountsOidc } from './auth.mjs';
 import { loadAccountsOidcConfig, resolveAccountsLoginMode } from './accounts/client.mjs';
-import { loadPassportSession } from './passport/session.mjs';
+import { clearPassportSessionCookie, loadPassportSession, readPassportSessionId } from './passport/session.mjs';
 import { loadSystemConfigFromStore } from './system-config.mjs';
 import { applyTechStackHeaders, loadTechStackConfigFromStore } from './tech-stack.mjs';
+import { isSecureRequest } from './request-origin.mjs';
 import type { AppEnv, RuntimeBindings } from './types.mjs';
 import { workerApiModules, workerApiRoutes } from './.generated/worker-api-registry.mjs';
 
@@ -112,9 +113,11 @@ const configureForRequest = async (c: Context<WorkerEnv>) => {
 		: undefined;
 	if (currentUser) c.set('currentUser', currentUser);
 	// Accounts 会话与站点本地会话相互独立，存在时额外授予 accounts 角色。
+	const passportSessionId = readPassportSessionId(c.req.raw);
 	const passportUser = passportDatabase && accountsIdentity
 		? await loadPassportSession(passportDatabase, c.req.raw)
 		: undefined;
+	if (passportSessionId && !passportUser) c.header('Set-Cookie', clearPassportSessionCookie(isSecureRequest(c)), { append: true });
 	if (passportUser) c.set('passportUser', passportUser);
 	// Accounts 会话只带来身份（accounts 角色），站点权限一律来自本站用户自己的角色。
 	c.set('effectiveRoles', [

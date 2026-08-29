@@ -1,7 +1,5 @@
 import type { DatabaseAdapter } from '@server/database/index.mjs';
-import { firstSql, sql } from '@server/database/sql.mjs';
-import { runSql } from '@server/database/sql.mjs';
-import { sha256 } from '@server/accounts/oidc.mjs';
+import { firstSql, runSql, sql } from '@server/database/sql.mjs';
 
 export const passportSessionCookieName = 'passport_session';
 
@@ -28,14 +26,14 @@ export const readDeviceFingerprint = (request: Request) => {
 
 export const ensurePassportDevice = async (database: DatabaseAdapter, userId: string, request: Request) => {
 	const fingerprint = readDeviceFingerprint(request);
-	const id = await sha256(fingerprint), now = Date.now();
-	const existing = await firstSql<{ id: string; user_id: string; status: string }>(database, sql(database).select({ table: 'passport_devices', columns: { id: 'id', user_id: { column: 'user_id', cast: 'text' }, status: 'status' }, where: [{ column: 'fingerprint', value: fingerprint }] }));
+	const id = fingerprint, now = Date.now();
+	const existing = await firstSql<{ id: string; user_id: string; status: string }>(database, sql(database).select({ table: 'passport_devices', columns: { id: 'id', user_id: { column: 'user_id', cast: 'text' }, status: 'status' }, where: [{ column: 'id', value: fingerprint }] }));
 	if (existing && existing.user_id !== userId) throw new Error('此设备指纹已关联其他 Accounts 用户');
 	if (existing) {
-		await runSql(database, sql(database).update('passport_devices', { status: 'active', revoked_at: null, last_seen_at: now, user_agent: request.headers.get('user-agent') ?? '', platform: request.headers.get('sec-ch-ua-platform') ?? '', ip_address: request.headers.get('cf-connecting-ip') ?? request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '' }, { id: existing.id }));
+		await runSql(database, sql(database).update('passport_devices', { status: 'active', revoked_at: null, last_seen_at: now, user_agent: request.headers.get('user-agent') ?? '', platform: request.headers.get('sec-ch-ua-platform') ?? '', ip_address: request.headers.get('x-real-ip') ?? request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '' }, { id: existing.id }));
 		return existing.id;
 	}
-	await runSql(database, sql(database).insert('passport_devices', { id, user_id: userId, fingerprint, user_agent: request.headers.get('user-agent') ?? '', platform: request.headers.get('sec-ch-ua-platform') ?? '', ip_address: request.headers.get('cf-connecting-ip') ?? request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '', status: 'active', created_at: now, last_seen_at: now }));
+	await runSql(database, sql(database).insert('passport_devices', { id, user_id: userId, fingerprint, user_agent: request.headers.get('user-agent') ?? '', platform: request.headers.get('sec-ch-ua-platform') ?? '', ip_address: request.headers.get('x-real-ip') ?? request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '', status: 'active', created_at: now, last_seen_at: now }));
 	return id;
 };
 
@@ -54,6 +52,10 @@ export const loadPassportSession = async (database: DatabaseAdapter, request: Re
 	}
 	let fingerprint: string;
 	try { fingerprint = readDeviceFingerprint(request); } catch {
+		await runSql(database, sql(database).delete('passport_sessions', { id: sessionId }));
+		return undefined;
+	}
+	if (user.device_id !== fingerprint) {
 		await runSql(database, sql(database).delete('passport_sessions', { id: sessionId }));
 		return undefined;
 	}
