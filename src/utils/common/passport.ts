@@ -8,7 +8,7 @@ const loadPassport = async () => {
 	if (!passport.Passport) {
 		await new Promise<void>((resolve, reject) => {
 			const script = document.createElement('script');
-			script.src = '/passport.js';
+			script.src = '/passport.js.nocache';
 			script.onload = () => resolve();
 			script.onerror = () => reject(new Error('Passport SDK 加载失败'));
 			document.head.appendChild(script);

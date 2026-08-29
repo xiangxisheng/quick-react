@@ -116,18 +116,15 @@ const mapAllowedIps = new Set([
 const trustedProxyRules = systemConfig.trustedProxyIps.split(',').map((ip) => ip.trim()).filter(Boolean);
 
 const nodeApp = new Hono<AppEnv>();
-nodeApp.use('/bundle.js', async (c, next) => {
-	c.header('Cache-Control', 'no-cache');
-	await next();
-});
-nodeApp.use('/bundle.js.map', async (c, next) => {
-	const clientIp = getClientIp(c, trustedProxyRules);
-	if (!clientIp || !mapAllowedIps.has(clientIp)) return c.text('Not Found', 404);
-	return next();
-});
 nodeApp.use('*', compress());
 nodeApp.use('*', etag());
-
+nodeApp.use('*', async (c, next) => {
+	if (!c.req.path.endsWith('.map')) return next();
+	const clientIp = getClientIp(c, trustedProxyRules);
+	if (!clientIp || !mapAllowedIps.has(clientIp)) return c.text('Not Found', 404);
+	c.header('Cache-Control', 'no-cache');
+	return next();
+});
 /**
  * 按域名覆盖静态站点：`wwwroot/<hostname>/` 下的文件优先于应用页面，
  * 用于给某个域名单独提供静态首页等内容；目录不存在时什么都不做。
@@ -160,6 +157,24 @@ nodeApp.use('*', async (c, next) => {
 	if (!fileInfo?.isFile()) return next();
 	c.header('Content-Type', staticContentTypes[extname(file).toLowerCase()] ?? 'application/octet-stream');
 	c.header('Cache-Control', 'no-cache');
+	return c.body(await readFile(file));
+});
+
+// 统一服务 public 下的静态文件；文件是否存在决定是否处理，不维护逐文件映射。
+nodeApp.use('*', async (c, next) => {
+	if (c.req.method !== 'GET' && c.req.method !== 'HEAD') return next();
+	if (c.req.path.startsWith('/api/')) return next();
+	let requestPath: string;
+	try { requestPath = decodeURIComponent(c.req.path); } catch { return next(); }
+	if (requestPath.includes('..') || requestPath.includes('\0')) return next();
+	if (requestPath.endsWith('.nocache')) requestPath = requestPath.slice(0, -'.nocache'.length);
+	const file = join(publicDir, requestPath === '/' ? 'index.html' : requestPath);
+	const publicRoot = publicDir.endsWith('/') ? publicDir.slice(0, -1) : publicDir;
+	if (!file.startsWith(`${publicRoot}/`)) return next();
+	const info = await stat(file).catch(() => undefined);
+	if (!info?.isFile()) return next();
+	c.header('Cache-Control', 'no-cache');
+	c.header('Content-Type', staticContentTypes[extname(file).toLowerCase()] ?? 'application/octet-stream');
 	return c.body(await readFile(file));
 });
 
