@@ -29,7 +29,7 @@ try {
 	const clientId = 'acct_test', clientSecret = 'test-client-secret', verifier = base64Url(crypto.getRandomValues(new Uint8Array(48)));
 	const secretHash = Buffer.from(await sha256(clientSecret)).toString('hex'), challenge = base64Url(await sha256(verifier));
 	database.prepare(`INSERT INTO passport_oidc_clients (id, name, secret_hash, redirect_uris, allowed_scopes, require_pkce, status, created_at, updated_at, backchannel_logout_uri)
-		VALUES (?, 'Test Client', ?, '["https://client.test/callback"]', 'openid profile email', 1, 'enabled', ?, ?, 'https://site1.test/api/accounts/oidc/backchannel-logout')`).run(clientId, secretHash, now, now);
+		VALUES (?, 'Test Client', ?, '["https://client.test/callback","https://site1.test/api/accounts/oidc/callback"]', 'openid profile email', 1, 'enabled', ?, ?, 'https://site1.test/api/accounts/oidc/backchannel-logout')`).run(clientId, secretHash, now, now);
 	database.prepare(`INSERT INTO base_system_configs (key, value, updated_at) VALUES ('accounts-oidc-client', ?, ?)`).run(JSON.stringify({ enabled: true, issuer: 'https://accounts.test', clientId, clientSecret }), now);
 	database.prepare(`INSERT INTO base_system_users (id, username, password, roles, status, created_at, updated_at) VALUES (77, 'local_admin', 'unused', '["admin"]', 'enabled', ?, ?)`).run(now, now);
 	database.prepare(`INSERT INTO base_system_sessions (id, user_id, expires_at, created_at) VALUES ('local-session', 77, ?, ?)`).run(now + 3600_000, now);
@@ -101,6 +101,11 @@ try {
 	assert.match(strictMessage, /允许地址为 https:\/\/client\.test\/callback/);
 	strictDatabase.prepare('UPDATE passport_oidc_clients SET strict_redirect_uri = 0 WHERE id = ?').run(clientId);
 	strictDatabase.close();
+	const invalidAuthorize = new URL(authorize); invalidAuthorize.searchParams.set('redirect_uri', 'https://invalid.test/callback');
+	const invalidResponse = await request(`${invalidAuthorize.pathname}${invalidAuthorize.search}`, { headers: { cookie: `passport_session=${sessionId}` } });
+	const invalidMessage = (await invalidResponse.json()).feedback.message;
+	assert.equal(invalidResponse.status, 400);
+	assert.equal(invalidMessage.match(/https:\/\/site1\.test\/api\/accounts\/oidc\/callback/g)?.length, 1, '手工地址与自动地址重合时只显示一次');
 	// 启用 Accounts 登录的业务站点：需要登录的页面直接弹窗，不再跳登录页，也不给本地注册入口。
 	const businessDocument = await (await app.request('https://site1.test/panel/admin.html', { headers: { accept: 'text/html' } })).text();
 	const businessInitial = JSON.parse(businessDocument.match(/__INITIAL_DATA__=(\{.*?\});<\/script>/s)[1]);

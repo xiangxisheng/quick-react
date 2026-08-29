@@ -20,5 +20,6 @@ export const registeredClientRedirectUris = async (c: Context<AppEnv>, client: R
 		joins: [{ table: 'global_sites', alias: 's', left: 's.site_key', right: 'h.site_key' }],
 		where: [{ column: 'h.status', value: 'enabled' }, { column: 's.status', value: 'enabled' }, { column: 's.migration_status', value: 'ready' }, { column: 's.dsn', value: site.dsn }, { column: 's.database_binding', value: site.databaseBinding }],
 	}));
-	return [...configured, ...rows.filter((row) => !row.hostname.startsWith('*.')).map((row) => `https://${row.hostname}/api/accounts/oidc/callback`)];
+	const standard = rows.filter((row) => !row.hostname.startsWith('*.')).map((row) => `https://${row.hostname}/api/accounts/oidc/callback`);
+	return [...new Set([...configured, ...standard])];
 };
