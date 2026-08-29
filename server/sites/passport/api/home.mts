@@ -17,7 +17,7 @@ const handler: ApiHandler = (c, next) => {
 			{ key: 'account', title: '账号管理', body: '登录后可以在账户中心修改昵称、添加并验证邮箱、切换主邮箱、解绑不再使用的邮箱，以及设置或修改登录密码。用户名在首次设置后不可更改。' },
 			{ key: 'sso', title: '为业务站点提供统一登录', body: '业务站点通过标准 OpenID Connect 协议接入。你在业务站点点击登录后，会在弹出的窗口中完成认证；授权成功后，该站点只获得你的账号编号、用户名、昵称和主邮箱，用于在该站点识别你的身份。' },
 			{ key: 'privacy', title: '数据与隐私', body: '我们只收集完成账号功能所必需的信息（账号标识、邮箱、密码哈希、第三方身份标识、会话与登录来源），不会用于广告投放，也不会出售给第三方。通过 Google 账号登录获取的信息仅用于创建和识别本站账号，遵守 Google API 服务用户数据政策，包括其中的有限使用要求。' },
-			{ key: 'contact', title: '联系我们', body: '如需注销账号、行使查询与删除权利，或对本服务有任何疑问，请联系 xiangxisheng@gmail.com。' },
+			{ key: 'contact', title: '联系我们', body: `如需注销账号、行使查询与删除权利，或对本服务有任何疑问，请联系 ${c.get('siteSettings').contactEmail || '站点管理员'}。` },
 		],
 		links: [
 			{ key: 'privacy', label: '隐私权政策', url: '/page/privacy.html' },

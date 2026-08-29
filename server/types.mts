@@ -3,6 +3,7 @@ import type { SiteRequestContext, SiteRouter } from './site-router.mjs';
 import type { ConfigStore } from './config-store.mjs';
 import type { SystemConfig } from './system-config.mjs';
 import type { TechStackConfig } from './tech-stack.mjs';
+import type { SiteSettings } from './site-settings.mjs';
 import type { UserIdentity } from '@shared/types/user.mjs';
 import type { TableColumn, TableRow } from '@shared/types/table.mjs';
 import type { AccountsLoginMode } from './accounts/client.mjs';
@@ -27,6 +28,7 @@ export type AppEnv = {
 		siteRouter: SiteRouter;
 		configStore: ConfigStore;
 		systemConfig: SystemConfig;
+		siteSettings: SiteSettings;
 		techStackConfig: TechStackConfig;
 		accountsIdentity: boolean;
 		accountsLoginMode: AccountsLoginMode;

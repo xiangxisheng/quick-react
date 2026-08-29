@@ -1,9 +1,9 @@
-<!doctype html>
+export const renderPrivacyHtml = (siteName = '本站', contactEmail = '') => `<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>隐私权政策</title>
+<title>${siteName}隐私权政策</title>
 <meta name="description" content="本站账号服务的隐私权政策，说明收集的信息、使用方式、共享范围以及用户的查询与删除方式。">
 <style>
 :root { color-scheme: light dark; }
@@ -87,9 +87,9 @@ th { background: #fafafa; font-weight: 600; }
 	<p>本政策可能因功能调整或法律要求而更新。更新后会修改本页顶部的“最后更新日期”；涉及重大变更的，会在你下次登录时提示。</p>
 
 	<h2>九、联系我们</h2>
-	<p>如对本政策或你的个人信息有任何疑问、投诉或需要行使查询、更正、删除的权利，请联系：<strong>xiangxisheng@gmail.com</strong>。我们会在收到请求后的合理期限内回复。</p>
+<p>如对本政策或你的个人信息有任何疑问、投诉或需要行使查询、更正、删除的权利，请联系：<strong>${contactEmail || '未配置'}</strong>。我们会在收到请求后的合理期限内回复。</p>
 
 	<a class="back" href="/">← 返回首页</a>
 </main>
 </body>
-</html>
+</html>`;

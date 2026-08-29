@@ -1,4 +1,5 @@
 import type { DatabaseAdapter } from '@server/database/index.mjs';
+import { escapeHtml } from '@server/common/html.mjs';
 import { getCloudEmailAdapter } from './catalog.mjs';
 import type { CloudEmailAdapter, CloudEmailMessage, CloudEmailScope, CloudEmailTarget, CloudEmailTemplate, CloudEmailTemplatePublication } from './index.mjs';
 import { createAliyunDirectMailAdapter, createAliyunDirectMailTemplate, describeAliyunDirectMailTemplate, updateAliyunDirectMailTemplate } from './providers/aliyun-direct-mail.mjs';
@@ -52,7 +53,6 @@ export const refreshCloudEmailTemplate = async (target: CloudEmailScope, provide
 };
 
 const variablePattern = /\{\{([a-z][a-z0-9_]*)\}\}/g;
-const escapeHtml = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const render = (source: string, variables: Record<string, string>, html: boolean) => source.replace(variablePattern, (_, key: string) => {
 	if (!(key in variables)) throw new Error(`邮件模板缺少变量：${key}`);
 	return html ? escapeHtml(variables[key]) : variables[key];

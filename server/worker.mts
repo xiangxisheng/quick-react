@@ -2,7 +2,7 @@ import { Hono, type Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { compress } from 'hono/compress';
 import { etag } from 'hono/etag';
-import { renderIndexHtml } from './templates/index.mjs';
+import { renderIndexHtml } from './templates/base/index.mjs';
 import { createApiGateway } from './api-router.mjs';
 import { accountsIdentityApi, getPageMetadata, getSiteNavigation, siteProvidesApi } from './navigation.mjs';
 import { buildAuthState, resolvePagePaths, resolvePageStatus } from './page-context.mjs';
@@ -18,6 +18,9 @@ import { clearPassportSessionCookie, loadPassportSession, readPassportSessionId 
 import { loadSystemConfigFromStore } from './system-config.mjs';
 import { applyTechStackHeaders, loadTechStackConfigFromStore } from './tech-stack.mjs';
 import { isSecureRequest } from './request-origin.mjs';
+import { loadSiteSettings } from './site-settings.mjs';
+import { renderPrivacyHtml } from './templates/base/page/privacy.mjs';
+import { renderTermsHtml } from './templates/base/page/terms.mjs';
 import type { AppEnv, RuntimeBindings } from './types.mjs';
 import { workerApiModules, workerApiRoutes } from './.generated/worker-api-registry.mjs';
 
@@ -33,6 +36,7 @@ const configurationCache = new WeakMap<object, {
 	loadedAt: number;
 	systemConfig: Awaited<ReturnType<typeof loadSystemConfigFromStore>>;
 	techStackConfig: Awaited<ReturnType<typeof loadTechStackConfigFromStore>>;
+	siteSettings: Awaited<ReturnType<typeof loadSiteSettings>>;
 }>();
 
 const asAdapter = (binding: unknown): DatabaseAdapter | undefined => {
@@ -86,11 +90,12 @@ const configureForRequest = async (c: Context<WorkerEnv>) => {
 	};
 	let configuration = configurationCache.get(database as object);
 	if (!configuration || Date.now() - configuration.loadedAt >= 30_000) {
-		const [systemConfig, techStackConfig] = await Promise.all([
+		const [systemConfig, techStackConfig, siteSettings] = await Promise.all([
 			loadSystemConfigFromStore(configStore),
 			loadTechStackConfigFromStore(configStore),
+			loadSiteSettings(configStore),
 		]);
-		configuration = { loadedAt: Date.now(), systemConfig, techStackConfig };
+		configuration = { loadedAt: Date.now(), systemConfig, techStackConfig, siteSettings };
 		configurationCache.set(database as object, configuration);
 	}
 	c.set('site', site);
@@ -100,6 +105,7 @@ const configureForRequest = async (c: Context<WorkerEnv>) => {
 	c.set('siteRouter', siteRouter);
 	c.set('configStore', configStore);
 	c.set('systemConfig', configuration.systemConfig);
+	c.set('siteSettings', configuration.siteSettings);
 	c.set('techStackConfig', configuration.techStackConfig);
 	c.set('accountsIdentity', accountsIdentity);
 	const accountsConfig = await loadAccountsOidcConfig(c);
@@ -209,6 +215,8 @@ app.all('/api', apiGateway);
 app.all('/api/*', (c, next) => apiGateway(c, next));
 app.get('/.well-known/openid-configuration', oidcDiscovery);
 app.get('/', renderDocument);
+app.get('/page/privacy.html', (c) => c.html(renderPrivacyHtml(c.get('site').name, c.get('siteSettings').contactEmail)));
+app.get('/page/terms.html', (c) => c.html(renderTermsHtml(c.get('site').name, c.get('siteSettings').contactEmail)));
 
 app.get('*', async (c, next) => {
 	if (c.req.path.startsWith('/api/') || !c.req.header('accept')?.includes('text/html')) {

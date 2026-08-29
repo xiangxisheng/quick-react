@@ -1,9 +1,9 @@
-<!doctype html>
+export const renderTermsHtml = (siteName = '本站', contactEmail = '') => `<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>服务条款</title>
+<title>${siteName}服务条款</title>
 <meta name="description" content="本站账号服务的服务条款，说明服务内容、账号规则、使用限制、责任范围与条款变更方式。">
 <style>
 :root { color-scheme: light dark; }
@@ -73,11 +73,11 @@ ul { padding-left: 22px; }
 	<p>本条款的订立、效力、解释及争议解决适用中华人民共和国大陆地区法律。双方应先友好协商解决争议；协商不成的，任一方可向本站运营方所在地有管辖权的人民法院提起诉讼。</p>
 
 	<h2>九、联系我们</h2>
-	<p>对本条款有疑问或需要申请注销账号，请联系：<strong>xiangxisheng@gmail.com</strong>。</p>
+	<p>对本条款有疑问或需要申请注销账号，请联系：<strong>${contactEmail || '未配置'}</strong>。</p>
 
 	<p>本条款与<a href="/page/privacy.html">隐私权政策</a>共同构成你与本站之间的完整协议。</p>
 
 	<a class="back" href="/">← 返回首页</a>
 </main>
 </body>
-</html>
+</html>`;
