@@ -13,7 +13,7 @@ import { sendDefaultCloudEmail } from '@server/cloud/email.mjs';
 const providerId = (value: string): ExternalProviderId | undefined => value === 'google' || value === 'wechat' ? value : undefined;
 
 const handler: ApiHandler = async (c, _next, params) => {
-	if (c.get('site').siteKey !== 'passport' || !['GET', 'POST'].includes(c.req.method)) return apiMessage(c, 404);
+	if (!['GET', 'POST'].includes(c.req.method)) return apiMessage(c, 404);
 	const database = c.get('passportDatabase'), id = providerId(params.id);
 	if (!database) return apiMessage(c, 503, 'Accounts 数据库不可用');
 	if (!id) return apiMessage(c, 404, '外部身份源不存在');

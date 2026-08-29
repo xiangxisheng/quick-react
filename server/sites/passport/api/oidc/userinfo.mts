@@ -4,7 +4,7 @@ import { sha256 } from '@server/accounts/oidc.mjs';
 import { accessTokenUser } from '@server/accounts/repository.mjs';
 
 const handler: ApiHandler = async (c) => {
-	if (c.get('site').siteKey !== 'passport' || c.req.method !== 'GET') return apiMessage(c, 404);
+	if (c.req.method !== 'GET') return apiMessage(c, 404);
 	const database = c.get('passportDatabase'); if (!database) return apiMessage(c, 503);
 	const authorization = c.req.header('authorization') ?? '';
 	if (!authorization.startsWith('Bearer ')) return apiMessage(c, 401, '缺少 Bearer Token');

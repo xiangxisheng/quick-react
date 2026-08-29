@@ -3,6 +3,7 @@ import { apiMessage, apiResponse } from '@server/api-response.mjs';
 import { normalizeHostname } from '@server/site-router.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 import { getChangedFields } from '@server/changed-fields.mjs';
+import { accountsIdentityApi } from '@server/navigation.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
 
 const columns = [
@@ -82,7 +83,9 @@ const handler: ApiHandler = async (c, next, params) => {
 		const site = await firstSql(database, sql(database).select({ table: 'global_sites', columns: { site_key: 'site_key' }, where: [{ column: 'site_key', value: nextSiteKey }, { column: 'status', value: 'enabled' }, { column: 'migration_status', value: 'ready' }] }));
 		if (!site) return apiMessage(c, 400, '站点不存在或尚未就绪');
 		const bot = await firstSql(database, sql(database).select({ table: 'global_telegram_bots', columns: { id: 'id' }, where: [{ column: 'webhook_hostname', value: current.hostname }], limit: 1 }));
-		if (bot && ((hostname && hostname !== current.hostname) || nextSiteKey !== 'passport' || status === statusValues.disabled)) {
+		// 机器人回调域名只能留在身份中心站点上，否则 Telegram 的 webhook 会指向没有身份数据的站点。
+		const accountsSiteKey = (await c.get('siteRouter').resolveByApi(accountsIdentityApi))?.siteKey;
+		if (bot && ((hostname && hostname !== current.hostname) || nextSiteKey !== accountsSiteKey || status === statusValues.disabled)) {
 			return apiMessage(c, 409, '域名正在被 Telegram 机器人使用，请先切换或停用相关机器人');
 		}
 		const values: Record<string, unknown> = {};

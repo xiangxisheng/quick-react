@@ -29,7 +29,7 @@ const parseBody = async (c: Parameters<ApiHandler>[0]): Promise<Record<string, u
 
 const handler: ApiHandler = async (c, next, params) => {
 	const database = c.get('passportDatabase');
-	if (!database || c.get('site').siteKey !== 'passport') return apiMessage(c, 404);
+	if (!database) return apiMessage(c, 404);
 	if (!params.id && c.req.method === 'GET') {
 		const rows = await allSql<ProviderRow>(database, sql(database).select({ table: 'passport_external_providers', columns: { id: 'id', display_name: 'display_name', client_id: 'client_id', client_secret: 'client_secret', wechat_mode: 'wechat_mode', wechat_redirect_domain: 'wechat_redirect_domain', status: 'status', created_at: 'created_at', updated_at: 'updated_at' }, orderBy: [{ column: 'created_at' }] }));
 		const origin = c.get('systemConfig').publicOrigin?.trim() || requestOrigin(c);

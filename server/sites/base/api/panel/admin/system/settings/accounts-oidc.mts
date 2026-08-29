@@ -3,6 +3,7 @@ import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mj
 import { accountsOidcConfigKey, defaultAccountsOidcConfig, loadDiscovery, normalizeAccountsOidcConfig, oidcFetch } from '@server/accounts/client.mjs';
 import type { FormPageConfig } from '@shared/types/form-page.mjs';
 import { allSql, sql } from '@server/database/sql.mjs';
+import { accountsIdentityApi } from '@server/navigation.mjs';
 
 const defaultIssuer = 'https://accounts.example.com';
 const createFormPage = (issuerOptions: Array<{ value: string; text: string; fieldValues?: Record<string, unknown> }>): FormPageConfig => ({
@@ -19,13 +20,14 @@ const createFormPage = (issuerOptions: Array<{ value: string; text: string; fiel
 
 const loadIssuerOptions = async (c: Parameters<ApiHandler>[0], currentIssuer: string) => {
 	const database = c.get('globalDatabase');
-	const rows = await allSql<{ hostname: string }>(database, sql(database).select({
+	const accountsSite = await c.get('siteRouter').resolveByApi(accountsIdentityApi);
+	const rows = accountsSite ? await allSql<{ hostname: string }>(database, sql(database).select({
 		table: 'global_site_hosts', alias: 'h',
 		columns: { hostname: 'h.hostname' },
 		joins: [{ table: 'global_sites', alias: 's', left: 's.site_key', right: 'h.site_key' }],
-		where: [{ column: 'h.site_key', value: 'passport' }, { column: 'h.status', value: 'enabled' }, { column: 's.status', value: 'enabled' }, { column: 's.migration_status', value: 'ready' }],
+		where: [{ column: 'h.site_key', value: accountsSite.siteKey }, { column: 'h.status', value: 'enabled' }, { column: 's.status', value: 'enabled' }, { column: 's.migration_status', value: 'ready' }],
 		orderBy: [{ column: 'h.hostname' }],
-	}));
+	})) : [];
 	const options: Array<{ value: string; text: string; fieldValues?: Record<string, unknown> }> = rows.filter((row) => !row.hostname.startsWith('*.')).map((row) => ({ value: `https://${row.hostname}`, text: `Passport (${row.hostname})`, fieldValues: { issuer: `https://${row.hostname}` } }));
 	if (!options.length && !currentIssuer) options.push({ value: defaultIssuer, text: defaultIssuer, fieldValues: { issuer: defaultIssuer } });
 	options.push({ value: '__custom__', text: '自定义 Issuer' });

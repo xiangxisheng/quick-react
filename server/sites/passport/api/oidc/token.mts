@@ -7,7 +7,7 @@ import { sql } from '@server/database/sql.mjs';
 
 type Code = { client_id: string; user_id: string; redirect_uri: string; scope: string; nonce: string; code_challenge: string; code_challenge_method: string; expires_at: number; consumed_at: number | null; session_id: string };
 const handler: ApiHandler = async (c) => {
-	if (c.get('site').siteKey !== 'passport' || c.req.method !== 'POST') return apiMessage(c, 404);
+	if (c.req.method !== 'POST') return apiMessage(c, 404);
 	const database = c.get('passportDatabase'); if (!database?.batch) return apiMessage(c, 503, 'Accounts 数据库不可用');
 	const body = await parseFormBody(c.req.raw), authorization = c.req.header('authorization') ?? '';
 	let clientId = String(body.client_id ?? ''), clientSecret = String(body.client_secret ?? '');

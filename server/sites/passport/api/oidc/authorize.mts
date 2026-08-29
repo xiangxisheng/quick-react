@@ -11,7 +11,7 @@ type Client = { id: string; redirect_uris: string; allowed_scopes: string; requi
 type RequestRow = { client_id: string; redirect_uri: string; scope: string; state: string; nonce: string; code_challenge: string; code_challenge_method: string; expires_at: number };
 
 const handler: ApiHandler = async (c) => {
-	if (c.get('site').siteKey !== 'passport' || c.req.method !== 'GET') return apiMessage(c, 404);
+	if (c.req.method !== 'GET') return apiMessage(c, 404);
 	const database = c.get('passportDatabase');
 	if (!database) return apiMessage(c, 503, 'Accounts 数据库不可用');
 	let values: RequestRow;

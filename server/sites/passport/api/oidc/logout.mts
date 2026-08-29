@@ -5,7 +5,7 @@ import { oidcIssuer, revokeOidcSession } from '@server/accounts/provider.mjs';
 import { isSecureRequest } from '@server/request-origin.mjs';
 
 const handler: ApiHandler = async (c) => {
-	if (c.get('site').siteKey !== 'passport' || !['GET', 'POST'].includes(c.req.method)) return apiMessage(c, 404);
+	if (!['GET', 'POST'].includes(c.req.method)) return apiMessage(c, 404);
 	const database = c.get('passportDatabase'); if (!database) return apiMessage(c, 503);
 	const sessionId = readPassportSessionId(c.req.raw), secure = isSecureRequest(c);
 	if (sessionId) await revokeOidcSession(database, sessionId, oidcIssuer(c), c.env.OIDC_FETCH ?? fetch);

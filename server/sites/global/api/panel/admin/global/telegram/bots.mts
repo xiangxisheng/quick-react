@@ -5,6 +5,7 @@ import type { DatabaseAdapter } from '@server/database/index.mjs';
 import { deleteTelegramWebhook, getTelegramBotIdentity, getTelegramWebhookInfo, setTelegramWebhook } from '@server/telegram/api.mjs';
 import { enabledDisabledOptions, statusValues } from '@shared/types/status.mjs';
 import { allSql, firstSql, runSql, sql } from '@server/database/sql.mjs';
+import { accountsIdentityApi } from '@server/navigation.mjs';
 
 const columns = [
 	{ dataIndex: 'id', title: 'ID', dataType: 'int' as const },
@@ -36,12 +37,20 @@ const secretPattern = /^[A-Za-z0-9_-]{1,256}$/;
 const createSecretToken = () => crypto.randomUUID().replaceAll('-', '');
 const webhookUrl = (hostname: string, botId: number) => `https://${hostname}/api/tgwebhook?bot_id=${encodeURIComponent(String(botId))}`;
 
-const passportHostOptions = async (database: DatabaseAdapter) => {
-	const rows = await allSql<{ hostname: string }>(database, sql(database).select({ table: 'global_site_hosts', columns: { hostname: 'hostname' }, where: [{ column: 'site_key', value: 'passport' }, { column: 'status', value: 'enabled' }], orderBy: [{ column: 'hostname' }] }));
+// 机器人回调必须落在身份中心站点的域名上；身份中心就是提供 Accounts 身份登录接口的站点。
+const accountsSiteKey = async (c: Parameters<ApiHandler>[0]) => (await c.get('siteRouter').resolveByApi(accountsIdentityApi))?.siteKey;
+
+const passportHostOptions = async (c: Parameters<ApiHandler>[0], database: DatabaseAdapter) => {
+	const siteKey = await accountsSiteKey(c);
+	if (!siteKey) return [];
+	const rows = await allSql<{ hostname: string }>(database, sql(database).select({ table: 'global_site_hosts', columns: { hostname: 'hostname' }, where: [{ column: 'site_key', value: siteKey }, { column: 'status', value: 'enabled' }], orderBy: [{ column: 'hostname' }] }));
 	return rows.map((row) => ({ value: row.hostname, text: row.hostname }));
 };
 
-const validatePassportHost = async (database: DatabaseAdapter, hostname: string) => Boolean(await firstSql(database, sql(database).select({ table: 'global_site_hosts', columns: { id: 'id' }, where: [{ column: 'hostname', value: hostname }, { column: 'site_key', value: 'passport' }, { column: 'status', value: 'enabled' }] })));
+const validatePassportHost = async (c: Parameters<ApiHandler>[0], database: DatabaseAdapter, hostname: string) => {
+	const siteKey = await accountsSiteKey(c);
+	return Boolean(siteKey && await firstSql(database, sql(database).select({ table: 'global_site_hosts', columns: { id: 'id' }, where: [{ column: 'hostname', value: hostname }, { column: 'site_key', value: siteKey }, { column: 'status', value: 'enabled' }] })));
+};
 
 const publicRow = (row: BotRow) => ({
 	id: row.id,
@@ -79,7 +88,7 @@ const handler: ApiHandler = async (c, next, params) => {
 	if (!params.id && c.req.method === 'GET') {
 		const [rows, hosts] = await Promise.all([
 			allSql<BotRow>(database, sql(database).select({ table: 'global_telegram_bots', orderBy: [{ column: 'id', direction: 'DESC' }] })),
-			passportHostOptions(database),
+			passportHostOptions(c, database),
 		]);
 		const tableColumns = columns.map((column) => column.dataIndex === 'webhook_hostname' ? { ...column, options: hosts } : column);
 		return apiResponse(c, 200, { table: { option: { rowKey: 'id', actions: { query: [{ key: 'search', label: '搜索' }], toolbar: [{ key: 'create', label: '新增' }, { key: 'delete', label: '删除' }], row: [{ key: 'test', label: 'Webhook 状态' }, { key: 'edit', label: '编辑' }, { key: 'delete', label: '删除', confirm: '机器人必须已停用且没有关联数据，确认删除吗？' }] } }, columns: tableColumns, dataSource: rows.map(publicRow), totalRecords: rows.length } });
@@ -89,7 +98,7 @@ const handler: ApiHandler = async (c, next, params) => {
 		const name = text(body.name), token = text(body.bot_token), hostname = text(body.webhook_hostname);
 		const secretToken = text(body.secret_token) || createSecretToken();
 		const status = body.status === statusValues.disabled ? statusValues.disabled : statusValues.enabled;
-		if (!name || !token || !secretPattern.test(secretToken) || !await validatePassportHost(database, hostname)) return apiMessage(c, 400, '名称、Bot Token、Secret Token 或 Passport 域名不合法');
+		if (!name || !token || !secretPattern.test(secretToken) || !await validatePassportHost(c, database, hostname)) return apiMessage(c, 400, '名称、Bot Token、Secret Token 或 Passport 域名不合法');
 		let identity;
 		try { identity = await getTelegramBotIdentity(token); }
 		catch (error) { return apiMessage(c, 502, error instanceof Error ? error.message : 'Bot Token 校验失败'); }
@@ -141,7 +150,7 @@ const handler: ApiHandler = async (c, next, params) => {
 		const secretToken = changed.has('secret_token') && text(body.secret_token) ? text(body.secret_token) : current.secret_token;
 		const hostname = changed.has('webhook_hostname') ? text(body.webhook_hostname) : current.webhook_hostname;
 		const status = changed.has('status') ? body.status === statusValues.disabled ? statusValues.disabled : statusValues.enabled : current.status;
-		if (!name || !secretPattern.test(secretToken) || !await validatePassportHost(database, hostname)) return apiMessage(c, 400, '名称、Secret Token 或 Passport 域名不合法');
+		if (!name || !secretPattern.test(secretToken) || !await validatePassportHost(c, database, hostname)) return apiMessage(c, 400, '名称、Secret Token 或 Passport 域名不合法');
 		let username = current.bot_username;
 		if (token !== current.bot_token) {
 			try { username = (await getTelegramBotIdentity(token)).username; }

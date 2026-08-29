@@ -4,7 +4,7 @@ import { ensureSigningKey } from '@server/accounts/oidc.mjs';
 import { signingPublicKeys } from '@server/accounts/repository.mjs';
 
 const handler: ApiHandler = async (c) => {
-	if (c.get('site').siteKey !== 'passport' || c.req.method !== 'GET') return apiMessage(c, 404);
+	if (c.req.method !== 'GET') return apiMessage(c, 404);
 	const database = c.get('passportDatabase'); if (!database) return apiMessage(c, 503);
 	await ensureSigningKey(database);
 	const rows = await signingPublicKeys(database);

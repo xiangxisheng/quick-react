@@ -1,5 +1,6 @@
 import type { DatabaseAdapter, DatabaseTarget } from './database/index.mjs';
 import { allSql, sql } from './database/sql.mjs';
+import { siteProvidesApi } from './navigation.mjs';
 
 export type SiteRecord = {
 	siteKey: string;
@@ -152,13 +153,17 @@ export class SiteRouter {
 		return { ...site, hostname, codeSiteChain: buildSiteChain(site, snapshot.sites), databaseTarget };
 	}
 
-	async resolveBySiteKey(siteKey: string, hostname = ''): Promise<SiteRequestContext | undefined> {
+	/** 找出提供某个接口的站点，例如身份中心就是提供 Accounts 身份登录接口的那个站点。 */
+	async resolveByApi(apiPath: string, hostname = ''): Promise<SiteRequestContext | undefined> {
 		const snapshot = await this.currentSnapshot();
-		const site = snapshot.sites.get(siteKey);
-		if (!site) return undefined;
-		const databaseTarget: DatabaseTarget = site.databaseBinding
-			? { kind: 'binding', value: site.databaseBinding }
-			: site.dsn ? { kind: 'dsn', value: site.dsn } : { kind: 'default', value: '' };
-		return { ...site, hostname, codeSiteChain: buildSiteChain(site, snapshot.sites), databaseTarget };
+		for (const site of snapshot.sites.values()) {
+			const codeSiteChain = buildSiteChain(site, snapshot.sites);
+			if (!siteProvidesApi(codeSiteChain, apiPath)) continue;
+			const databaseTarget: DatabaseTarget = site.databaseBinding
+				? { kind: 'binding', value: site.databaseBinding }
+				: site.dsn ? { kind: 'dsn', value: site.dsn } : { kind: 'default', value: '' };
+			return { ...site, hostname, codeSiteChain, databaseTarget };
+		}
+		return undefined;
 	}
 }

@@ -64,7 +64,7 @@ const clientFormRow = (row: Record<string, unknown>, options: Array<{ value: str
 
 const handler: ApiHandler = async (c, next, params) => {
 	const database = c.get('passportDatabase');
-	if (!database || c.get('site').siteKey !== 'passport') return apiMessage(c, 404);
+	if (!database) return apiMessage(c, 404);
 	if (!params.id && c.req.method === 'GET') {
 		const rows: Array<Record<string, unknown>> = await oidcClients(database);
 		const redirectUriOptions = await loadRedirectUriOptions(c);

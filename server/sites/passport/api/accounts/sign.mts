@@ -175,7 +175,6 @@ const challengeKeyboard = (challengeId: string, expected: number): TelegramInlin
 });
 
 const handler: ApiHandler = async (c, next) => {
-	if (c.get('site').siteKey !== 'passport') return apiMessage(c, 404, 'Passport 身份登录仅在 Passport 站点可用');
 	const database = c.get('passportDatabase'), globalDatabase = c.get('globalDatabase');
 	if (!database) return apiMessage(c, 503, 'Passport 数据库不可用');
 	const secure = isSecureRequest(c);

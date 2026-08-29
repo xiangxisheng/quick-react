@@ -2,7 +2,8 @@ import type { Context } from 'hono';
 import type { AppEnv } from './types.mjs';
 import type { AuthPage, AuthState, HeaderAction, PageStatus } from '@shared/types/initial-data.mjs';
 import { findNavigationItem, stripPageSuffix } from '@shared/navigation-tree.mjs';
-import { getFullSiteNavigation, getPageDefinitions, getSiteNavigation } from './navigation.mjs';
+import { getFullSiteNavigation, getPageDefinitions, getSiteNavigation, siteProvidesApi } from './navigation.mjs';
+import { firstSql, sql } from './database/sql.mjs';
 import { loadAccountsOidcConfig } from './accounts/client.mjs';
 
 // 前端固定注册的第三方登录回调页面，不属于导航树。
@@ -11,15 +12,26 @@ const callbackPagePaths = ['/accounts/external/callback', '/accounts/external/we
 /** 站点是否用 Accounts 作为登录入口：每个站点都能接入，看它自己的系统设置开关。 */
 export const usesAccountsLogin = async (c: Context<AppEnv>) => (await loadAccountsOidcConfig(c)).enabled;
 
+/** 本站是否还能创建初始管理员：由本站数据库里的引导状态决定，和站点是哪个无关。 */
+const registrationAvailable = async (c: Context<AppEnv>) => {
+	const database = c.get('database');
+	const row = await firstSql<{ value: string }>(database, sql(database).select({ table: 'base_system_bootstrap', columns: { value: 'value' }, where: [{ column: 'key', value: 'initial_admin' }] }));
+	return row?.value === 'open';
+};
+
 export const buildAuthState = async (c: Context<AppEnv>): Promise<AuthState> => {
 	const site = c.get('site');
 	const siteConfig = c.get('techStackConfig');
 	// 启用 Accounts 登录的站点不跳转登录页，直接在当前页弹出登录窗口。
 	const accountsLogin = await usesAccountsLogin(c);
+	// 本站是否自带 Accounts 身份登录页：看继承链里有没有实现该接口的代码站点。
+	const accountsIdentity = siteProvidesApi(site.codeSiteChain, '/api/accounts/sign');
+	// 启用 Accounts 登录后不能再创建本地账号，注册入口一并隐藏。
+	const signUp = !accountsLogin && await registrationAvailable(c);
 	const signPages: AuthPage[] = [
 		{ path: `/sign${siteConfig.pageSuffix}`, title: '登录', description: '登录 Quick React', mode: 'sign', apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'POST', redirectPath: `/panel/admin${siteConfig.pageSuffix}` },
-		...(site.siteKey === 'global' ? [{ path: `/sign-up${siteConfig.pageSuffix}`, title: '注册', description: '创建初始管理员', mode: 'sign-up' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'PUT' as const, redirectPath: `/sign${siteConfig.pageSuffix}` }] : []),
-		...(site.codeSiteChain.includes('passport')
+		...(signUp ? [{ path: `/sign-up${siteConfig.pageSuffix}`, title: '注册', description: '创建初始管理员', mode: 'sign-up' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'PUT' as const, redirectPath: `/sign${siteConfig.pageSuffix}` }] : []),
+		...(accountsIdentity
 			? [{ path: `/accounts/sign${siteConfig.pageSuffix}`, title: 'Accounts 身份登录', description: '使用 Accounts 身份完成统一登录', mode: 'sign' as const, apiPath: `/api/accounts/sign${siteConfig.apiSuffix}`, submitMethod: 'POST' as const, redirectPath: `/` }]
 			: []),
 	];
@@ -33,7 +45,7 @@ export const buildAuthState = async (c: Context<AppEnv>): Promise<AuthState> => 
 		{ key: '/accounts/sign', label: '退出 Accounts', action: 'logout', icon: 'logout' },
 	];
 	// Accounts 站点上以 Accounts 身份（昵称）为准；同时存在站点本地会话时，两套入口都给出。
-	if (site.codeSiteChain.includes('passport') && passportUser) {
+	if (accountsIdentity && passportUser) {
 		return {
 			component: 'dropdown',
 			currentUser: passportUser,
@@ -48,13 +60,12 @@ export const buildAuthState = async (c: Context<AppEnv>): Promise<AuthState> => 
 		return { component: 'dropdown', currentUser: passportUser, actions: accountsActions, pages: signPages };
 	}
 	// Accounts 站点的登录入口指向账号登录页（第三方与邮箱登录都在那里），本地账号密码页只给站点管理员使用。
-	const signInKey = site.codeSiteChain.includes('passport') ? '/accounts/sign' : '/sign';
+	const signInKey = accountsIdentity ? '/accounts/sign' : '/sign';
 	return {
 		component: 'buttons',
 		actions: [
 			{ key: signInKey, label: '登录', action: accountsLogin ? 'accounts-login' : 'navigate', icon: 'login' },
-			// 启用 Accounts 登录后不能再创建本地账号，注册入口一并隐藏。
-			...(site.siteKey === 'global' && !accountsLogin ? [{ key: '/sign-up', label: '注册', action: 'navigate' as const, icon: 'register' as const }] : []),
+			...(signUp ? [{ key: '/sign-up', label: '注册', action: 'navigate' as const, icon: 'register' as const }] : []),
 		],
 		pages: signPages,
 	};
