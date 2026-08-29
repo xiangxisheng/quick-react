@@ -20,7 +20,7 @@ try {
 	assert.equal(matchNavigationKey(keys, '/panel/admin/system/users'), '/panel/admin');
 	assert.equal(matchNavigationKey(keys, '/panel/accounts/profile'), '/panel/accounts');
 	// 不属于任何菜单的页面不高亮。
-	assert.equal(matchNavigationKey(keys, '/accounts/sign'), '');
+	assert.equal(matchNavigationKey(keys, '/sign'), '');
 	assert.equal(matchNavigationKey(keys, '/panel'), '');
 	assert.equal(matchNavigationKey(keys, '/aboutus'), '');
 	assert.equal(matchNavigationKey(keys, '/no-such-page'), '');

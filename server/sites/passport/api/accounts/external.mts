@@ -104,7 +104,7 @@ const handler: ApiHandler = async (c, _next, params) => {
 			const pendingToken = await createPendingExternalIdentity(database, profile, provider.id);
 			c.header('Set-Cookie', clearExternalStateCookie(secure));
 			c.header('Set-Cookie', externalPendingCookie(pendingToken, secure), { append: true });
-			return c.redirect(`/accounts/sign${c.get('techStackConfig').pageSuffix}`, 302);
+			return c.redirect(`/sign${c.get('techStackConfig').pageSuffix}`, 302);
 		}
 		const userId = await resolveExternalUser(database, c.env.SNOWFLAKE_WORKER_ID, provider, profile, current?.id ? String(current.id) : undefined);
 		// 身份源带头像时后台同步到对象存储，失败不影响登录。

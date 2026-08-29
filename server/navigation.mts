@@ -4,9 +4,8 @@ import type { NavigationItem } from '@shared/types/navigation.mjs';
 export type MenuNode = NavigationItem;
 export type { NavigationPageDefinition as PageDefinition } from '@shared/navigation-tree.mjs';
 
-/** 身份中心的判定接口：谁实现了它，谁就是 Accounts 身份中心。 */
-export const accountsIdentityApi = '/api/accounts/sign';
-export const oidcProviderApi = '/api/oidc/authorize';
+/** 身份中心的判定接口：谁实现了 OIDC 授权端点，谁就是 Accounts 身份中心。 */
+export const accountsIdentityApi = '/api/oidc/authorize';
 
 /** 继承链里是否有代码站点实现了该接口：用来判断本站具备什么能力，而不是判断它是哪个站点。 */
 export const siteProvidesApi = (siteChain: string[], apiPath: string) => (

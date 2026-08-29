@@ -43,7 +43,7 @@ const handler: ApiHandler = async (c) => {
 		if (!requestId) await runSql(database, sql(database).insert('passport_oidc_authorization_requests', { id, client_id: values.client_id, redirect_uri: values.redirect_uri, scope: scopes.join(' '), state: values.state, nonce: values.nonce, code_challenge: values.code_challenge, code_challenge_method: values.code_challenge_method, expires_at: now + 600_000, created_at: now }));
 		else await runSql(database, sql(database).update('passport_oidc_authorization_requests', { expires_at: now + 600_000 }, { id }));
 		c.header('Set-Cookie', oidcRequestCookie(id, isSecureRequest(c)));
-		return c.redirect(`/accounts/sign${c.get('techStackConfig').pageSuffix}`, 302);
+		return c.redirect(`/sign${c.get('techStackConfig').pageSuffix}`, 302);
 	}
 	const code = randomToken(32), now = Date.now(), sessionId = readPassportSessionId(c.req.raw) ?? '';
 	await runSql(database, sql(database).insert('passport_oidc_authorization_codes', { code_hash: await sha256(code), client_id: values.client_id, user_id: String(current.id), redirect_uri: values.redirect_uri, scope: scopes.join(' '), nonce: values.nonce, code_challenge: values.code_challenge, code_challenge_method: values.code_challenge_method, expires_at: now + 60_000, created_at: now, session_id: sessionId }));

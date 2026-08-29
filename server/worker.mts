@@ -4,7 +4,7 @@ import { compress } from 'hono/compress';
 import { etag } from 'hono/etag';
 import { renderIndexHtml } from './templates/index.mjs';
 import { createApiGateway } from './api-router.mjs';
-import { getPageMetadata, getSiteNavigation, siteProvidesApi } from './navigation.mjs';
+import { accountsIdentityApi, getPageMetadata, getSiteNavigation, siteProvidesApi } from './navigation.mjs';
 import { buildAuthState, resolvePagePaths, resolvePageStatus } from './page-context.mjs';
 import { createDatabaseConfigStore } from './config-store.mjs';
 import { createD1Adapter, type D1DatabaseLike } from './database/d1.mjs';
@@ -66,8 +66,8 @@ const configureForRequest = async (c: Context<WorkerEnv>) => {
 	const database = await resolveSiteDatabase(c, site, defaultDatabase);
 	if (!database) throw new Error(`Database target is unavailable for site ${site.siteKey}`);
 	// 自带 Accounts 身份的站点用自己的库；控制面额外连一份用于校验关联数据。业务站点只走 OIDC，不直连身份库。
-	const accountsIdentity = siteProvidesApi(site.codeSiteChain, '/api/accounts/sign');
-	const passportSite = accountsIdentity ? site : site.isSystem ? await siteRouter.resolveByApi('/api/accounts/sign', site.hostname) : undefined;
+	const accountsIdentity = siteProvidesApi(site.codeSiteChain, accountsIdentityApi);
+	const passportSite = accountsIdentity ? site : site.isSystem ? await siteRouter.resolveByApi(accountsIdentityApi, site.hostname) : undefined;
 	let passportDatabase: DatabaseAdapter | undefined;
 	if (passportSite) {
 		try { passportDatabase = passportSite.siteKey === site.siteKey ? database : await resolveSiteDatabase(c, passportSite, defaultDatabase); }

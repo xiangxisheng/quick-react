@@ -6,12 +6,12 @@ import { signIdToken } from '@server/accounts/oidc.mjs';
 import { backchannelClients, passportSessionUser } from '@server/accounts/repository.mjs';
 import { runSql, sql } from '@server/database/sql.mjs';
 import { requestOrigin } from '@server/request-origin.mjs';
-import { oidcProviderApi, siteProvidesApi } from '@server/navigation.mjs';
+import { accountsIdentityApi, siteProvidesApi } from '@server/navigation.mjs';
 
 export const oidcIssuer = (c: Context<AppEnv>) => requestOrigin(c);
 
 export const oidcDiscovery = (c: Context<AppEnv>) => {
-	if (!siteProvidesApi(c.get('site').codeSiteChain, oidcProviderApi)) return apiMessage(c, 404);
+	if (!siteProvidesApi(c.get('site').codeSiteChain, accountsIdentityApi)) return apiMessage(c, 404);
 	const issuer = oidcIssuer(c);
 	return apiResponse(c, 200, {
 		issuer,

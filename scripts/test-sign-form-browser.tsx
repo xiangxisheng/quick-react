@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 
-const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://accounts.test/accounts/sign.html' });
+const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://accounts.test/sign.html' });
 Object.assign(globalThis, {
 	window: dom.window,
 	document: dom.window.document,
@@ -58,9 +58,9 @@ const commonApi = {
 };
 
 // 登录页的 apiPath 自带查询串，action 必须按 URL 规则追加。
-render(React.createElement(FormPage, { commonApi, apiPath: '/api/accounts/sign.php?mode=sign', title: '登录' }));
+render(React.createElement(FormPage, { commonApi, apiPath: '/api/sign.php?mode=sign', title: '登录' }));
 await waitFor(() => assert.ok(screen.getByText('输入邮箱后点下一步')));
-assert.deepEqual(requests.map((item) => item.url), ['/api/accounts/sign.php?mode=sign']);
+assert.deepEqual(requests.map((item) => item.url), ['/api/sign.php?mode=sign']);
 
 // 第三方登录渲染成图标链接，不是表单按钮。
 assert.ok(screen.getByText('微信'));
@@ -75,20 +75,20 @@ const user = userEvent.setup({ document: dom.window.document });
 nextResponse = { redirectTo: '/api/accounts/external/wechat', feedback: { component: 'message', type: 'success', message: '正在前往微信', redirectAfter: 0 } };
 await user.click(screen.getByText('微信'));
 await waitFor(() => assert.equal(requests.length, 2));
-assert.equal(requests[1].url, '/api/accounts/sign.php?mode=sign&action=provider%3Awechat');
+assert.equal(requests[1].url, '/api/sign.php?mode=sign&action=provider%3Awechat');
 assert.equal(requests[1].method, 'POST');
 cleanup();
 
 // 有初始值的字段仍然保留清空和还原。
 requests.length = 0;
 nextResponse = { formPage: passwordForm, currentValues: passwordForm.initialValues };
-render(React.createElement(FormPage, { commonApi, apiPath: '/api/accounts/sign.php?mode=sign', title: '登录' }));
+render(React.createElement(FormPage, { commonApi, apiPath: '/api/sign.php?mode=sign', title: '登录' }));
 await waitFor(() => assert.ok(screen.getByText('输入密码登录')));
 assert.equal(screen.queryByTitle('清空'), null, '空密码字段不显示清空');
 nextResponse = { formPage: signInForm, currentValues: signInForm.initialValues };
 await user.click(screen.getByRole('button', { name: '忘记密码' }));
 await waitFor(() => assert.equal(requests.length, 2));
-assert.equal(requests[1].url, '/api/accounts/sign.php?mode=sign&action=forgot_password');
+assert.equal(requests[1].url, '/api/sign.php?mode=sign&action=forgot_password');
 // 动作返回的新表单会替换当前表单。
 await waitFor(() => assert.ok(screen.getByText('输入邮箱后点下一步')));
 

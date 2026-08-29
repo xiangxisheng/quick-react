@@ -2,7 +2,7 @@ import type { Context } from 'hono';
 import type { AppEnv } from './types.mjs';
 import type { AuthPage, AuthState, HeaderAction, PageStatus } from '@shared/types/initial-data.mjs';
 import { findNavigationItem, stripPageSuffix } from '@shared/navigation-tree.mjs';
-import { getFullSiteNavigation, getPageDefinitions, getSiteNavigation, siteProvidesApi } from './navigation.mjs';
+import { getFullSiteNavigation, getPageDefinitions, getSiteNavigation } from './navigation.mjs';
 import { firstSql, sql } from './database/sql.mjs';
 import { loadAccountsOidcConfig } from './accounts/client.mjs';
 
@@ -20,51 +20,30 @@ const registrationAvailable = async (c: Context<AppEnv>) => {
 };
 
 export const buildAuthState = async (c: Context<AppEnv>): Promise<AuthState> => {
-	const site = c.get('site');
 	const siteConfig = c.get('techStackConfig');
 	// 启用 Accounts 登录的站点不跳转登录页，直接在当前页弹出登录窗口。
 	const accountsLogin = await usesAccountsLogin(c);
-	// 本站是否自带 Accounts 身份登录页：看继承链里有没有实现该接口的代码站点。
-	const accountsIdentity = siteProvidesApi(site.codeSiteChain, '/api/accounts/sign');
 	// 启用 Accounts 登录后不能再创建本地账号，注册入口一并隐藏。
 	const signUp = !accountsLogin && await registrationAvailable(c);
+	// 每个站点都只有 /sign 一个登录页，页面内容由本站的 /api/sign 决定。
 	const signPages: AuthPage[] = [
 		{ path: `/sign${siteConfig.pageSuffix}`, title: '登录', description: '登录 Quick React', mode: 'sign', apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'POST', redirectPath: `/panel/admin${siteConfig.pageSuffix}` },
 		...(signUp ? [{ path: `/sign-up${siteConfig.pageSuffix}`, title: '注册', description: '创建初始管理员', mode: 'sign-up' as const, apiPath: `/api/sign${siteConfig.apiSuffix}`, submitMethod: 'PUT' as const, redirectPath: `/sign${siteConfig.pageSuffix}` }] : []),
-		...(accountsIdentity
-			? [{ path: `/accounts/sign${siteConfig.pageSuffix}`, title: 'Accounts 身份登录', description: '使用 Accounts 身份完成统一登录', mode: 'sign' as const, apiPath: `/api/accounts/sign${siteConfig.apiSuffix}`, submitMethod: 'POST' as const, redirectPath: `/` }]
-			: []),
 	];
 	const currentUser = c.get('currentUser'), passportUser = c.get('passportUser');
-	const localActions: HeaderAction[] = [
-		{ key: '/panel/me', label: '个人中心', action: 'navigate', icon: 'user' },
+	// 登录后的入口只看当前持有哪些会话，退出统一走本站的 /sign。
+	const actions: HeaderAction[] = [
+		...(currentUser ? [{ key: '/panel/me', label: '个人中心', action: 'navigate' as const, icon: 'user' as const }] : []),
+		...(passportUser ? [{ key: '/panel/accounts', label: '账户中心', action: 'navigate' as const, icon: 'user' as const }] : []),
 		{ key: '/sign', label: '退出登录', action: 'logout', icon: 'logout' },
 	];
-	const accountsActions: HeaderAction[] = [
-		{ key: '/panel/accounts', label: '账户中心', action: 'navigate', icon: 'user' },
-		{ key: '/accounts/sign', label: '退出 Accounts', action: 'logout', icon: 'logout' },
-	];
-	// Accounts 站点上以 Accounts 身份（昵称）为准；同时存在站点本地会话时，两套入口都给出。
-	if (accountsIdentity && passportUser) {
-		return {
-			component: 'dropdown',
-			currentUser: passportUser,
-			actions: [...accountsActions, ...(currentUser ? localActions : [])],
-			pages: signPages,
-		};
-	}
-	if (currentUser) {
-		return { component: 'dropdown', currentUser, actions: localActions, pages: signPages };
-	}
-	if (passportUser) {
-		return { component: 'dropdown', currentUser: passportUser, actions: accountsActions, pages: signPages };
-	}
-	// Accounts 站点的登录入口指向账号登录页（第三方与邮箱登录都在那里），本地账号密码页只给站点管理员使用。
-	const signInKey = accountsIdentity ? '/accounts/sign' : '/sign';
+	// 同时存在两套会话时以 Accounts 身份（昵称）为准。
+	const user = passportUser ?? currentUser;
+	if (user) return { component: 'dropdown', currentUser: user, actions, pages: signPages };
 	return {
 		component: 'buttons',
 		actions: [
-			{ key: signInKey, label: '登录', action: accountsLogin ? 'accounts-login' : 'navigate', icon: 'login' },
+			{ key: '/sign', label: '登录', action: accountsLogin ? 'accounts-login' : 'navigate', icon: 'login' },
 			...(signUp ? [{ key: '/sign-up', label: '注册', action: 'navigate' as const, icon: 'register' as const }] : []),
 		],
 		pages: signPages,

@@ -43,15 +43,15 @@ try {
 	// 还没有设置用户名的账号即使已登录，也要先回登录页补全，不发授权码。
 	const blocked = await request(`${authorize.pathname}${authorize.search}`, { headers: { cookie: `passport_session=${sessionId}` } });
 	assert.equal(blocked.status, 302);
-	assert.match(blocked.headers.get('location'), /^\/accounts\/sign/);
+	assert.match(blocked.headers.get('location'), /^\/sign/);
 	// 从业务站点跳来登录时，登录页要说明来源并提供返回入口，避免用户回不去。
 	const oidcRequestCookie = blocked.headers.getSetCookie().map((value) => value.split(';')[0]).find((value) => value.startsWith('accounts_oidc_request='));
 	assert.ok(oidcRequestCookie);
-	const fromClient = await (await request('/api/accounts/sign.php', { headers: { cookie: oidcRequestCookie } })).json();
+	const fromClient = await (await request('/api/sign.php', { headers: { cookie: oidcRequestCookie } })).json();
 	assert.match(fromClient.formPage.description, /正在为 client\.test 登录/);
 	assert.deepEqual(fromClient.formPage.actions.map((action) => action.key), ['return_to_client']);
 	assert.equal(fromClient.formPage.actions[0].label, '取消登录');
-	const returned = await request('/api/accounts/sign.php?action=return_to_client', { method: 'POST', headers: { cookie: oidcRequestCookie, 'content-type': 'application/json' }, body: '{}' });
+	const returned = await request('/api/sign.php?action=return_to_client', { method: 'POST', headers: { cookie: oidcRequestCookie, 'content-type': 'application/json' }, body: '{}' });
 	const cancelled = await returned.json();
 	// 弹窗里取消登录先关窗口，非弹窗场景才回落到来源站点。
 	assert.equal(cancelled.closeWindow, true);
