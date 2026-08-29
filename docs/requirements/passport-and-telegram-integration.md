@@ -292,7 +292,7 @@ passport_telegram_identity_choices
   created_at BIGINT NOT NULL
   updated_at BIGINT NOT NULL
 
-passport_user_roles
+passport_user_roles                     -- 已废弃：Accounts 只分配身份，不分配权限，代码不再读取该表
   user_id BIGINT NOT NULL
   role TEXT NOT NULL
   created_at BIGINT NOT NULL

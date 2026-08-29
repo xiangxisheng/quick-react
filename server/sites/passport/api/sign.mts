@@ -1,4 +1,6 @@
 import type { ApiHandler } from '@server/api-router.mjs';
+import baseSign from '@server/sites/base/api/sign.mjs';
+import { accountsLoginEnabled } from '@server/sites/passport/accounts-login.mjs';
 import { apiMessage, apiMessageData, apiResponse } from '@server/api-response.mjs';
 import type { DatabaseAdapter, DatabaseBatchStatement } from '@server/database/index.mjs';
 import { normalizePassportEmail, setPassportPassword, verifyPassportPasswordHistory } from '@server/passport/identity.mjs';
@@ -174,7 +176,9 @@ const challengeKeyboard = (challengeId: string, expected: number): TelegramInlin
 	],
 });
 
-const handler: ApiHandler = async (c, next) => {
+const handler: ApiHandler = async (c, next, params) => {
+	// 和其它站点同一条规则：关闭账号登录就回到本站账号密码登录。
+	if (!await accountsLoginEnabled(c)) return baseSign(c, next, params);
 	const database = c.get('passportDatabase'), globalDatabase = c.get('globalDatabase');
 	if (!database) return apiMessage(c, 503, 'Passport 数据库不可用');
 	const secure = isSecureRequest(c);

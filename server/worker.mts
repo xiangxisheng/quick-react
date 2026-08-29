@@ -106,10 +106,11 @@ const configureForRequest = async (c: Context<WorkerEnv>) => {
 		? await loadPassportSession(passportDatabase, c.req.raw)
 		: undefined;
 	if (passportUser) c.set('passportUser', passportUser);
+	// Accounts 会话只带来身份（accounts 角色），站点权限一律来自本站用户自己的角色。
 	c.set('effectiveRoles', [
 		'public',
 		...(currentUser ? ['user', ...currentUser.roles] : []),
-		...(passportUser ? ['accounts', ...passportUser.roles] : []),
+		...(passportUser ? ['accounts'] : []),
 	]);
 	return true;
 };

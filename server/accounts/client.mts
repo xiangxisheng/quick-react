@@ -18,6 +18,9 @@ export const normalizeAccountsOidcConfig = (value: unknown, previous = defaultAc
 	};
 };
 
+/** 是否接入了外部 Accounts：配置齐全才需要把用户弹到别的站点登录，身份中心自己不算。 */
+export const usesExternalAccounts = (config: AccountsOidcClientConfig) => config.enabled && Boolean(config.issuer) && Boolean(config.clientId);
+
 export const loadAccountsOidcConfig = async (c: Context<AppEnv>) => normalizeAccountsOidcConfig(await c.get('configStore').get(accountsOidcConfigKey));
 export const oidcFetch = (c: Context<AppEnv>, input: RequestInfo | URL, init?: RequestInit) => c.env.OIDC_FETCH ? c.env.OIDC_FETCH(input, init) : fetch(input, init);
 export type OidcDiscovery = { issuer: string; authorization_endpoint: string; token_endpoint: string; jwks_uri: string; userinfo_endpoint?: string };

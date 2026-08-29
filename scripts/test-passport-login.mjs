@@ -54,6 +54,17 @@ try {
 	const initial = await (await request('/api/sign.php')).json();
 	assert.equal(initial.formPage.initialValues.step, 'email');
 	assert.deepEqual(initial.formPage.externalLogins.map((item) => item.key), ['telegram']);
+
+	// 和其它站点同一个开关：关掉账号登录就回到本站账号密码登录，重新开启又变回账号登录。
+	const switchDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
+	const writeAccountsLogin = (enabled) => switchDatabase.prepare('INSERT INTO base_system_configs (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+		.run('accounts-oidc-client', JSON.stringify({ enabled, issuer: '', clientId: '', clientSecret: '' }), Date.now());
+	writeAccountsLogin(false);
+	const localForm = await (await request('/api/sign.php')).json();
+	assert.deepEqual(localForm.formPage.fields.map((field) => field.name), ['username', 'password', 'remember']);
+	writeAccountsLogin(true);
+	switchDatabase.close();
+	assert.equal((await (await request('/api/sign.php')).json()).formPage.initialValues.step, 'email');
 	const emailStep = await (await request('/api/sign.php?action=provider:telegram', { method: 'POST', body: { step: 'email', email: '' } })).json();
 	assert.equal(emailStep.formPage.initialValues.step, 'telegram_email');
 	const telegramSelection = await (await request('/api/sign.php', {

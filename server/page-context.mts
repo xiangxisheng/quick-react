@@ -4,13 +4,13 @@ import type { AuthPage, AuthState, HeaderAction, PageStatus } from '@shared/type
 import { findNavigationItem, stripPageSuffix } from '@shared/navigation-tree.mjs';
 import { getFullSiteNavigation, getPageDefinitions, getSiteNavigation } from './navigation.mjs';
 import { firstSql, sql } from './database/sql.mjs';
-import { loadAccountsOidcConfig } from './accounts/client.mjs';
+import { loadAccountsOidcConfig, usesExternalAccounts } from './accounts/client.mjs';
 
 // 前端固定注册的第三方登录回调页面，不属于导航树。
 const callbackPagePaths = ['/accounts/external/callback', '/accounts/external/wechat'];
 
-/** 站点是否用 Accounts 作为登录入口：每个站点都能接入，看它自己的系统设置开关。 */
-export const usesAccountsLogin = async (c: Context<AppEnv>) => (await loadAccountsOidcConfig(c)).enabled;
+/** 站点是否把用户弹到外部 Accounts 登录：每个站点都能接入，看它自己的系统设置。 */
+export const usesAccountsLogin = async (c: Context<AppEnv>) => usesExternalAccounts(await loadAccountsOidcConfig(c));
 
 /** 本站是否还能创建初始管理员：由本站数据库里的引导状态决定，和站点是哪个无关。 */
 const registrationAvailable = async (c: Context<AppEnv>) => {
