@@ -33,7 +33,10 @@ const handler: ApiHandler = async (c) => {
 	const database = c.get('database'), config = await loadAccountsOidcConfig(c);
 	if (!config.enabled) return apiMessage(c, 404, '本站未启用 Accounts OIDC 登录');
 	const requestId = readCookie(c.req.raw, accountsLoginCookieName), state = c.req.query('state') ?? '', code = c.req.query('code') ?? '';
-	const request = requestId ? await firstSql<LoginRequest>(database, sql(database).select({ table: 'base_oidc_login_requests', columns: { id: 'id', issuer: 'issuer', state: 'state', nonce: 'nonce', code_verifier: 'code_verifier', return_path: 'return_path', expires_at: 'expires_at' }, where: [{ column: 'id', value: requestId }] })) : undefined;
+	const requestColumns = { id: 'id', issuer: 'issuer', state: 'state', nonce: 'nonce', code_verifier: 'code_verifier', return_path: 'return_path', expires_at: 'expires_at' } as const;
+	const request = requestId
+		? await firstSql<LoginRequest>(database, sql(database).select({ table: 'base_oidc_login_requests', columns: requestColumns, where: [{ column: 'id', value: requestId }] }))
+		: state ? await firstSql<LoginRequest>(database, sql(database).select({ table: 'base_oidc_login_requests', columns: requestColumns, where: [{ column: 'state', value: state }] })) : undefined;
 	if (!request || request.expires_at <= Date.now() || request.issuer !== config.issuer || !state || state !== request.state || !code) return apiMessage(c, 400, 'Accounts 登录回调状态无效或已过期');
 	try {
 		const discovery = await loadDiscovery(c, config.issuer), callback = `${requestOrigin(c)}/api/accounts/oidc/callback`;
