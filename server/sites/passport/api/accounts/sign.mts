@@ -52,6 +52,16 @@ const methodForm = (options: SelectOption[], mode: 'signup' | 'reset' | 'link', 
 		{ name: 'method', label: mode === 'link' ? '身份源' : '认证方式', type: 'select', options, rules: [{ required: true, message: '请选择一种方式' }] },
 	],
 });
+const signedInForm = (): FormPageConfig => ({
+	description: '你已登录 Accounts。绑定身份等账号管理操作请在账户中心完成。',
+	actions: [
+		{ key: 'account_center', label: '进入账户中心' },
+		{ key: 'bind_identity', label: '管理绑定身份' },
+		{ key: 'logout', label: '退出登录' },
+	],
+	initialValues: {},
+	fields: [],
+});
 const passwordLoginForm = (email: string, externalLogins: FormPageExternalLogin[] = []): FormPageConfig => ({
 	description: `${email} 已注册，请输入密码登录，或使用下方的第三方账号登录。`,
 	submitLabel: '登录',
@@ -257,8 +267,7 @@ const handler: ApiHandler = async (c, next) => {
 				await refreshOidcRequest(c, database);
 				return apiResponse(c, 200, { user, registrationAvailable: false, formPage: pendingForm, currentValues: pendingForm.initialValues });
 			}
-			const linkOptions = providers.map((provider) => ({ value: provider.id, text: provider.display_name }));
-			return apiResponse(c, 200, { user, registrationAvailable: false, formPage: methodForm(linkOptions, 'link') });
+			return apiResponse(c, 200, { user, registrationAvailable: false, formPage: signedInForm() });
 		}
 		if (pending) {
 			const otp = await pendingExternalEmailOtp(database, pending.id_hash);
@@ -294,6 +303,18 @@ const handler: ApiHandler = async (c, next) => {
 		const client = await pendingClient();
 		const formPage = signInForm(text(body.email), await signInExternalLogins(), client ? new URL(client).host : '');
 		return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues });
+	}
+	if (action === 'account_center' || action === 'bind_identity') {
+		const user = await loadPassportSession(database, c.req.raw);
+		if (!user) return apiMessage(c, 401, '登录状态已失效，请重新登录');
+		const path = action === 'account_center' ? '/panel/accounts' : '/panel/accounts/bind-identity';
+		return apiMessageData(c, 200, '正在打开账户中心', { next: { action: 'navigate', path: `${path}${c.get('techStackConfig').pageSuffix}` } });
+	}
+	if (action === 'logout') {
+		const sessionId = readPassportSessionId(c.req.raw);
+		if (sessionId) await revokeOidcSession(database, sessionId, oidcIssuer(c), c.env.OIDC_FETCH ?? fetch);
+		c.header('Set-Cookie', clearPassportSessionCookie(secure));
+		return apiMessageData(c, 200, '已退出 Accounts', { next: { action: 'reload' } });
 	}
 	// 取消登录：登录在弹窗里进行，直接关闭窗口；不是弹窗时回落到来源站点。同时清掉待授权请求。
 	if (action === 'return_to_client') {

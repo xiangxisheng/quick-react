@@ -62,6 +62,7 @@ try {
 
 	const usernameDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
 	usernameDatabase.prepare('INSERT INTO passport_usernames (user_id, username, created_at) VALUES (?, ?, ?)').run(String(userId), 'oidcuser1', Date.now());
+	usernameDatabase.prepare('INSERT INTO passport_user_credentials (user_id, password, created_at) VALUES (?, ?, ?)').run(String(userId), 'test-password-hash', Date.now());
 	usernameDatabase.close();
 	const authorized = await request(`${authorize.pathname}${authorize.search}`, { headers: { cookie: `passport_session=${sessionId}` } });
 	assert.equal(authorized.status, 302);
@@ -90,6 +91,10 @@ try {
 	assert.ok(selfSessionCookie);
 	const signedInPassport = await (await request('/api/sign.php', { headers: { cookie: selfSessionCookie } })).json();
 	assert.equal(signedInPassport.user.username, 'oidcuser1');
+	const signedInAccounts = await (await request('/api/accounts/sign.php', { headers: { cookie: `passport_session=${sessionId}` } })).json();
+	assert.deepEqual(signedInAccounts.formPage.actions.map((action) => action.key), ['account_center', 'bind_identity', 'logout']);
+	const accountCenter = await request('/api/accounts/sign.php?action=account_center', { method: 'POST', headers: { cookie: `passport_session=${sessionId}`, 'content-type': 'application/json' }, body: '{}' });
+	assert.equal((await accountCenter.json()).next.path, '/panel/accounts.html');
 	const strictDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);
 	strictDatabase.prepare('UPDATE passport_oidc_clients SET strict_redirect_uri = 1 WHERE id = ?').run(clientId);
 	const strictStart = await request('/api/sign.php', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });

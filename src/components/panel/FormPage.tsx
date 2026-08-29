@@ -301,7 +301,7 @@ export default function FormPage({ commonApi, apiPath, title, submitMethod = 'PU
 			})())}
 			<Space>
 				{formConfig?.actions?.map((action) => <Button key={action.key} loading={runningAction === action.key} disabled={saving || Boolean(runningAction)} onClick={() => runAction(action.key)}>{action.label}</Button>)}
-				{!formConfig?.passportLogin?.enabled ? <Button type="primary" htmlType="submit" loading={saving}>{formConfig?.submitLabel}</Button> : null}
+				{!formConfig?.passportLogin?.enabled && formConfig?.submitLabel ? <Button type="primary" htmlType="submit" loading={saving}>{formConfig.submitLabel}</Button> : null}
 				{formConfig?.submitHint ? <Typography.Text type="secondary">{formConfig.submitHint}</Typography.Text> : null}
 			</Space>
 		</Form>
