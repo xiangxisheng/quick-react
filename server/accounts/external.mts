@@ -253,10 +253,22 @@ export const verifyExternalEmailOtp = async (database: DatabaseAdapter, workerId
 		firstSql<{ user_id: string; status: string }>(database, sql(database).select({ table: 'passport_external_identities', alias: 'i', columns: { user_id: { column: 'i.user_id', cast: 'text' }, status: 'u.status' }, joins: [{ table: 'passport_users', alias: 'u', left: 'u.user_id', right: 'i.user_id' }], where: [{ column: 'i.provider', value: pending.provider }, { column: 'i.subject', value: pending.subject }] })),
 		firstSql<{ user_id: string; status: string }>(database, sql(database).select({ table: 'passport_emails', alias: 'e', columns: { user_id: { column: 'ue.user_id', cast: 'text' }, status: 'u.status' }, joins: [{ table: 'passport_user_emails', alias: 'ue', left: 'ue.email_id', right: 'e.id' }, { table: 'passport_users', alias: 'u', left: 'u.user_id', right: 'ue.user_id' }], where: [{ column: 'e.email', value: otp.email }, { column: 'e.verified', value: 1 }], limit: 1 })),
 	]);
-	if (identityOwner || emailOwner) {
+	if (identityOwner) {
 		await runSql(database, sql(database).update('passport_external_email_otps', { status: 'used', updated_at: now }, { id: otp.id }));
-		if (identityOwner) return { status: 'conflict', message: identityOwner.status === 'enabled' ? '此外部身份已经绑定 Accounts 用户，请重新登录' : '此外部身份对应的 Accounts 用户已停用' };
-		return { status: 'conflict', message: emailOwner!.status === 'enabled' ? '该邮箱已属于现有 Accounts 用户，请先登录原账户，再绑定此外部身份' : '该邮箱所属的 Accounts 用户已停用' };
+		return { status: 'conflict', message: identityOwner.status === 'enabled' ? '此外部身份已经绑定 Accounts 用户，请重新登录' : '此外部身份对应的 Accounts 用户已停用' };
+	}
+	if (emailOwner) {
+		if (emailOwner.status !== 'enabled') {
+			await runSql(database, sql(database).update('passport_external_email_otps', { status: 'used', updated_at: now }, { id: otp.id }));
+			return { status: 'conflict', message: '该邮箱所属的 Accounts 用户已停用' };
+		}
+		if (!database.batch) throw new Error('Accounts 数据库不支持原子绑定外部身份');
+		await database.batch([
+			sql(database).insert('passport_external_identities', { user_id: emailOwner.user_id, provider: pending.provider, subject: pending.subject, profile: pending.profile, created_at: now, updated_at: now }),
+			sql(database).update('passport_external_email_otps', { status: 'used', updated_at: now }, { id: otp.id }),
+			sql(database).update('passport_external_pending_identities', { status: 'completed', updated_at: now }, { id_hash: pending.id_hash }),
+		]);
+		return { status: 'created', userId: emailOwner.user_id };
 	}
 	if (!database.batch) throw new Error('Accounts 数据库不支持原子创建外部身份');
 	const generator = getPassportSnowflakeGenerator(database, workerId), userId = (await generator.next()).toString(), emailId = (await generator.next()).toString();

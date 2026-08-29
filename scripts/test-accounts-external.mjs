@@ -24,8 +24,14 @@ globalThis.fetch = async (input, init) => {
 		const conflict = authorization.includes('google-conflict');
 		return Response.json({ sub: conflict ? 'google-subject-2' : 'google-subject-1', name: 'Google Account', email: 'google@example.com', email_verified: true });
 	}
-	if (url.origin === 'https://api.weixin.qq.com' && url.pathname.endsWith('/access_token')) return Response.json({ access_token: 'wechat-access', openid: 'wechat-openid-1' });
-	if (url.origin === 'https://api.weixin.qq.com' && url.pathname.endsWith('/userinfo')) return Response.json({ openid: 'wechat-openid-1', nickname: '微信测试用户' });
+	if (url.origin === 'https://api.weixin.qq.com' && url.pathname.endsWith('/access_token')) {
+		const code = url.searchParams.get('code') ?? '';
+		return Response.json({ access_token: `wechat-access-${code}`, openid: code === 'wechat-existing-email' ? 'wechat-openid-existing' : 'wechat-openid-1' });
+	}
+	if (url.origin === 'https://api.weixin.qq.com' && url.pathname.endsWith('/userinfo')) {
+		const accessToken = url.searchParams.get('access_token') ?? '';
+		return Response.json({ openid: accessToken.includes('wechat-existing-email') ? 'wechat-openid-existing' : 'wechat-openid-1', nickname: '微信测试用户' });
+	}
 	if (url.href === 'https://dm.aliyuncs.com/') {
 		const body = new URLSearchParams(String(init?.body ?? ''));
 		assert.equal(body.get('Action'), 'SingleSendMail');
@@ -114,6 +120,35 @@ try {
 	assert.equal(afterConflict.prepare("SELECT COUNT(*) AS count FROM passport_external_identities WHERE provider = 'google'").get().count, 2, '新身份应该绑定到同一个账号');
 	assert.equal(afterConflict.prepare("SELECT COUNT(DISTINCT user_id) AS count FROM passport_external_identities WHERE provider = 'google'").get().count, 1);
 	afterConflict.close();
+	// 微信没有邮箱：验证一个已属于 Accounts 用户的邮箱后，应把微信身份绑定到该用户，而不是拒绝或创建新用户。
+	const existingWechatStart = await app.request('http://accounts.test/api/accounts/external/wechat');
+	const existingWechatAuthorization = new URL(existingWechatStart.headers.get('location'));
+	const existingWechatState = existingWechatAuthorization.searchParams.get('state');
+	const existingWechatCallback = await app.request(`http://accounts.test/api/accounts/external/wechat?code=wechat-existing-email&state=${encodeURIComponent(existingWechatState)}`, { headers: { cookie: cookie(existingWechatStart, 'accounts_external_state') } });
+	const existingWechatPending = cookie(existingWechatCallback, 'accounts_external_pending');
+	assert.ok(existingWechatPending);
+	const existingWechatEmail = await jsonRequest(app, '/api/accounts/sign.php', { step: 'external_email', email: 'google@example.com' }, existingWechatPending);
+	assert.equal(existingWechatEmail.status, 200);
+	const existingWechatVerified = await jsonRequest(app, '/api/accounts/sign.php', { step: 'external_verify', code: deliveredCode }, existingWechatPending);
+	assert.equal(existingWechatVerified.status, 200);
+	const existingWechatResult = await existingWechatVerified.json();
+	const existingWechatDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
+	const googleOwner = existingWechatDatabase.prepare("SELECT CAST(ue.user_id AS TEXT) AS user_id FROM passport_user_emails ue JOIN passport_emails e ON e.id = ue.email_id WHERE e.email = 'google@example.com'").get().user_id;
+	const wechatOwner = existingWechatDatabase.prepare("SELECT CAST(user_id AS TEXT) AS user_id FROM passport_external_identities WHERE provider = 'wechat' AND subject = 'wechat-app-id:wechat-openid-existing'").get().user_id;
+	assert.equal(String(existingWechatResult.user.id), googleOwner, '已有邮箱绑定微信后应登录同一 Accounts 用户');
+	assert.equal(wechatOwner, googleOwner);
+	existingWechatDatabase.close();
+	// 验证码页面必须明确显示收件地址，并允许回到邮箱输入步骤。
+	const changeEmailStart = await app.request('http://accounts.test/api/accounts/external/wechat');
+	const changeEmailState = new URL(changeEmailStart.headers.get('location')).searchParams.get('state');
+	const changeEmailCallback = await app.request(`http://accounts.test/api/accounts/external/wechat?code=wechat-change-email&state=${encodeURIComponent(changeEmailState)}`, { headers: { cookie: cookie(changeEmailStart, 'accounts_external_state') } });
+	const changeEmailPending = cookie(changeEmailCallback, 'accounts_external_pending');
+	await jsonRequest(app, '/api/accounts/sign.php', { step: 'external_email', email: 'wechat-change@example.com' }, changeEmailPending);
+	const codePage = await (await app.request('http://accounts.test/api/accounts/sign.php', { headers: { cookie: changeEmailPending } })).json();
+	assert.match(codePage.formPage.description, /wechat-change@example\.com/);
+	assert.deepEqual(codePage.formPage.actions.map((action) => action.key), ['change_email']);
+	const changedCodeEmail = await jsonRequest(app, '/api/accounts/sign.php?action=change_email', { step: 'external_verify' }, changeEmailPending);
+	assert.equal((await changedCodeEmail.json()).formPage.initialValues.step, 'external_email');
 
 	const forwardedHeaders = { 'x-forwarded-proto': 'https', 'x-forwarded-host': 'passport.example.test' };
 	const wechatStart = await app.request('http://accounts.test/api/accounts/external/wechat', { headers: forwardedHeaders });
@@ -128,7 +163,7 @@ try {
 	const pendingCookie = cookie(wechatCallback, 'accounts_external_pending');
 	assert.ok(pendingCookie);
 	const beforeEmail = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
-	assert.equal(beforeEmail.prepare("SELECT COUNT(*) AS count FROM passport_external_identities WHERE provider = 'wechat'").get().count, 0);
+	assert.equal(beforeEmail.prepare("SELECT COUNT(*) AS count FROM passport_external_identities WHERE provider = 'wechat'").get().count, 1);
 	assert.equal(beforeEmail.prepare('SELECT COUNT(*) AS count FROM passport_users').get().count, 1);
 	beforeEmail.close();
 	const emailForm = await (await app.request('http://accounts.test/api/accounts/sign.php', { headers: { cookie: `${pendingCookie}; ${signupEmailCookie}` } })).json();
@@ -148,9 +183,9 @@ try {
 	assert.equal(verifiedResult.formPage.initialValues.step, 'set_username');
 	assert.equal(verifiedResult.redirectTo, undefined);
 	const completed = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
-	assert.equal(completed.prepare("SELECT COUNT(*) AS count FROM passport_external_identities WHERE provider = 'wechat'").get().count, 1);
+	assert.equal(completed.prepare("SELECT COUNT(*) AS count FROM passport_external_identities WHERE provider = 'wechat'").get().count, 2);
 	assert.equal(completed.prepare("SELECT COUNT(*) AS count FROM passport_emails WHERE email = 'wechat@example.com' AND verified = 1").get().count, 1);
-	assert.equal(completed.prepare("SELECT COUNT(*) AS count FROM passport_external_pending_identities WHERE status = 'completed'").get().count, 1);
+	assert.equal(completed.prepare("SELECT COUNT(*) AS count FROM passport_external_pending_identities WHERE status = 'completed'").get().count, 2);
 	completed.close();
 	// 用户名必填且有格式限制，密码可以跳过。
 	assert.equal((await (await app.request('http://accounts.test/api/accounts/sign.php', { headers: { cookie: wechatSession } })).json()).formPage.initialValues.step, 'set_username');
@@ -220,7 +255,7 @@ try {
 	assert.equal(deliveredCode, '', '老用户登录不应该发送验证码');
 	const returningDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE, { readOnly: true });
 	assert.equal(returningDatabase.prepare('SELECT COUNT(*) AS count FROM passport_users').get().count, 2, '不应该重复创建用户');
-	assert.equal(returningDatabase.prepare("SELECT COUNT(*) AS count FROM passport_external_identities WHERE provider = 'wechat'").get().count, 1);
+	assert.equal(returningDatabase.prepare("SELECT COUNT(*) AS count FROM passport_external_identities WHERE provider = 'wechat'").get().count, 2);
 	returningDatabase.close();
 
 	const modeDatabase = new DatabaseSync(process.env.DEFAULT_DATABASE_FILE);

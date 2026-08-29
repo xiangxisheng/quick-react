@@ -134,8 +134,9 @@ const externalEmailForm = (provider: string, email = ''): FormPageConfig => ({
 	],
 });
 const externalCodeForm = (email: string): FormPageConfig => ({
-	description: `验证码已发送到 ${email}，验证成功后才会创建 Accounts 用户。`,
+	description: `验证码已发送到 ${email}，请输入验证码完成验证；验证成功后将绑定外部身份并登录 Accounts。`,
 	submitLabel: '验证并创建账户',
+	actions: [{ key: 'change_email', label: '更换邮箱' }],
 	initialValues: { step: 'external_verify', code: '' },
 	fields: [
 		{ name: 'step', label: '', type: 'hidden' },
@@ -299,7 +300,19 @@ const handler: ApiHandler = async (c, next) => {
 		if (!provider) return apiMessage(c, 400, '请选择有效的登录方式');
 		return apiResponse(c, 200, { redirectTo: `/api/accounts/external/${provider.id}`, feedback: { component: 'message' as const, type: 'success' as const, message: `正在前往${provider.display_name}`, redirectAfter: 0 } });
 	}
-	if (action === 'change_email' || action === 'back_to_sign') {
+	if (action === 'change_email') {
+		const pendingToken = readCookie(c.req.raw, externalPendingCookieName);
+		const pending = pendingToken ? await pendingExternalIdentity(database, pendingToken) : null;
+		if (pending) {
+			const otp = await pendingExternalEmailOtp(database, pending.id_hash);
+			const formPage = externalEmailForm(pending.provider === 'wechat' ? '微信' : '外部身份源', otp?.email ?? '');
+			return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues });
+		}
+		const client = await pendingClient();
+		const formPage = signInForm(text(body.email), await signInExternalLogins(), client ? new URL(client).host : '');
+		return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues });
+	}
+	if (action === 'back_to_sign') {
 		const client = await pendingClient();
 		const formPage = signInForm(text(body.email), await signInExternalLogins(), client ? new URL(client).host : '');
 		return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues });
