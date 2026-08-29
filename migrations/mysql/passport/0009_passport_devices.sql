@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS passport_devices (
 	created_at BIGINT NOT NULL,
 	last_seen_at BIGINT NOT NULL,
 	revoked_at BIGINT NULL,
-	UNIQUE KEY passport_devices_user_fingerprint (user_id, fingerprint),
+	UNIQUE KEY passport_devices_fingerprint (fingerprint),
 	KEY passport_devices_user_id (user_id),
 	KEY passport_devices_status (status),
 	CONSTRAINT passport_devices_user_fk FOREIGN KEY (user_id) REFERENCES passport_users(user_id) ON DELETE RESTRICT

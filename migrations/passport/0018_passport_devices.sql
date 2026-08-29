@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS passport_devices (
 	last_seen_at INTEGER NOT NULL,
 	revoked_at INTEGER,
 	FOREIGN KEY (user_id) REFERENCES passport_users(user_id) ON DELETE RESTRICT,
-	UNIQUE (user_id, fingerprint)
+	UNIQUE (fingerprint)
 );
 CREATE INDEX IF NOT EXISTS passport_devices_user_id ON passport_devices(user_id);
 CREATE INDEX IF NOT EXISTS passport_devices_status ON passport_devices(status);

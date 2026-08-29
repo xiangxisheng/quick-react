@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS passport_devices (
 	created_at BIGINT NOT NULL,
 	last_seen_at BIGINT NOT NULL,
 	revoked_at BIGINT,
-	UNIQUE (user_id, fingerprint)
+	UNIQUE (fingerprint)
 );
 CREATE INDEX IF NOT EXISTS passport_devices_user_id ON passport_devices(user_id);
 CREATE INDEX IF NOT EXISTS passport_devices_status ON passport_devices(status);
