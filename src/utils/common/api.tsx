@@ -5,6 +5,7 @@ import { ExclamationCircleOutlined } from '@ant-design/icons';
 import { useRef, useState } from 'react';
 import type { ApiFeedback as SharedApiFeedback, ApiResponseBody } from '@shared/types/api-response.mjs';
 import type { TableColumn, TableData, TableOption, TableResponse } from '@shared/types/table.mjs';
+import { getDeviceFingerprint } from './device-fingerprint.js';
 
 /* 前端类型定义开始 */
 export type DataType = TableData;
@@ -104,7 +105,10 @@ export function useCommonApi(): [CommonApi, React.JSX.Element] {
 	const apiFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
 		setPendingRequests((count) => count + 1);
 		try {
-			const res: Response = await fetch(input, init);
+			const fingerprint = await getDeviceFingerprint();
+			const headers = new Headers(init?.headers);
+			if (fingerprint) headers.set('X-Device-Fingerprint', fingerprint);
+			const res: Response = await fetch(input, { ...init, headers });
 			const resJSON: ParsedResJSON = await getJsonByRes(res);
 			if (!res.ok || resJSON.parseError) {
 				showFeedback(resJSON.feedback ?? (resJSON.message ? {

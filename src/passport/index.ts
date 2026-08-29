@@ -17,7 +17,10 @@ const defaultSignInPath = () => {
 };
 const Passport = {
 	async login(options: PassportLoginOptions = {}): Promise<{ next?: PassportNextAction }> {
-		const response = await fetch(options.signInPath ?? defaultSignInPath(), { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include', body: JSON.stringify({ action: 'login', ...(options.provider ? { provider: options.provider } : {}) }) });
+		const fingerprint = await getDeviceFingerprint();
+		const headers = new Headers({ 'content-type': 'application/json' });
+		if (fingerprint) headers.set('X-Device-Fingerprint', fingerprint);
+		const response = await fetch(options.signInPath ?? defaultSignInPath(), { method: 'POST', headers, credentials: 'include', body: JSON.stringify({ action: 'login', ...(options.provider ? { provider: options.provider } : {}) }) });
 		const result = await response.json();
 		if (!response.ok || !result.redirectTo) throw new Error(result?.feedback?.message || 'Passport 登录初始化失败');
 		// 登录一律在弹窗里完成，业务页面不会离开。
@@ -35,7 +38,9 @@ const Passport = {
 		});
 	},
 	async logout(options: Pick<PassportLoginOptions, 'signInPath'> = {}): Promise<PassportLogoutResult> {
-		const response = await fetch(options.signInPath ?? defaultSignInPath(), { method: 'DELETE', credentials: 'include' });
+		const fingerprint = await getDeviceFingerprint();
+		const headers = fingerprint ? { 'X-Device-Fingerprint': fingerprint } : undefined;
+		const response = await fetch(options.signInPath ?? defaultSignInPath(), { method: 'DELETE', headers, credentials: 'include' });
 		const result = await response.json() as PassportLogoutResult;
 		if (!response.ok) throw new Error(result.feedback?.message || '退出登录失败');
 		return result;
@@ -44,3 +49,4 @@ const Passport = {
 
 export default Passport;
 (window as Window & { Passport?: typeof Passport }).Passport = Passport;
+import { getDeviceFingerprint } from '../utils/common/device-fingerprint.js';

@@ -4,7 +4,7 @@ import type { DatabaseAdapter, DatabaseBatchStatement } from '@server/database/i
 import { normalizePassportEmail, setPassportPassword, verifyPassportPasswordHistory } from '@server/passport/identity.mjs';
 import { hasAccountPassword, setAccountUsername, utcMinutes } from '@server/passport/account.mjs';
 import { accountOnboarding, loginRedirectTarget, onboardingForm, refreshOidcRequest, resetPasswordForm } from '@server/accounts/onboarding.mjs';
-import { clearPassportSessionCookie, createPassportSessionCookie, loadPassportSession, readPassportSessionId } from '@server/passport/session.mjs';
+import { clearPassportSessionCookie, createPassportSessionCookie, ensurePassportDevice, loadPassportSession, readPassportSessionId } from '@server/passport/session.mjs';
 import { clearOidcRequestCookie, oidcRequestCookieName, readCookie } from '@server/accounts/oidc.mjs';
 import { authorizationRequest } from '@server/accounts/repository.mjs';
 import { oidcIssuer, revokePassportSession, revokeOidcSession } from '@server/accounts/provider.mjs';
@@ -193,8 +193,8 @@ const handler: ApiHandler = async (c, next) => {
 
 	/** 建立 Accounts 会话；会话 Cookie 必须先写，其余 Cookie 追加。 */
 	const startSession = async (userId: string) => {
-		const sessionId = crypto.randomUUID(), now = Date.now(), maxAge = 24 * 60 * 60;
-		await runSql(database, sql(database).insert('passport_sessions', { id: sessionId, user_id: userId, expires_at: now + maxAge * 1000, created_at: now }));
+		const sessionId = crypto.randomUUID(), now = Date.now(), maxAge = 24 * 60 * 60, deviceId = await ensurePassportDevice(database, userId, c.req.raw);
+		await runSql(database, sql(database).insert('passport_sessions', { id: sessionId, user_id: userId, device_id: deviceId, expires_at: now + maxAge * 1000, created_at: now }));
 		c.header('Set-Cookie', createPassportSessionCookie(sessionId, secure, maxAge));
 		c.header('Set-Cookie', clearSignupEmailCookie(secure), { append: true });
 	};
@@ -533,11 +533,11 @@ const handler: ApiHandler = async (c, next) => {
 			return apiResponse(c, 200, { formPage, currentValues: formPage.initialValues, feedback: { component: 'inline' as const, type: 'warning' as const, message: '尚未收到 Telegram 批准，请确认数字后重试' } });
 		}
 		if (challenge.status !== 'approved') return apiMessage(c, 409, challenge.status === 'denied' ? '本次登录已被拒绝' : '登录确认已经失效');
-		const sessionId = crypto.randomUUID(), now = Date.now(), maxAge = 24 * 60 * 60;
+		const sessionId = crypto.randomUUID(), now = Date.now(), maxAge = 24 * 60 * 60, deviceId = await ensurePassportDevice(database, challenge.user_id, c.req.raw);
 		if (!database.batch) return apiMessage(c, 500, 'Passport 数据库不支持原子登录');
 		const builder = sql(database);
 		const statements: DatabaseBatchStatement[] = [
-			builder.insertFromSelect('passport_sessions', { id: sessionId, user_id: { column: 'user_id' }, expires_at: now + maxAge * 1000, created_at: now }, 'passport_login_challenges', [{ column: 'id', value: challengeId }, { column: 'status', value: 'approved' }]),
+			builder.insertFromSelect('passport_sessions', { id: sessionId, user_id: { column: 'user_id' }, device_id: deviceId, expires_at: now + maxAge * 1000, created_at: now }, 'passport_login_challenges', [{ column: 'id', value: challengeId }, { column: 'status', value: 'approved' }]),
 			builder.update('passport_login_challenges', { status: 'consumed', updated_at: now }, { id: challengeId, status: 'approved' }),
 		];
 		await database.batch(statements);

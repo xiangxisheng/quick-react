@@ -4,7 +4,7 @@ import { bindReturnCookieName, clearBindReturnCookie, clearExternalStateCookie, 
 import { readCookie } from '@server/accounts/oidc.mjs';
 import { postLoginRedirect } from '@server/accounts/onboarding.mjs';
 import { externalAvatarUrl, syncExternalAvatar } from '@server/passport/avatar.mjs';
-import { createPassportSessionCookie, loadPassportSession } from '@server/passport/session.mjs';
+import { createPassportSessionCookie, ensurePassportDevice, loadPassportSession } from '@server/passport/session.mjs';
 import { runSql, sql } from '@server/database/sql.mjs';
 import { isSecureRequest, requestOrigin } from '@server/request-origin.mjs';
 import { sha256 } from '@server/accounts/oidc.mjs';
@@ -57,7 +57,7 @@ const handler: ApiHandler = async (c, _next, params) => {
 		if (polled.qr_status !== 'authorized' || !polled.qr_user_id) return apiResponse(c, 200, { status: polled.qr_status });
 		const current = await loadPassportSession(database, c.req.raw);
 		const sessionId = crypto.randomUUID(), now = Date.now();
-		await runSql(database, sql(database).insert('passport_sessions', { id: sessionId, user_id: polled.qr_user_id, expires_at: now + 24 * 60 * 60 * 1000, created_at: now }));
+		await runSql(database, sql(database).insert('passport_sessions', { id: sessionId, user_id: polled.qr_user_id, device_id: await ensurePassportDevice(database, polled.qr_user_id, c.req.raw), expires_at: now + 24 * 60 * 60 * 1000, created_at: now }));
 		await runSql(database, sql(database).update('passport_external_login_states', { qr_status: 'consumed' }, [{ column: 'id_hash', value: await sha256(pollState) }, { column: 'qr_status', value: 'authorized' }]));
 		c.header('Set-Cookie', createPassportSessionCookie(sessionId, secure, 24 * 60 * 60));
 		const redirectTo = current && String(current.id) === String(polled.qr_user_id)
@@ -149,7 +149,7 @@ const handler: ApiHandler = async (c, _next, params) => {
 			return consume ? apiResponse(c, 200, { status: 'linked', redirectTo: bindTarget }) : c.redirect(bindTarget, 302);
 		}
 		const sessionId = crypto.randomUUID(), now = Date.now(), maxAge = 24 * 60 * 60;
-		await runSql(database, sql(database).insert('passport_sessions', { id: sessionId, user_id: userId, expires_at: now + maxAge * 1000, created_at: now }));
+		await runSql(database, sql(database).insert('passport_sessions', { id: sessionId, user_id: userId, device_id: await ensurePassportDevice(database, userId, c.req.raw), expires_at: now + maxAge * 1000, created_at: now }));
 		c.header('Set-Cookie', clearExternalStateCookie(secure));
 		c.header('Set-Cookie', createPassportSessionCookie(sessionId, secure, maxAge), { append: true });
 		// 第三方认证通过：30 分钟内允许发送邮箱验证码、重设密码。
